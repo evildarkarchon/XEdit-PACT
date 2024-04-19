@@ -19,12 +19,18 @@ from PySide6.QtCore import QObject, Signal, Slot
 
 # =================== PACT TOML FILE ===================
 
+yaml_cache = {} # Cache for YAML files to prevent multiple reads.
+
 def yaml_settings(yaml_path, key_path, new_value=None):
     yaml = ruamel.yaml.YAML()
     yaml.indent(offset=2)
     yaml.width = 300
-    with open(yaml_path, 'r', encoding='utf-8') as yaml_file:
-        data = yaml.load(yaml_file)
+    
+    if yaml_path not in yaml_cache:
+        with open(yaml_path, 'r', encoding='utf-8') as yaml_file:
+            yaml_cache[yaml_path] = yaml.load(yaml_file)
+
+    data = yaml_cache[yaml_path]
 
     keys = key_path.split('.') if isinstance(key_path, str) else key_path
     value = data
@@ -44,8 +50,9 @@ def yaml_settings(yaml_path, key_path, new_value=None):
             else:
                 return None  # Key not found.
         if value is None and "Path" not in key_path:  # Error me if I mistype or screw up the value grab.
-            print(f"❌ ERROR (yaml_settings)! Trying to grab a None value for : '{key_path}'")
+            print(f"❌ ERROR (yaml_settings) : Trying to grab a None value for : '{key_path}'")
 
+    yaml_cache[yaml_path] = data  # Update the cache with the modified data
     return value
 
 def pact_settings(setting=None):
