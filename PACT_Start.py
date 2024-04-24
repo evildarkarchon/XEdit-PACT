@@ -90,8 +90,7 @@ def pact_journal_expire():
 
 
 def pact_log_update(log_message):
-    pact_journal_expire()
-
+    
     with open("PACT Journal.log", "a", encoding="utf-8", errors="ignore") as LOG_PACT:
         LOG_PACT.write(log_message)
 
@@ -642,6 +641,7 @@ def clean_plugins(progress_emitter: ProgressEmitter):
     print(f"✔️ CLEANING STARTED... ( PLUGINS TO CLEAN: {plugin_count} )")
     log_start = time.perf_counter()
     log_time = datetime.datetime.now()
+    pact_journal_expire()
     pact_log_update(f"\nSTARTED CLEANING PROCESS AT : {log_time}")
     count_cleaned = 0
 
