@@ -7,7 +7,7 @@
 
 1.80.3 Unofficial:
 - Add code to detect partial form creation (huge oversight on my part)
-- Add a debug mode setting, for now, it just disables clearing of the xEdit logs.
+- Add a debug mode setting, for now, it just disables clearing of the xEdit logs, for now.
 
 1.80.2 Unofficial:
 - Re-enable update checking and direct them to my repo for now.
