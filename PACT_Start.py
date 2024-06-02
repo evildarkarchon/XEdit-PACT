@@ -250,16 +250,14 @@ Please change Journal Expiration to a valid positive number.""")
         raise ValueError("""❌ ERROR : JOURNAL EXPIRATION VALUE IN PACT SETTINGS IS TOO SMALL.)
 Journal Expiration must be set to at least 1 day or more.""")
 
-
-pact_update_settings(info)
-if ".exe" in str(info.XEDIT_PATH) and info.XEDIT_EXE in info.xedit_list_specific:
-    xedit_path = Path(info.XEDIT_PATH)
-    info.XEDIT_LOG_TXT = str(xedit_path.with_name(xedit_path.stem.upper() + '_log.txt'))
-    info.XEDIT_EXC_LOG = str(xedit_path.with_name(xedit_path.stem.upper() + 'Exception.log'))
-elif info.XEDIT_PATH and not ".exe" in str(info.XEDIT_PATH):
-    print(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Errors.Invalid_XEDIT_File"))
-    input(PAUSE_MESSAGE)
-    raise ValueError
+    if ".exe" in str(info.XEDIT_PATH) and info.XEDIT_EXE in info.xedit_list_specific:
+        xedit_path = Path(info.XEDIT_PATH)
+        info.XEDIT_LOG_TXT = str(xedit_path.with_name(xedit_path.stem.upper() + '_log.txt'))
+        info.XEDIT_EXC_LOG = str(xedit_path.with_name(xedit_path.stem.upper() + 'Exception.log'))
+    elif info.XEDIT_PATH and not ".exe" in str(info.XEDIT_PATH):
+        print(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Errors.Invalid_XEDIT_File"))
+        input(PAUSE_MESSAGE)
+        raise ValueError
 
 
 # Make sure Mod Organizer 2 is not already running.
