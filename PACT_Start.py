@@ -143,46 +143,46 @@ class Info:
     XEDIT_PATH: str | Path = field(default_factory=Path)
     LOAD_ORDER_TXT: str | Path = field(default_factory=Path)
     LOAD_ORDER_PATH: str | Path = field(default_factory=Path)
-    Journal_Expiration: int = 7
-    Cleaning_Timeout: int = 300
+    Journal_Expiration = 7
+    Cleaning_Timeout = 300
 
-    MO2Mode: bool = False
-    xedit_list_fallout3: list[str] = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO3")
-    lower_fo3: set[str] = set(map(str.lower, xedit_list_fallout3))
-    xedit_list_newvegas: list[str] = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FNV")
-    lower_fnv: set[str] = set(map(str.lower, xedit_list_newvegas))
-    xedit_list_fallout4: list[str] = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO4")
+    MO2Mode = False
+    xedit_list_fallout3 = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO3")
+    lower_fo3 = set(map(str.lower, xedit_list_fallout3))
+    xedit_list_newvegas = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FNV")
+    lower_fnv = set(map(str.lower, xedit_list_newvegas))
+    xedit_list_fallout4 = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO4")
     xedit_list_fallout4.extend(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO4VR"))
-    lower_fo4: set[str] = set(map(str.lower, xedit_list_fallout4))
-    xedit_list_skyrimse: list[str] = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.SSE")
+    lower_fo4 = set(map(str.lower, xedit_list_fallout4))
+    xedit_list_skyrimse = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.SSE")
     xedit_list_skyrimse.extend(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.SkyrimVR"))
-    lower_sse: set[str] = set(map(str.lower, xedit_list_skyrimse))
-    xedit_list_universal: list[str] = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.Universal")
-    xedit_list_specific: list[str] = xedit_list_fallout3 + xedit_list_newvegas + xedit_list_fallout4 + xedit_list_skyrimse
+    lower_sse = set(map(str.lower, xedit_list_skyrimse))
+    xedit_list_universal = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.Universal")
+    xedit_list_specific = xedit_list_fallout3 + xedit_list_newvegas + xedit_list_fallout4 + xedit_list_skyrimse
 
-    lower_specific: set[str] = set(map(str.lower, xedit_list_specific))
-    lower_universal: set[str] = set(map(str.lower, xedit_list_universal)) 
+    lower_specific = set(map(str.lower, xedit_list_specific))
+    lower_universal = set(map(str.lower, xedit_list_universal)) 
 
-    clean_results_UDR: set[int] = set()  # Undisabled References
-    clean_results_ITM: set[int] = set()  # Identical To Master
-    clean_results_NVM: set[int] = set()  # Deleted Navmeshes
-    clean_results_PARTIAL_FORMS: set[int] = set()  # Partial Forms
-    clean_failed_list: set[str] = set()  # Cleaning Failed
-    plugins_processed: int = 0
-    plugins_cleaned: int = 0
+    clean_results_UDR = set()  # Undisabled References
+    clean_results_ITM = set()  # Identical To Master
+    clean_results_NVM = set()  # Deleted Navmeshes
+    clean_results_PARTIAL_FORMS = set()  # Partial Forms
+    clean_failed_list = set()  # Cleaning Failed
+    plugins_processed = 0
+    plugins_cleaned = 0
 
-    LCL_skip_list: list[str] = []
+    LCL_skip_list = []
 
     # HARD EXCLUDE PLUGINS PER GAME HERE
-    FO3_skip_list: list[str] = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FO3")
+    FO3_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FO3")
 
-    FNV_skip_list: list[str] = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FNV")
+    FNV_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FNV")
 
-    FO4_skip_list: list[str] = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FO4")
+    FO4_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FO4")
 
-    SSE_skip_list: list[str] = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.SSE")
+    SSE_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.SSE")
 
-    VIP_skip_list: list[str] = FO3_skip_list + FNV_skip_list + FO4_skip_list + SSE_skip_list
+    VIP_skip_list = FO3_skip_list + FNV_skip_list + FO4_skip_list + SSE_skip_list
 
     XEDIT_LOG_TXT: str = field(default_factory=str)
     XEDIT_EXC_LOG: str = field(default_factory=str)
