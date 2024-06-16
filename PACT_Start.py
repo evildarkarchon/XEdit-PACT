@@ -5,6 +5,7 @@ import re
 import subprocess
 import time
 import ruamel.yaml
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -510,32 +511,46 @@ def run_auto_cleaning(plugin_name):
     if not pact_settings("Debug Mode"):
         clear_xedit_logs()
     print(f"\nCURRENTLY CLEANING : {plugin_name}")
-    bat_process = subprocess.Popen(bat_command)
-    time.sleep(1)
+    bat_process = subprocess.Popen(bat_command, shell=True)
 
-    # Check subprocess for errors until it finishes
-    while bat_process.poll() is None:
-        xedit_procs = [proc for proc in psutil.process_iter(attrs=['pid', 'name', 'cpu_percent', 'create_time']) if is_it_xedit(proc.name().lower(), info)]
-        for proc in xedit_procs:
-            if proc.name().lower() == str(info.XEDIT_EXE).lower():
+    # Create a separate thread for monitoring the process
+    monitor_thread = threading.Thread(target=monitor_process, args=(bat_process, plugin_name))
+    monitor_thread.start()
+
+    # Wait for the cleaning process to finish
+    bat_process.wait()
+
+    # Increment processed plugins count
+    info.plugins_processed += 1
+
+def monitor_process(proc, plugin_name):
+    """
+    Monitors the cleaning process for errors.
+
+    Args:
+        proc (subprocess.Popen): The subprocess to monitor.
+        plugin_name (str): The name of the plugin being cleaned.
+    """
+    while proc.poll() is None:
+        xedit_procs = [p for p in psutil.process_iter(attrs=['pid', 'name', 'cpu_percent', 'create_time']) if is_it_xedit(p.name().lower(), info)]
+        for p in xedit_procs:
+            if p.name().lower() == str(info.XEDIT_EXE).lower():
                 # Check for low CPU usage (indicative of an error)
-                if check_cpu_usage(proc):
-                    handle_error(proc, plugin_name, info, "❌ ERROR : PLUGIN IS DISABLED OR HAS MISSING REQUIREMENTS! KILLING XEDIT AND ADDING PLUGIN TO IGNORE LIST...")
+                if check_cpu_usage(p):
+                    handle_error(p, plugin_name, info, "❌ ERROR : PLUGIN IS DISABLED OR HAS MISSING REQUIREMENTS! KILLING XEDIT AND ADDING PLUGIN TO IGNORE LIST...")
                     pact_log_update(f"{plugin_name} -> Disabled or missing requirements")
                     break
                 # Check for process running longer than specified timeout
-                if check_process_timeout(proc, info):
-                    handle_error(proc, plugin_name, info, "❌ ERROR : XEDIT TIMED OUT (CLEANING PROCESS TOOK TOO LONG)! KILLING XEDIT...", add_ignore=False)
+                if check_process_timeout(p, info):
+                    handle_error(p, plugin_name, info, "❌ ERROR : XEDIT TIMED OUT (CLEANING PROCESS TOOK TOO LONG)! KILLING XEDIT...", add_ignore=False)
                     pact_log_update(f"{plugin_name} -> XEdit timed out")
                     break
                 # Check for exceptions in process
                 if check_process_exceptions(info):
-                    handle_error(proc, plugin_name, info, "❌ ERROR : PLUGIN IS EMPTY OR HAS MISSING REQUIREMENTS! KILLING XEDIT AND ADDING PLUGIN TO IGNORE LIST...")
+                    handle_error(p, plugin_name, info, "❌ ERROR : PLUGIN IS EMPTY OR HAS MISSING REQUIREMENTS! KILLING XEDIT AND ADDING PLUGIN TO IGNORE LIST...")
                     pact_log_update(f"{plugin_name} -> Empty or missing requirements")
                     break
         time.sleep(3)
-    # Increment processed plugins count
-    info.plugins_processed += 1
 
 
 # Compile the patterns outside the function
