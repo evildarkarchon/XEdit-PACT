@@ -1,5 +1,8 @@
 ===========================================================================
 # CHANGELOG #
+1.80.6 Unofficial:
+- Separate process monitoring code out of the main thread, this should make the program more responsive.
+
 1.80.5 Unofficial (1.80.4 was reverted):
 - Fixed error in xEdit command line generation.
 - Hotfix: Change stylsheet for the backup and restore buttons to better indicate that they are disabled.
