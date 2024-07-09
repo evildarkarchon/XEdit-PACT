@@ -1,47 +1,47 @@
 PACT_Data:
   default_settings: |
     PACT_Settings:
-    # This file contains settings for both source scripts and Plugin Auto Cleaning Tool.exe 
-    # Set to true if you want PACT to check that you have the latest version of PACT. 
+    # This file contains settings for both source scripts and Plugin Auto Cleaning Tool.exe
+    # Set to true if you want PACT to check that you have the latest version of PACT.
       Update Check: true
 
-    # Set to true if you want PACT to show extra stats about cleaned plugins in the command line window. 
+    # Set to true if you want PACT to show extra stats about cleaned plugins in the command line window.
       Stat Logging: true
 
-    # In seconds, set below how long should PACT wait for xedit to clean any plugin. 
-    # If it takes longer than the set amount, the plugin will be immediately skipped. 
+    # In seconds, set below how long should PACT wait for xedit to clean any plugin.
+    # If it takes longer than the set amount, the plugin will be immediately skipped.
       Cleaning Timeout: 300
 
-    # In days, set below how long should PACT wait until the logging journal is cleared. 
-    # If PACT Journal.txt is older than the set amount, it is immediately deleted. 
+    # In days, set below how long should PACT wait until the logging journal is cleared.
+    # If PACT Journal.txt is older than the set amount, it is immediately deleted.
       Journal Expiration: 7
 
-    # Set or copy-paste your load order (loadorder.txt / plugins.txt) file path below. 
-    # See the PACT Nexus Page for instructions on where you can find these files. 
+    # Set or copy-paste your load order (loadorder.txt / plugins.txt) file path below.
+    # See the PACT Nexus Page for instructions on where you can find these files.
       LoadOrder TXT: ""
 
-    # Set or copy-paste your XEdit (FO3Edit.exe / FNVEdit.exe / FO4Edit.exe / SSEEdit.exe) executable file path below. 
-    # xEdit.exe is also supported, but requires that you set LoadOrder TXT path to loadorder.txt only. 
+    # Set or copy-paste your XEdit (FO3Edit.exe / FNVEdit.exe / FO4Edit.exe / SSEEdit.exe) executable file path below.
+    # xEdit.exe is also supported, but requires that you set LoadOrder TXT path to loadorder.txt only.
       XEDIT EXE: ""
 
-    # Set or copy-paste your MO2 (ModOrganizer.exe) executable file path below. 
-    # Required if MO2 is your main mod manager. Otherwise, leave this blank. 
+    # Set or copy-paste your MO2 (ModOrganizer.exe) executable file path below.
+    # Required if MO2 is your main mod manager. Otherwise, leave this blank.
       MO2 EXE: ""
-  
+
     # Allow XEdit to use partial forms.
     # This is an extremely experimental feature, and may cause issues.
     # It requires an XEdit version >= 4.1.5b.
     # Because of the experimental nature of this feature, it will not be configurable in the GUI.
     # Use at your own risk. No support will be provided for this feature.
       Partial Forms: false
-    
+
     # Enables features that help debug PACT.
       Debug Mode: false
-  
+
   default_ignorefile: |
     # This file contains plugin names that CLASSIC will IGNORE while scanning your crash logs and mod files.
     # When adding plugin names, make sure you add it under the correct game list, same applies to VR plugins.
-    
+
     # To add plugin names yourself, make sure each plugin starts with a dash followed by a space,
     # AND ends with either .esm | .esp | .esl | Uppercase / lowercase does not matter.
     PACT_Ignore_FO3:
@@ -52,7 +52,7 @@ PACT_Data:
       - Example Plugin.esp
     PACT_Ignore_SSE:
       - Example Plugin.esp
-  
+
   version: "1.80.5 Unofficial"
   version_date: 24.01.03 #YY/MM/DD
 
@@ -65,7 +65,7 @@ PACT_Data:
       ❌ ERROR : CANNOT PROCESS LOAD ORDER FILE FOR XEDIT IN THIS SITUATION!
       You have to set your load order file path to loadorder.txt and NOT plugins.txt
       This is so PACT can detect the right game. Change the load order file path and try again.
-  
+
   Warnings:
     Invalid_INI_Setup: |
       ❌  WARNING : YOUR PACT INI SETUP IS INCORRECT!
@@ -79,7 +79,7 @@ PACT_Data:
       ❌  WARNING : PACT FAILED TO CHECK FOR UPDATES!
       You can download the latest version from the PACT Nexus Page.
       https://www.nexusmods.com/fallout4/mods/48065
-  
+
   XEdit_Lists:
     FO3:
       - FO3Edit.exe
@@ -103,7 +103,7 @@ PACT_Data:
       - xEdit64.exe
       - xfoedit.exe
       - xfoedit64.exe
-  
+
   Skip_Lists:
     FO3:
       - ''
@@ -159,3 +159,4 @@ PACT_Data:
       - HearthFires.esm
       - Dragonborn.esm
       - Unofficial Skyrim Special Edition Patch.esp
+      - _ResourcePack.esl
