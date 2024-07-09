@@ -53,8 +53,8 @@ PACT_Data:
     PACT_Ignore_SSE:
       - Example Plugin.esp
 
-  version: "1.80.5 Unofficial"
-  version_date: 24.01.03 #YY/MM/DD
+  version: "1.80.6 Unofficial"
+  version_date: 24.07.09 #YY/MM/DD
 
   Errors:
     Ivalid_XEDIT_File: |
