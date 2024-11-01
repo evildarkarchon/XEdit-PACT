@@ -1,29 +1,33 @@
-import datetime
-import hashlib
-import os
+from __future__ import annotations
+
 import platform
-import re
-import shutil
 import sys
 from pathlib import Path
+from typing import Any
 
 import psutil
 from PySide6 import QtCore, QtGui, QtWidgets
-from PySide6.QtCore import Qt, QThread, QTimer, QUrl, QEventLoop
+from PySide6.QtCore import QEventLoop, Qt, QThread, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import (QApplication, QFileDialog, QFrame, QLabel,
-                               QLineEdit, QMessageBox, QPushButton,
-                               QStyleFactory)
+from PySide6.QtWidgets import QApplication, QFileDialog, QFrame, QLabel, QLineEdit, QPushButton, QStyleFactory
 
-from PACT_Start import (ProgressEmitter,
-                        check_process_mo2, check_settings_integrity,
-                        clean_plugins, info, pact_update_check,
-                        pact_update_settings, yaml_settings, pact_settings, is_it_xedit, get_game_mode)
+from PACT_Start import (
+    ProgressEmitter,
+    check_process_mo2,
+    check_settings_integrity,
+    clean_plugins,
+    info,
+    is_it_xedit,
+    pact_settings,
+    pact_update_check,
+    pact_update_settings,
+    yaml_settings,
+)
 
 current_platform = platform.system()
 if current_platform == 'Windows':
     version = platform.release()
-    if version.startswith('10') or version.startswith('11'):
+    if version.startswith(('10', '11')):
         sys.argv += ['-platform', 'windows:darkmode=2']
 
 '''TEMPLATES
@@ -32,19 +36,18 @@ QMessageBox.NoIcon | Question | Information | Warning | Critical
 
 progress_emitter = ProgressEmitter()
 
-def remove_from_list(list, item):
-    out = [value for value in list if value != item]
-    return out
+def remove_from_list(input_list: list, item: Any) -> list:
+    return [value for value in input_list if value != item]
 
-class UiPACTMainWin(object):
-    def __init__(self, PACT_WINDOW):
+class UiPACTMainWin:
+    def __init__(self, PACT_WINDOW: QtWidgets.QDialog) -> None:
         super().__init__()  # Allow subclasses to inherit & extend behavior of parent class.
         QApplication.setStyle(QStyleFactory.create("Fusion"))
 
         self.timer = QTimer()  # For CLEAN PLUGINS button auto check.
         self.timer.timeout.connect(self.timed_states)
         self.timer.start(3000)  # In ms, will override QTimer.singleShot
-        self.thread = None
+        self.thread: PactThread | None = None
 
         # MAIN WINDOW
         PACT_WINDOW.setObjectName("PACT_WINDOW")
@@ -61,39 +64,43 @@ class UiPACTMainWin(object):
         # TOP
 
         # Button - Check Updates
-        def create_button(text, parent, geometry, object_name, stylesheet=None, clicked=None, font=None, enabled=True):
+        def create_button(text: str, parent: QtWidgets.QWidget, geometry: QtCore.QRect, object_name: str, **kwargs: Any) -> QPushButton:
             button = QPushButton(text, parent)
             button.setGeometry(geometry)
             button.setObjectName(object_name)
-            if stylesheet:
-                button.setStyleSheet(stylesheet)
-            if clicked:
-                button.clicked.connect(clicked)
-            if font:
-                button.setFont(font)
-            if not enabled:
-                button.setEnabled(False)
+            if 'stylesheet' in kwargs:
+                button.setStyleSheet(kwargs['stylesheet'])
+            if 'clicked' in kwargs:
+                button.clicked.connect(kwargs['clicked'])
+            if 'font' in kwargs:
+                button.setFont(kwargs['font'])
+            if 'enabled' in kwargs:
+                button.setEnabled(kwargs['enabled'])
             else:
                 button.setEnabled(True)
             return button
 
-        def create_labeled_input_field(label_text, parent, label_geometry, input_geometry, input_validator, input_text):
+        def create_labeled_input_field(label_text: str, parent: QtWidgets.QWidget, label_geometry: QtCore.QRect, input_geometry: QtCore.QRect, **kwargs: Any) -> tuple[QLabel, QLineEdit]:
             label = QLabel(label_text, parent)
             label.setGeometry(label_geometry)
             input_field = QLineEdit(parent)
             input_field.setGeometry(input_geometry)
-            input_field.setValidator(input_validator)
-            input_field.setText(input_text)
+            if kwargs.get("input_validator"):
+                input_validator = kwargs.get("input_validator")
+                if input_validator:
+                    input_field.setValidator(input_validator)
+            if kwargs.get("input_text") != "None":
+                input_field.setText(kwargs.get("input_text"))
             return label, input_field
 
-        def create_label(text, parent, geometry, font, object_name):
+        def create_label(text: str, parent: QtWidgets.QWidget, geometry: QtCore.QRect, font: QtGui.QFont, object_name: str) -> QLabel:
             label = QLabel(text, parent)
             label.setGeometry(geometry)
             label.setFont(font)
             label.setObjectName(object_name)
             return label
 
-        def create_horizontal_line_separator(parent, geometry, object_name):
+        def create_horizontal_line_separator(parent: QtWidgets.QWidget, geometry: QtCore.QRect, object_name: str) -> QFrame:
             separator = QFrame(parent)
             separator.setGeometry(geometry)
             separator.setFrameShape(QFrame.Shape.HLine)
@@ -101,12 +108,12 @@ class UiPACTMainWin(object):
             separator.setObjectName(object_name)
             return separator
 
-        def create_progress_bar(parent, geometry: QtCore.QRect, object_name, format: str = "%p%", visible=False):
+        def create_progress_bar(parent: QtWidgets.QWidget, geometry: QtCore.QRect, object_name: str, progress_format: str = "%p%", visible: bool = False) -> QtWidgets.QProgressBar:
             progress_bar = QtWidgets.QProgressBar(parent)
             progress_bar.setGeometry(geometry)
             progress_bar.setValue(0)
             progress_bar.setObjectName(object_name)
-            progress_bar.setFormat(format)
+            progress_bar.setFormat(progress_format)
             if visible:
                 progress_bar.setVisible(True)
             else:
@@ -133,12 +140,12 @@ class UiPACTMainWin(object):
                                              PACT_WINDOW,
                                              QtCore.QRect(70, 100, 165, 32),
                                              "RegBT_BROWSE_LO",
-                                             "color: black; background-color: lightyellow; border-radius: 5px; border: 1px solid gray;",
-                                             self.select_file_lo
+                                             stylesheet="color: black; background-color: lightyellow; border-radius: 5px; border: 1px solid gray;",
+                                             clicked=self.select_file_lo
                                              )
         self.configured_LO = False
         if "loadorder" in pact_settings("LoadOrder TXT") or "plugins" in pact_settings("LoadOrder TXT"):  # type: ignore
-            if os.path.isfile(pact_settings("LoadOrder TXT")):  # type: ignore
+            if Path(pact_settings("LoadOrder TXT")).is_file():  # type: ignore
                 self.RegBT_BROWSE_LO.setStyleSheet("color: black; background-color: lightgreen; border-radius: 5px; border: 1px solid gray;")
                 self.RegBT_BROWSE_LO.setText("✔️ LOAD ORDER FILE SET")
                 self.configured_LO = True
@@ -152,12 +159,12 @@ class UiPACTMainWin(object):
                                               PACT_WINDOW,
                                               QtCore.QRect(245, 100, 165, 32),
                                               "RegBT_BROWSE_MO2",
-                                              "color: black; background-color: lightyellow; border-radius: 5px; border: 1px solid gray;",
-                                              self.select_file_mo2
+                                              stylesheet="color: black; background-color: lightyellow; border-radius: 5px; border: 1px solid gray;",
+                                              clicked=self.select_file_mo2
                                               )
         self.configured_MO2 = False
         if "ModOrganizer" in pact_settings("MO2 EXE"):  # type: ignore
-            if os.path.isfile(pact_settings("MO2 EXE")):  # type: ignore
+            if Path(pact_settings("MO2 EXE")).is_file():  # type: ignore
                 self.RegBT_BROWSE_MO2.setStyleSheet("color: black; background-color: lightgreen; border-radius: 5px; border: 1px solid gray;")
                 self.RegBT_BROWSE_MO2.setText("✔️ MO2 EXECUTABLE SET")
                 self.configured_MO2 = True
@@ -171,12 +178,12 @@ class UiPACTMainWin(object):
                                                 PACT_WINDOW,
                                                 QtCore.QRect(420, 100, 165, 32),
                                                 "RegBT_BROWSE_XEDIT",
-                                                "color: black; background-color: lightyellow; border-radius: 5px; border: 1px solid gray;",
-                                                self.select_file_xedit
+                                                stylesheet="color: black; background-color: lightyellow; border-radius: 5px; border: 1px solid gray;",
+                                                clicked=self.select_file_xedit
                                                 )
         self.configured_XEDIT = False
         if "Edit" in pact_settings("XEDIT EXE"):  # type: ignore
-            if os.path.isfile(pact_settings("XEDIT EXE")):  # type: ignore
+            if Path(pact_settings("XEDIT EXE")).is_file():  # type: ignore
                 self.RegBT_BROWSE_XEDIT.setStyleSheet("color: black; background-color: lightgreen; border-radius: 5px; border: 1px solid gray;")
                 self.RegBT_BROWSE_XEDIT.setText("✔️ XEDIT EXECUTABLE SET")
                 self.configured_XEDIT = True
@@ -212,113 +219,122 @@ class UiPACTMainWin(object):
         # MAIN
 
         # Button - Backup Plugins
-        self.RegBT_BACKUP_PLUGINS = create_button("BACKUP PLUGINS",
-                                                  PACT_WINDOW,
-                                                  QtCore.QRect(80, 250, 230, 32),
-                                                  "RegBT_BACKUP_PLUGINS",
-                                                  """
-                                                  QPushButton {
-                                                    color: black; 
-                                                    background-color: grey; 
-                                                    border-radius: 5px; 
-                                                    border: 1px solid gray;}
-                                                    QPushButton:hover {
-                                                        background-color: lightblue;
-                                                        }
-                                                    """,
-                                                  self.pact_placeholder_popup,
-                                                  enabled=False  # Temporary, not functional right now.
-                                                  )
-
+        self.RegBT_BACKUP_PLUGINS = create_button(
+            text="BACKUP PLUGINS",
+            parent=PACT_WINDOW,
+            geometry=QtCore.QRect(80, 250, 230, 32),
+            object_name="RegBT_BACKUP_PLUGINS",
+            stylesheet="""
+            QPushButton {
+                color: black;
+                background-color: grey;
+                border-radius: 5px;
+                border: 1px solid gray;}
+                QPushButton:hover {
+                    background-color: lightblue;
+                }
+            """,
+            clicked=self.pact_placeholder_popup,
+            enabled=False  # Temporary, not functional right now.
+        )
         # Button - Restore Backup
-        self.RegBT_RESTORE_BACKUP = create_button("RESTORE BACKUP",
-                                                  PACT_WINDOW,
-                                                  QtCore.QRect(330, 250, 230, 32),
-                                                  "RegBT_RESTORE_BACKUP",
-                                                  """
-                                                  QPushButton {
-                                                    color: black; 
-                                                    background-color: grey; 
-                                                    border-radius: 5px; 
-                                                    border: 1px solid gray;
-                                                    }
-                                                    QPushButton:hover {
-                                                        background-color: lightblue;
-                                                        }
-                                                    """,
-                                                  self.pact_placeholder_popup,
-                                                  enabled=False  # Temporary, not functional right now.
-                                                  )
+        self.RegBT_RESTORE_BACKUP = create_button(
+            text="RESTORE BACKUP",
+            parent=PACT_WINDOW,
+            geometry=QtCore.QRect(330, 250, 230, 32),
+            object_name="RegBT_RESTORE_BACKUP",
+            stylesheet="""
+            QPushButton {
+                color: black;
+                background-color: grey;
+                border-radius: 5px;
+                border: 1px solid gray;
+                }
+                QPushButton:hover {
+                    background-color: lightblue;
+                    }
+                """,
+            clicked=self.pact_placeholder_popup,
+            enabled=False  # Temporary, not functional right now.
+        )
 
         # Input - Cleaning Timeout
-
-        self.InputLabel_CT, self.InputField_CT = create_labeled_input_field("Cleaning Timeout\n     (in seconds)",
-                                                                            PACT_WINDOW, QtCore.QRect(105, 300, 100, 48),
-                                                                            QtCore.QRect(130, 350, 50, 24),
-                                                                            QtGui.QIntValidator(),
-                                                                            str(info.Cleaning_Timeout)
-                                                                            )
+        self.InputLabel_CT, self.InputField_CT = create_labeled_input_field(
+            label_text="Cleaning Timeout\n     (in seconds)",
+            parent=PACT_WINDOW,
+            label_geometry=QtCore.QRect(105, 300, 100, 48),
+            input_geometry=QtCore.QRect(130, 350, 50, 24),
+            input_validator=QtGui.QIntValidator(),
+            input_text=str(info.Cleaning_Timeout)
+        )
 
         # Input - Journal Expiration
-        self.InputField_JE, self.InputField_JE = create_labeled_input_field("Journal Expiration\n         (in days)",
-                                                                            PACT_WINDOW,
-                                                                            QtCore.QRect(440, 300, 100, 48),
-                                                                            QtCore.QRect(465, 350, 50, 24),
-                                                                            QtGui.QIntValidator(),
-                                                                            str(info.Journal_Expiration)
-                                                                            )
+        self.InputLabel_JE, self.InputField_JE = create_labeled_input_field(
+            label_text="Journal Expiration\n         (in days)",
+            parent=PACT_WINDOW,
+            label_geometry=QtCore.QRect(440, 300, 100, 48),
+            input_geometry=QtCore.QRect(465, 350, 50, 24),
+            input_validator=QtGui.QIntValidator(),
+            input_text=str(info.Journal_Expiration)
+        )
 
         # Button - CLEAN PLUGINS
-        self.RegBT_CLEAN_PLUGINS = create_button("START CLEANING",
-                                                 PACT_WINDOW,
-                                                 QtCore.QRect(245, 325, 150, 32),
-                                                 "RegBT_CLEAN_PLUGINS", "color: black; background-color: lightgray; border-radius: 5px; border: 1px solid gray;",
-                                                 self.start_cleaning
-                                                 )
+        self.RegBT_CLEAN_PLUGINS = create_button(
+            text="START CLEANING",
+            parent=PACT_WINDOW,
+            geometry=QtCore.QRect(245, 325, 150, 32),
+            object_name="RegBT_CLEAN_PLUGINS",
+            stylesheet="color: black; background-color: lightgray; border-radius: 5px; border: 1px solid gray;",
+            clicked=self.start_cleaning
+        )
 
         # BOTTOM
-        self.ProgressBar = create_progress_bar(PACT_WINDOW,
-                                               QtCore.QRect(20, 400, 600, 24),
-                                               "ProgressBar",
-                                               format=""
-                                               )
+        self.ProgressBar = create_progress_bar(
+            parent=PACT_WINDOW,
+            geometry=QtCore.QRect(20, 400, 600, 24),
+            object_name="ProgressBar",
+            progress_format=""
+        )
+
         # Button - HELP
-        self.RegBT_HELP = create_button("HELP",
-                                        PACT_WINDOW,
-                                        QtCore.QRect(20, 440, 110, 24),
-                                        "RegBT_HELP",
-                                        """
-                                        QPushButton {color: black; 
-                                        background-color: lightgray; 
-                                        border-radius: 5px; 
-                                        border: 1px solid gray;}
-                                        QPushButton:hover {background-color: lightblue;}
-                                        """,
-                                        self.help_popup
-                                        )
+        self.RegBT_HELP = create_button(
+            text="HELP",
+            parent=PACT_WINDOW,
+            geometry=QtCore.QRect(20, 440, 110, 24),
+            object_name="RegBT_HELP",
+            stylesheet="""
+            QPushButton {color: black;
+            background-color: lightgray;
+            border-radius: 5px;
+            border: 1px solid gray;}
+            QPushButton:hover {background-color: lightblue;}
+            """,
+            clicked=self.help_popup
+        )
 
         # Button - EXIT
-        self.RegBT_EXIT = create_button("EXIT",
-                                        PACT_WINDOW,
-                                        QtCore.QRect(510, 440, 110, 24),
-                                        "RegBT_EXIT",
-                                        """
-                                        QPushButton {
-                                            color: black; 
-                                            background-color: lightgray; 
-                                            border-radius: 5px; 
-                                            border: 1px solid gray;
-                                            }
-                                        QPushButton:hover {
-                                            background-color: lightblue;
-                                            }
-                                        """,
-                                        PACT_WINDOW.close
-                                        )
+        self.RegBT_EXIT = create_button(
+            text="EXIT",
+            parent=PACT_WINDOW,
+            geometry=QtCore.QRect(510, 440, 110, 24),
+            object_name="RegBT_EXIT",
+            stylesheet="""
+            QPushButton {
+                color: black;
+                background-color: lightgray;
+                border-radius: 5px;
+                border: 1px solid gray;
+                }
+            QPushButton:hover {
+                background-color: lightblue;
+                }
+            """,
+            clicked=PACT_WINDOW.close
+        )
     # ============== CLEAN PLUGINS BUTTON STATES ================
-    
-    def is_xedit_running(self):
-        
+
+    def is_xedit_running(self) -> bool:
+
         xedit_procs = [proc for proc in psutil.process_iter(attrs=['pid', 'name', 'cpu_percent', 'create_time']) if is_it_xedit(proc.name(), info)]
         xedit_running = False
         for proc in xedit_procs:
@@ -326,7 +342,7 @@ class UiPACTMainWin(object):
                 xedit_running = True
         return xedit_running
 
-    def timed_states(self):
+    def timed_states(self) -> None:
         xedit_running = self.is_xedit_running()
 
         if self.thread is None:
@@ -338,7 +354,7 @@ class UiPACTMainWin(object):
             self.RegBT_EXIT.setEnabled(False)
             if not self.thread:
                 self.thread = PactThread(progress_bar=self.ProgressBar)
-            if progress_emitter.is_done == True and isinstance(self.thread, PactThread):
+            if progress_emitter.is_done is True and isinstance(self.thread, PactThread):
                 try:
                     self.thread.terminate()
                     self.thread.wait()
@@ -349,7 +365,7 @@ class UiPACTMainWin(object):
                 self.RegBT_CLEAN_PLUGINS.setText("START CLEANING")
                 self.RegBT_CLEAN_PLUGINS.setStyleSheet("color: black; background-color: lightblue; border-radius: 5px; border: 1px solid gray;")
 
-    def start_cleaning(self):
+    def start_cleaning(self) -> None:
         if self.thread is None:
             self.thread = PactThread(progress_bar=self.ProgressBar)
             self.thread.start()
@@ -366,7 +382,7 @@ class UiPACTMainWin(object):
             self.RegBT_CLEAN_PLUGINS.clicked.disconnect()
             self.RegBT_CLEAN_PLUGINS.clicked.connect(self.stop_cleaning)
 
-    def init_start_button(self, xedit_running=False):
+    def init_start_button(self, xedit_running: bool = False) -> None:
         if self.RegBT_BROWSE_LO and not self.RegBT_BROWSE_LO.isEnabled():
             self.RegBT_BROWSE_LO.setEnabled(True)
         if self.RegBT_BROWSE_MO2 and not self.RegBT_BROWSE_MO2.isEnabled():
@@ -382,14 +398,14 @@ class UiPACTMainWin(object):
             self.RegBT_CLEAN_PLUGINS.clicked.disconnect()
             self.RegBT_CLEAN_PLUGINS.clicked.connect(self.start_cleaning)
 
-    def reset_thread(self):
+    def reset_thread(self) -> None:
         self.thread = None
 
-    def init_start_and_reset(self):
+    def init_start_and_reset(self) -> None:
         self.init_start_button()
         self.reset_thread()
 
-    def stop_cleaning(self):
+    def stop_cleaning(self) -> None:
         if self.thread is not None:
             progress_emitter.is_done = True
             self.RegBT_CLEAN_PLUGINS.setEnabled(False)
@@ -437,7 +453,7 @@ folders to the Primary Backup folder, overwrite plugins and then run RESTORE."""
     # @staticmethod recommended for func that don't call "self".
 
     @staticmethod
-    def help_popup():
+    def help_popup() -> None:
         Box_Help = QtWidgets.QMessageBox()
         Box_Help.setIcon(QtWidgets.QMessageBox.Question)  # type: ignore
         Box_Help.setWindowTitle("Need Help?")
@@ -447,7 +463,7 @@ folders to the Primary Backup folder, overwrite plugins and then run RESTORE."""
             QDesktopServices.openUrl(QUrl("https://discord.com/invite/7ZZbrsGQh4"))
 
     @staticmethod
-    def update_popup():
+    def update_popup() -> None:
         if pact_update_check():
             QtWidgets.QMessageBox.information(PACT_WINDOW, "PACT Update", "You have the latest version of PACT!")
         else:
@@ -548,12 +564,12 @@ folders to the Primary Backup folder, overwrite plugins and then run RESTORE."""
                                     continue
                 print("PRIMARY BACKUP RESTORED!")""" # This is commented out because it's not functional right now.
     @staticmethod
-    def pact_placeholder_popup():
+    def pact_placeholder_popup() -> None:
         QtWidgets.QMessageBox.information(PACT_WINDOW, "PACT Placeholder", "This feature is not available yet!")
 
     # ================= MAIN BUTTON FUNCTIONS ===================
 
-    def update_settings(self):
+    def update_settings(self) -> None:
         pact_update_settings(info)
         value_CT = int(self.InputField_CT.text())
         value_JE = int(self.InputField_JE.text())
@@ -561,47 +577,47 @@ folders to the Primary Backup folder, overwrite plugins and then run RESTORE."""
         yaml_settings("PACT Settings.yaml", "Journal Expiration", value_JE)
         QtWidgets.QMessageBox.information(PACT_WINDOW, "PACT Settings", "All PACT settings have been updated and refreshed!")
 
-    def select_file_lo(self):
+    def select_file_lo(self) -> None:
         LO_file, _ = QFileDialog.getOpenFileName(filter="*.txt")  # type: ignore
-        if os.path.exists(LO_file) and ("loadorder" in LO_file or "plugins" in LO_file):
+        if Path(LO_file).exists() and ("loadorder" in LO_file or "plugins" in LO_file):
             QtWidgets.QMessageBox.information(PACT_WINDOW, "New Load Order File Set", f"You have set the new path to: {LO_file} \n")
             yaml_settings("PACT Settings.yaml", "PACT_Settings.LoadOrder TXT", LO_file)
             self.RegBT_BROWSE_LO.setStyleSheet("color: black; background-color: lightgreen; border-radius: 5px; border: 1px solid gray;")
             self.RegBT_BROWSE_LO.setText("✔️ LOAD ORDER FILE SET")
             self.configured_LO = True
-        elif os.path.exists(LO_file) and "loadorder" not in LO_file and "plugins" not in LO_file:
+        elif Path(LO_file).exists() and "loadorder" not in LO_file and "plugins" not in LO_file:
             self.RegBT_BROWSE_LO.setStyleSheet("color: black; background-color: orange; border-radius: 5px; border: 1px solid gray;")
             self.RegBT_BROWSE_LO.setText("❌ WRONG LO FILE")
 
-    def select_file_mo2(self):
+    def select_file_mo2(self) -> None:
         MO2_EXE, _ = QFileDialog.getOpenFileName(filter="*.exe")  # type: ignore
-        if os.path.exists(MO2_EXE):
+        if Path(MO2_EXE).exists():
             QtWidgets.QMessageBox.information(PACT_WINDOW, "New MO2 Executable Set", "You have set MO2 to: \n" + MO2_EXE)
             yaml_settings("PACT Settings.yaml", "PACT_Settings.MO2 EXE", MO2_EXE)
             self.RegBT_BROWSE_MO2.setStyleSheet("color: black; background-color: lightgreen; border-radius: 5px; border: 1px solid gray;")
             self.RegBT_BROWSE_MO2.setText("✔️ MO2 EXECUTABLE SET")
             self.configured_MO2 = True
 
-    def select_file_xedit(self):
+    def select_file_xedit(self) -> None:
         XEDIT_EXE, _ = QFileDialog.getOpenFileName(filter="*.exe")  # type: ignore
-        if os.path.exists(XEDIT_EXE) and is_it_xedit(XEDIT_EXE, info):
+        if Path(XEDIT_EXE).exists() and is_it_xedit(XEDIT_EXE, info):
             QtWidgets.QMessageBox.information(PACT_WINDOW, "New MO2 Executable Set", "You have set XEDIT to: \n" + XEDIT_EXE)
             yaml_settings("PACT Settings.yaml", "PACT_Settings.XEDIT EXE", XEDIT_EXE)
             self.RegBT_BROWSE_XEDIT.setStyleSheet("color: black; background-color: lightgreen; border-radius: 5px; border: 1px solid gray;")
             self.RegBT_BROWSE_XEDIT.setText("✔️ XEDIT EXECUTABLE SET")
             self.configured_XEDIT = True
-        elif os.path.exists(XEDIT_EXE) and not is_it_xedit(XEDIT_EXE, info):
+        elif Path(XEDIT_EXE).exists() and not is_it_xedit(XEDIT_EXE, info):
             self.RegBT_BROWSE_XEDIT.setText("❌ WRONG XEDIT EXE")
             self.RegBT_BROWSE_XEDIT.setStyleSheet("color: black; background-color: orange; border-radius: 5px; border: 1px solid gray;")
 
 # CLEANING NEEDS A SEPARATE THREAD SO IT DOESN'T FREEZE PACT GUI
 class PactThread(QThread):
-    def __init__(self, progress_bar, parent=None):
+    def __init__(self, progress_bar: QtWidgets.QProgressBar, parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
         self.cleaning_done = False
         self.progress_bar = progress_bar
 
-    def run(self):  # def Plugins_CLEAN():
+    def run(self) -> None:  # def Plugins_CLEAN():
         is_mo2_running = check_process_mo2(progress_emitter)
         if is_mo2_running:
             if self.progress_bar:
