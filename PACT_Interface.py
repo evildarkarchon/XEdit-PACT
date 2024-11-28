@@ -527,11 +527,11 @@ folders to the Primary Backup folder, overwrite plugins and then run RESTORE."""
     @staticmethod
     def help_popup() -> None:
         Box_Help = QMessageBox()
-        Box_Help.setIcon(QMessageBox.Question)  # type: ignore
+        Box_Help.setIcon(QMessageBox.Icon.Question)
         Box_Help.setWindowTitle("Need Help?")
         Box_Help.setText(UiPACTMainWin.help_box_msg)  # RESERVED | Box_Help.setInformativeText("...")
-        Box_Help.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)  # type: ignore
-        if Box_Help.exec() != QMessageBox.Cancel:  # type: ignore
+        Box_Help.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        if Box_Help.exec() != QMessageBox.StandardButton.Cancel:
             QDesktopServices.openUrl(QUrl("https://discord.com/invite/7ZZbrsGQh4"))
 
     def update_popup(self) -> None:
@@ -652,7 +652,7 @@ folders to the Primary Backup folder, overwrite plugins and then run RESTORE."""
         QMessageBox.information(self, "PACT Settings", "All PACT settings have been updated and refreshed!")
 
     def select_file_lo(self) -> None:
-        LO_file, _ = QFileDialog.getOpenFileName(filter="*.txt")  # type: ignore
+        LO_file, _ = QFileDialog.getOpenFileName(filter="*.txt")
         if Path(LO_file).exists() and ("loadorder" in LO_file or "plugins" in LO_file):
             QMessageBox.information(self, "New Load Order File Set", f"You have set the new path to: {LO_file} \n")
             yaml_settings("PACT Settings.yaml", "PACT_Settings.LoadOrder TXT", LO_file)
@@ -668,7 +668,7 @@ folders to the Primary Backup folder, overwrite plugins and then run RESTORE."""
             self.RegBT_BROWSE_LO.setText("❌ WRONG LO FILE")
 
     def select_file_mo2(self) -> None:
-        MO2_EXE, _ = QFileDialog.getOpenFileName(filter="*.exe")  # type: ignore
+        MO2_EXE, _ = QFileDialog.getOpenFileName(filter="*.exe")
         if Path(MO2_EXE).exists():
             QMessageBox.information(self, "New MO2 Executable Set", "You have set MO2 to: \n" + MO2_EXE)
             yaml_settings("PACT Settings.yaml", "PACT_Settings.MO2 EXE", MO2_EXE)
@@ -679,7 +679,7 @@ folders to the Primary Backup folder, overwrite plugins and then run RESTORE."""
             self.configured_MO2 = True
 
     def select_file_xedit(self) -> None:
-        XEDIT_EXE, _ = QFileDialog.getOpenFileName(filter="*.exe")  # type: ignore
+        XEDIT_EXE, _ = QFileDialog.getOpenFileName(filter="*.exe")
         if Path(XEDIT_EXE).exists() and is_it_xedit(XEDIT_EXE, info):
             QMessageBox.information(self, "New MO2 Executable Set", "You have set XEDIT to: \n" + XEDIT_EXE)
             yaml_settings("PACT Settings.yaml", "PACT_Settings.XEDIT EXE", XEDIT_EXE)

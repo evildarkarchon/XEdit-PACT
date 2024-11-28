@@ -168,23 +168,23 @@ class Info:
 
     MO2Mode: bool = False
     xedit_list_fallout3: list[str] = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO3") or []
-    lower_fo3: ClassVar[set[str]] = set(map(str.lower, xedit_list_fallout3)) or set()
+    lower_fo3: ClassVar[set[str]] = {item.lower() for item in xedit_list_fallout3} or set()
     xedit_list_newvegas: list[str] = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FNV") or []
-    lower_fnv: ClassVar[set[str]] = set(map(str.lower, xedit_list_newvegas)) or set()
+    lower_fnv: ClassVar[set[str]] = {item.lower() for item in xedit_list_newvegas} or set()
     xedit_list_fallout4: list[str] = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO4") or []
     xedit_list_fallout4.extend(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO4VR") or [])
-    lower_fo4: ClassVar[set[str]] = set(map(str.lower, xedit_list_fallout4))
+    lower_fo4: ClassVar[set[str]] = {item.lower() for item in xedit_list_fallout4} or set()
     xedit_list_skyrimse: list[str] = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.SSE") or []
     skyrimvr_list: list[str] = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.SkyrimVR") or []
     xedit_list_skyrimse.extend(skyrimvr_list)
-    lower_sse: ClassVar[set[str]] = set(map(str.lower, xedit_list_skyrimse))
+    lower_sse: ClassVar[set[str]] = {item.lower() for item in xedit_list_skyrimse} or set()
     xedit_list_universal: list[str] = field(default_factory=list)
     xedit_list_specific: list[str] = (
         xedit_list_fallout3 + xedit_list_newvegas + xedit_list_fallout4 + xedit_list_skyrimse
     )
 
-    lower_specific: ClassVar[set[str]] = set(map(str.lower, xedit_list_specific))
-    lower_universal: ClassVar[set[str]] = set(map(str.lower, xedit_list_universal or []))
+    lower_specific: ClassVar[set[str]] = {item.lower() for item in xedit_list_specific} or set()
+    lower_universal: ClassVar[set[str]] = {item.lower() for item in xedit_list_universal} or set()
 
     clean_results_UDR: set[str] = field(default_factory=set)  # Undisabled References
     clean_results_ITM: set[str] = field(default_factory=set)  # Identical To Master
