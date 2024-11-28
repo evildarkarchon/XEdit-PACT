@@ -2,7 +2,7 @@
 name = "pact"
 version = "2.0"
 description = "A program to automatically run xEdit's quickautoclean on various Bethesda games."
-authors = ["Your Name <you@example.com>"]
+authors = ["Poet", "evildarkarchon"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
