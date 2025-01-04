@@ -1,32 +1,151 @@
-# PLUGIN AUTO CLEANING TOOL (PACT) | By Poet (The Sound Of Snow)
 import datetime
 import os
 import re
 import subprocess
+import threading
 import time
-import ruamel.yaml
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, ClassVar
 
 import psutil
 import requests
-from PySide6.QtCore import QObject, Signal, Slot
+import ruamel.yaml
+from PySide6.QtCore import QObject, Signal
 
-'''AUTHOR NOTES (POET)
+"""AUTHOR NOTES (POET)
 - Comments marked as RESERVED in all scripts are intended for future updates or tests, do not edit / move / remove.
 - (..., encoding="utf-8", errors="ignore") needs to go with every opened file because unicode errors are a bitch.
-'''
+"""
+class ProgressEmitter(QObject):  # type: ignore
+    """
+    Class for emitting signals related to the progress of a task.
 
+    This class inherits from QObject and is designed to emit various signals indicating the progress,
+    maximum value, current plugin being processed, completion status, and visibility state. It is
+    primarily intended to be used in scenarios where tasks progress needs to be communicated to
+    the GUI or other observers.
+
+    :ivar progress: Signal to indicate the progress with an integer value.
+    :type progress: Signal(int)
+    :ivar max_value: Signal to emit the maximum value of the progress range.
+    :type max_value: Signal(int)
+    :ivar plugin_value: Signal to communicate a description related to the currently processing plugin.
+    :type plugin_value: Signal(str)
+    :ivar done: Signal to emit when a task has been completed.
+    :type done: Signal()
+    :ivar visible: Signal to indicate if the progress should be made visible.
+    :type visible: Signal(bool)
+    :ivar is_done: Boolean attribute to indicate whether the task has been completed.
+    :type is_done: bool
+    """
+    progress = Signal(int)
+    max_value = Signal(int)
+    plugin_value = Signal(str)
+    done = Signal()
+    visible = Signal(bool)
+    is_done = False
+
+    def report_max_value(self) -> None:
+        """
+        Emits the maximum value count obtained from the initialization of plugin information.
+
+        This method initializes plugin information and retrieves the respective count related to a
+        maximum value. It then triggers an emission of this count to notify other components or listeners.
+
+        :raises TypeError: If the emit method is called improperly or with invalid arguments.
+        :raises ValueError: If there are issues in retrieving or processing the plugin count.
+
+        :return: None
+        """
+        count = init_plugins_info()[1]
+        self.max_value.emit(count)
+
+    def report_progress(self, count: int) -> None:
+        """
+        Reports progress by emitting the current count as a signal.
+
+        This method is primarily used to update progress-related functionality,
+        such as updating a UI element or tracking the advancement of a process.
+        The count value represents the current progress state.
+
+        :param count: The current progress value to be emitted.
+        :type count: int
+
+        :return: None
+        """
+        self.progress.emit(count)
+
+    def report_plugin(self, plugin: str) -> None:
+        """
+        Reports the progress of cleaning a plugin to a specific plugin value signal.
+
+        This method emits a formatted string containing information about the
+        cleaning progress of a given plugin. The emitted string includes the
+        plugin name and placeholders for the current value (%v), maximum value
+        (%m), and percentage completed (%p%) of the cleaning process.
+
+        :param plugin: The name of the plugin to be reported.
+        :type plugin: str
+        :return: This method does not return any value.
+        :rtype: None
+        """
+        self.plugin_value.emit(f"Cleaning {plugin} %v/%m - %p%")
+
+    def report_done(self) -> None:
+        """
+        Sets the process as done by emitting the `done` signal and updating the
+        `is_done` status.
+
+        :raises: Emits the `done` signal. Does not raise exceptions.
+        :returns: None
+        """
+        self.done.emit()
+        self.is_done = True
+
+    def set_visible(self) -> None:
+        """
+        Sets the visibility state of the object to visible by emitting a visible signal.
+
+        :return: None
+        :rtype: None
+        """
+        self.visible.emit(True)
 # =================== PACT TOML FILE ===================
 
-def yaml_settings(yaml_path, key_path, new_value=None):
+yaml_cache = {}  # Cache for YAML files to prevent multiple reads.
+
+
+def yaml_settings(yaml_path: str, key_path: str | list[str], new_value: Any = None) -> Any:
+    """
+    Access or modify values in a YAML file. This function allows traversing the YAML structure
+    using a dot-separated key path or a list of keys. If a new value is provided, it updates the
+    YAML file accordingly. If no new value is provided, it retrieves the current value at the
+    specified key path. The function also maintains a cache of YAML data for efficient repeated access.
+
+    :param yaml_path: The file path to the YAML file to be accessed or modified.
+    :type yaml_path: str
+    :param key_path: Dot-separated string or list of strings representing the path to the
+        key in the YAML structure.
+    :type key_path: str | list[str]
+    :param new_value: Optional, the new value to set at the specified key path. If not provided,
+        the function will return the value located at that key.
+    :type new_value: Any, optional
+    :return: The value at the specified key path in the YAML file. Returns None if the key
+        is not found during retrieval, or if there is an error in grabbing the value.
+    :rtype: Any
+    """
     yaml = ruamel.yaml.YAML()
     yaml.indent(offset=2)
     yaml.width = 300
-    with open(yaml_path, 'r', encoding='utf-8') as yaml_file:
-        data = yaml.load(yaml_file)
 
-    keys = key_path.split('.') if isinstance(key_path, str) else key_path
+    if yaml_path not in yaml_cache:
+        with Path(yaml_path).open(encoding="utf-8") as yaml_file:
+            yaml_cache[yaml_path] = yaml.load(yaml_file)
+
+    data = yaml_cache[yaml_path]
+
+    keys = key_path.split(".") if isinstance(key_path, str) else key_path
     value = data
     # If new_value is provided, update the value.
     if new_value is not None:
@@ -34,7 +153,7 @@ def yaml_settings(yaml_path, key_path, new_value=None):
             value = value[key]
 
         value[keys[-1]] = new_value
-        with open(yaml_path, 'w', encoding='utf-8') as yaml_file:
+        with Path(yaml_path).open("w", encoding="utf-8") as yaml_file:
             yaml.dump(data, yaml_file)
     # Otherwise, traverse YAML structure to get value.
     else:
@@ -44,55 +163,307 @@ def yaml_settings(yaml_path, key_path, new_value=None):
             else:
                 return None  # Key not found.
         if value is None and "Path" not in key_path:  # Error me if I mistype or screw up the value grab.
-            print(f"❌ ERROR (yaml_settings)! Trying to grab a None value for : '{key_path}'")
+            print(f"❌ ERROR (yaml_settings) : Trying to grab a None value for : '{key_path}'")
 
+    yaml_cache[yaml_path] = data  # Update the cache with the modified data
     return value
 
-def pact_settings(setting=None):
-    if not os.path.exists("PACT Settings.yaml"):
+
+def pact_settings(setting: str | None = None) -> str | bool | int | list[str] | None:
+    """
+    Retrieves or initializes the "PACT Settings.yaml" configuration file. If the
+    file does not exist, it will create the YAML file based on default settings
+    provided in "PACT Data/PACT Main.yaml". This function allows fetching specific
+    settings by their keys. If a key is provided but its value is `None` and does
+    not reference a file path, an error message will be printed to notify about
+    the invalid key.
+
+    :param setting: The specific configuration key to retrieve from "PACT
+        Settings.yaml". If no key is provided, the function does not fetch any
+        value. Defaults to None.
+
+    :return: The value associated with the provided key. If the key is not
+        specified or does not exist in the configuration file, it returns None.
+        The type of the value can be `str`, `bool`, `int`, `list[str]`, or `None`.
+    """
+    if not Path("PACT Settings.yaml").exists():
         default_settings = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.default_settings")
-        with open('PACT Settings.yaml', 'w', encoding='utf-8') as file:
-            file.write(default_settings)
+        if default_settings is not None:
+            with Path("PACT Settings.yaml").open("w", encoding="utf-8") as settings_file:
+                settings_file.write(default_settings)
+        else:
+            print("❌ ERROR: Default settings could not be loaded.")
     if setting:
         get_setting = yaml_settings("PACT Settings.yaml", f"PACT_Settings.{setting}")
         if get_setting is None and "Path" not in setting:  # Error me if I make a stupid mistype.
             print(f"❌ ERROR (pact_settings)! Trying to grab a None value for : '{setting}'")
         return get_setting
+    return None
 
-def is_it_xedit(compare_string, info):
-    if Path(compare_string).name.lower() in info.lower_specific or Path(compare_string).name.lower() in info.lower_universal:
-        return True
-    return False
+@dataclass
+class Info:
+    """
+    Represents configuration and state information related to Mod Organizer 2 (MO2),
+    XEdit tools, and mod cleaning processes.
 
-if not os.path.exists("PACT Ignore.yaml"):
+    This class stores and manages paths, expiration times, mode states, lists
+    containing specific skip or usage configurations for different games, and logs.
+    It also processes settings using external YAML data and provides central
+    management for tool configurations. The purpose is to serve as a structured
+    container for data essential to managing mod cleaning and related operations,
+    ensuring efficient handling of paths, lists, processed plugins, and results.
+
+    :ivar MO2_EXE: Path to the MO2 executable.
+    :type MO2_EXE: str | Path
+    :ivar MO2_PATH: Directory path of the MO2 installation.
+    :type MO2_PATH: str | Path
+    :ivar XEDIT_EXE: Path to the XEdit executable.
+    :type XEDIT_EXE: str | Path
+    :ivar XEDIT_PATH: Directory path of the XEdit installation.
+    :type XEDIT_PATH: str | Path
+    :ivar LOAD_ORDER_TXT: Path to the text file containing the load order.
+    :type LOAD_ORDER_TXT: str | Path
+    :ivar LOAD_ORDER_PATH: Directory path for load order-related files.
+    :type LOAD_ORDER_PATH: str | Path
+    :ivar Journal_Expiration: Expiration time for journal entries in days.
+    :type Journal_Expiration: int
+    :ivar Cleaning_Timeout: Timeout duration for cleaning processes in seconds.
+    :type Cleaning_Timeout: int
+    :ivar MO2Mode: Indicates whether the system is operating in MO2 mode.
+    :type MO2Mode: bool
+    :ivar xedit_list_fallout3: List of XEdit-related configurations specific to Fallout 3.
+    :type xedit_list_fallout3: list[str]
+    :ivar lower_fo3: Lowercase set representation of xedit_list_fallout3.
+    :type lower_fo3: set[str]
+    :ivar xedit_list_newvegas: List of XEdit-related configurations specific to Fallout New Vegas.
+    :type xedit_list_newvegas: list[str]
+    :ivar lower_fnv: Lowercase set representation of xedit_list_newvegas.
+    :type lower_fnv: set[str]
+    :ivar xedit_list_fallout4: Combined list for Fallout 4 and Fallout 4 VR XEdit configurations.
+    :type xedit_list_fallout4: list[str]
+    :ivar lower_fo4: Lowercase set representation of xedit_list_fallout4.
+    :type lower_fo4: set[str]
+    :ivar xedit_list_skyrimse: Combined list for Skyrim Special Edition and Skyrim VR XEdit configurations.
+    :type xedit_list_skyrimse: list[str]
+    :ivar lower_sse: Lowercase set representation of xedit_list_skyrimse.
+    :type lower_sse: set[str]
+    :ivar skyrimvr_list: XEdit configurations specific to Skyrim VR.
+    :type skyrimvr_list: list[str]
+    :ivar xedit_list_universal: List of XEdit configurations that apply universally across games.
+    :type xedit_list_universal: list[str]
+    :ivar xedit_list_specific: Aggregated list of XEdit configurations from multiple games.
+    :type xedit_list_specific: list[str]
+    :ivar lower_specific: Lowercase set representation of xedit_list_specific.
+    :type lower_specific: set[str]
+    :ivar lower_universal: Lowercase set representation of xedit_list_universal.
+    :type lower_universal: set[str]
+    :ivar clean_results_UDR: Set of plugins with "Undisabled References" results.
+    :type clean_results_UDR: set[str]
+    :ivar clean_results_ITM: Set of plugins with "Identical To Master" results.
+    :type clean_results_ITM: set[str]
+    :ivar clean_results_NVM: Set of plugins with "Deleted Navmeshes" results.
+    :type clean_results_NVM: set[str]
+    :ivar clean_results_PARTIAL_FORMS: Set of plugins with "Partial Forms."
+    :type clean_results_PARTIAL_FORMS: set[str]
+    :ivar clean_failed_list: Set of plugins that failed the cleaning process.
+    :type clean_failed_list: set[str]
+    :ivar plugins_processed: Number of plugins that have been processed.
+    :type plugins_processed: int
+    :ivar plugins_cleaned: Number of plugins successfully cleaned.
+    :type plugins_cleaned: int
+    :ivar LCL_skip_list: Localized skip list at runtime.
+    :type LCL_skip_list: list[str]
+    :ivar FO3_skip_list: Specific skip list for Fallout 3 plugins.
+    :type FO3_skip_list: list[str]
+    :ivar FNV_skip_list: Specific skip list for Fallout New Vegas plugins.
+    :type FNV_skip_list: list[str]
+    :ivar FO4_skip_list: Specific skip list for Fallout 4 plugins.
+    :type FO4_skip_list: list[str]
+    :ivar SSE_skip_list: Specific skip list for Skyrim Special Edition plugins.
+    :type SSE_skip_list: list[str]
+    :ivar VIP_skip_list: Combined skip list for all key plugins across games.
+    :type VIP_skip_list: list[str]
+    :ivar XEDIT_LOG_TXT: Path to the main XEdit log file.
+    :type XEDIT_LOG_TXT: str
+    :ivar XEDIT_EXC_LOG: Path to the XEdit exception log file.
+    :type XEDIT_EXC_LOG: str
+    """
+    MO2_EXE: str | Path = field(default_factory=Path)
+    MO2_PATH: str | Path = field(default_factory=Path)
+    XEDIT_EXE: str | Path = field(default_factory=Path)
+    XEDIT_PATH: str | Path = field(default_factory=Path)
+    LOAD_ORDER_TXT: str | Path = field(default_factory=Path)
+    LOAD_ORDER_PATH: str | Path = field(default_factory=Path)
+    Journal_Expiration: int = 7
+    Cleaning_Timeout: int = 300
+
+    MO2Mode: bool = False
+    xedit_list_fallout3: list[str] = field(default_factory=lambda: yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO3") or [])
+    lower_fo3: ClassVar[set[str]] = {item.lower() for item in xedit_list_fallout3} or set()
+    xedit_list_newvegas: list[str] = field(default_factory=lambda: yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FNV") or [])
+    lower_fnv: ClassVar[set[str]] = {item.lower() for item in xedit_list_newvegas} or set()
+    xedit_list_fallout4: list[str] = field(default_factory=lambda: yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO4") or [])
+    xedit_list_fallout4.extend(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO4VR") or [])
+    lower_fo4: ClassVar[set[str]] = {item.lower() for item in xedit_list_fallout4} or set()
+    xedit_list_skyrimse: list[str] = field(default_factory=lambda: yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.SSE") or [])
+    skyrimvr_list: list[str] = field(default_factory=lambda: yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.SkyrimVR") or [])
+    xedit_list_skyrimse.extend(skyrimvr_list)
+    lower_sse: ClassVar[set[str]] = {item.lower() for item in xedit_list_skyrimse} or set()
+    xedit_list_universal: list[str] = field(default_factory=list)
+    xedit_list_specific: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.xedit_list_universal = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.Universal") or []
+        self.FO3_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FO3") or []
+        self.FNV_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FNV") or []
+        self.FO4_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FO4") or []
+        self.SSE_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.SSE") or []
+        self.VIP_skip_list = (
+            (self.FO3_skip_list or [])
+            + (self.FNV_skip_list or [])
+            + (self.FO4_skip_list or [])
+            + (self.SSE_skip_list or [])
+        )
+        self.xedit_list_specific = (
+            self.xedit_list_fallout3
+            + self.xedit_list_newvegas
+            + self.xedit_list_fallout4
+            + self.xedit_list_skyrimse
+        )
+
+    lower_specific: ClassVar[set[str]] = {item.lower() for item in xedit_list_specific} or set()
+    lower_universal: ClassVar[set[str]] = {item.lower() for item in xedit_list_universal} or set()
+
+    clean_results_UDR: set[str] = field(default_factory=set)  # Undisabled References
+    clean_results_ITM: set[str] = field(default_factory=set)  # Identical To Master
+    clean_results_NVM: set[str] = field(default_factory=set)  # Deleted Navmeshes
+    clean_results_PARTIAL_FORMS: set[str] = field(default_factory=set)  # Partial Forms
+    clean_failed_list: set[str] = field(default_factory=set)  # Cleaning Failed
+    plugins_processed: int = 0
+    plugins_cleaned: int = 0
+
+    LCL_skip_list: list[str] = field(default_factory=list)
+
+    # HARD EXCLUDE PLUGINS PER GAME HERE
+    FO3_skip_list: list[str] = field(default_factory=list)
+
+    FNV_skip_list: list[str] = field(default_factory=list)
+
+    FO4_skip_list: list[str] = field(default_factory=list)
+
+    SSE_skip_list: list[str] = field(default_factory=list)
+
+    VIP_skip_list: list[str] = field(default_factory=list)
+
+    XEDIT_LOG_TXT: str = field(default_factory=str)
+    XEDIT_EXC_LOG: str = field(default_factory=str)
+
+    # noinspection PyRedeclaration
+    def __post_init__(self) -> None:
+        self.xedit_list_universal = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.Universal") or []
+        self.FO3_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FO3") or []
+        self.FNV_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FNV") or []
+        self.FO4_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FO4") or []
+        self.SSE_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.SSE") or []
+        self.VIP_skip_list = (
+            (self.FO3_skip_list or [])
+            + (self.FNV_skip_list or [])
+            + (self.FO4_skip_list or [])
+            + (self.SSE_skip_list or [])
+        )
+
+
+def is_it_xedit(compare_string: str, data: Info) -> bool:
+    """
+    Determine if the given string matches certain conditions based on the provided
+    data.
+
+    The function checks if the name component of the given string (converted to lowercase)
+    exists either in the `lower_specific` or `lower_universal` attributes of the `data` object.
+    Returns `True` if a match is found, otherwise returns `False`.
+
+    :param compare_string: The string to check against the conditions.
+    :type compare_string: str
+
+    :param data: An object of type `Info` that contains the attributes `lower_specific`
+                 and `lower_universal` for comparison.
+    :type data: Info
+
+    :return: A boolean value indicating whether the `compare_string` satisfies any of
+             the conditions within attributes of `data`.
+    :rtype: bool
+    """
+    return bool(
+        Path(compare_string).name.lower() in data.lower_specific
+        or Path(compare_string).name.lower() in data.lower_universal
+    )
+
+
+if not Path("PACT Ignore.yaml").exists():
     default_ignorefile = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.default_ignorefile")
-    with open('PACT Ignore.yaml', 'w', encoding='utf-8') as file:
+    if default_ignorefile is not None:
+        with Path("PACT Ignore.yaml").open("w", encoding="utf-8") as file:
             file.write(default_ignorefile)
+    else:
+        print("❌ ERROR: Default ignore file could not be loaded.")
 
-def pact_journal_expire():
+
+def pact_journal_expire() -> None:
+    """
+    Delete the journal log file if it is older than the predefined expiration time.
+
+    The function checks a journal file stored in the current working directory with a
+    specific name. If the file exists, it calculates its age in days based on its last
+    modified timestamp. If the file's age exceeds the expiration time defined in
+    `info.Journal_Expiration`, the file gets deleted from the system.
+
+    :return: None
+    """
     # Delete journal if older than set amount of days.
 
-    PACT_folder = os.getcwd()
+    PACT_folder = Path.cwd()
     journal_name = "PACT Journal.log"
-    journal_path = os.path.join(PACT_folder, journal_name)
-    if os.path.isfile(journal_path):
-        journal_age = datetime.datetime.now() - datetime.datetime.fromtimestamp(os.path.getmtime(journal_path))
+    journal_path = PACT_folder / journal_name
+    if journal_path.is_file():
+        journal_age = datetime.datetime.now() - datetime.datetime.fromtimestamp(journal_path.stat().st_mtime)
         journal_age_days = journal_age.days
         if journal_age_days > info.Journal_Expiration:
-            os.remove(journal_path)
+            journal_path.unlink()
 
 
-def pact_log_update(log_message):
-    pact_journal_expire()
+def pact_log_update(log_message: str) -> None:
+    """
+    Logs a message to a file named "PACT Journal.log". The function appends the
+    provided log message to the log file, ensuring the message is written using
+    UTF-8 encoding and ignoring any encoding-related errors.
 
-    with open("PACT Journal.log", "a", encoding="utf-8", errors="ignore") as LOG_PACT:
+    :param log_message: The message to be logged. Must be a string.
+    :type log_message: str
+    :return: This function does not return a value.
+    :rtype: None
+    """
+    with Path("PACT Journal.log").open("a", encoding="utf-8", errors="ignore") as LOG_PACT:
         LOG_PACT.write(log_message)
 
 
-def pact_ignore_update(plugin, game):
-    ignore_list = yaml_settings("PACT Ignore.yaml", f"PACT_Ignore_{game}")
+def pact_ignore_update(plugin: str, game: str) -> None:
+    """
+    Adds the specified plugin to the ignore list for updates for a given game. This function utilizes
+    a YAML settings file to maintain an ignore list for each game, updating it by appending the plugin
+    name to the corresponding list.
+
+    :param plugin: The name of the plugin to be ignored in updates.
+    :type plugin: str
+    :param game: The name of the game for which the plugin should be ignored.
+    :type game: str
+    :return: No return value (None).
+    :rtype: None
+    """
+    ignore_list = yaml_settings("PACT Ignore.yaml", f"PACT_Ignore_{game}") or []
     ignore_list.append(plugin)
     yaml_settings("PACT Ignore.yaml", f"PACT_Ignore_{game}", ignore_list)
+
+
 # =================== WARNING MESSAGES ==================
 # Can change first line to """\ to remove the spacing.
 
@@ -101,17 +472,34 @@ PAUSE_MESSAGE = "Press Enter to continue..."
 # =================== UPDATE FUNCTION ===================
 
 
-def pact_update_check():
-    if PACT_config["MAIN"]["Update_Check"] is True:  # type: ignore
+def pact_update_check() -> bool:
+    """
+    Checks for updates to the Plugin Auto Cleaning Tool (PACT).
+
+    This function performs an update check to determine if a newer version of PACT is
+    available. It fetches the latest release information from the PACT GitHub repository
+    and compares it with the currently installed version. The comparison result determines
+    if an update is available or if the user already has the latest version. The function
+    handles network-related errors as well as the case when update checks are disabled
+    in the settings.
+
+    :raises OSError: If there is an operating system-related issue during the request.
+    :raises requests.exceptions.RequestException: If there is an issue fetching data
+        from the GitHub repository API.
+
+    :return: True if the currently installed PACT version is up-to-date, False otherwise.
+    :rtype: bool
+    """
+    if pact_settings("Update Check"):  # type: ignore
         print("❓ CHECKING FOR ANY NEW PLUGIN AUTO CLEANING TOOL (PACT) UPDATES...")
         print("   (You can disable this check in the EXE or PACT Settings.toml) \n")
         try:
-            response = requests.get("https://api.github.com/repos/GuidanceOfGrace/XEdit-PACT/releases/latest")
+            response = requests.get("https://api.github.com/repos/evildarkarchon/XEdit-PACT/releases/latest")
             PACT_Received = response.json()["name"]
             if PACT_Received == yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.version"):
                 print("\n✔️ You have the latest version of PACT!")
                 return True
-            else:
+            else:  # noqa: RET505
                 print(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Warnings.Outdated_PACT"))
                 print("===============================================================================")
         except (OSError, requests.exceptions.RequestException):
@@ -124,124 +512,147 @@ def pact_update_check():
 
 
 # =================== TERMINAL OUTPUT START ====================
-print(f"Hello World! | Plugin Auto Cleaning Tool (PACT) | Version {str(yaml_settings('PACT Data/PACT Main.yaml', 'PACT_Data.version'))} | FO3, FNV, FO4, SSE")
+print(
+    f"Hello World! | Plugin Auto Cleaning Tool (PACT) | Version {yaml_settings('PACT Data/PACT Main.yaml', 'PACT_Data.version')!s} | FO3, FNV, FO4, SSE"
+)
 print("MAKE SURE TO SET THE CORRECT LOAD ORDER AND XEDIT PATHS BEFORE CLEANING PLUGINS")
 print("===============================================================================")
-
-
-@dataclass
-class Info:
-    MO2_EXE: str | Path = field(default_factory=Path)
-    MO2_PATH: str | Path = field(default_factory=Path)
-    XEDIT_EXE: str | Path = field(default_factory=Path)
-    XEDIT_PATH: str | Path = field(default_factory=Path)
-    LOAD_ORDER_TXT: str | Path = field(default_factory=Path)
-    LOAD_ORDER_PATH: str | Path = field(default_factory=Path)
-    Journal_Expiration = 7
-    Cleaning_Timeout = 300
-
-    MO2Mode = False
-    xedit_list_fallout3 = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO3")
-    lower_fo3 = set(map(str.lower, xedit_list_fallout3))
-    xedit_list_newvegas = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FNV")
-    lower_fnv = set(map(str.lower, xedit_list_newvegas))
-    xedit_list_fallout4 = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO4")
-    xedit_list_fallout4.extend(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO4VR"))
-    lower_fo4 = set(map(str.lower, xedit_list_fallout4))
-    xedit_list_skyrimse = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.SSE")
-    xedit_list_skyrimse.extend(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.SkyrimVR"))
-    lower_sse = set(map(str.lower, xedit_list_skyrimse))
-    xedit_list_universal = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.Universal")
-    xedit_list_specific = xedit_list_fallout3 + xedit_list_newvegas + xedit_list_fallout4 + xedit_list_skyrimse
-
-    lower_specific = set(map(str.lower, xedit_list_specific))
-    lower_universal = set(map(str.lower, xedit_list_universal)) 
-
-    clean_results_UDR = []  # Undisabled References
-    clean_results_ITM = []  # Identical To Master
-    clean_results_NVM = []  # Deleted Navmeshes
-    clean_failed_list = []  # Cleaning Failed
-    plugins_processed = 0
-    plugins_cleaned = 0
-
-    LCL_skip_list = []
-
-    # HARD EXCLUDE PLUGINS PER GAME HERE
-    FO3_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FO3")
-
-    FNV_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FNV")
-
-    TTW_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.TTW")
-
-    FO4_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FO4")
-
-    SSE_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.SSE")
-
-    VIP_skip_list = FO3_skip_list + FNV_skip_list + TTW_skip_list + FO4_skip_list + SSE_skip_list
-
-    XEDIT_LOG_TXT: str = field(default_factory=str)
-    XEDIT_EXC_LOG: str = field(default_factory=str)
-
 
 info = Info()
 
 
-def update_load_order_path(info, load_order_path):
-    info.LOAD_ORDER_PATH = load_order_path
+def update_load_order_path(
+        data: Info, load_order_path: str | Path) -> None:
+    """
+    Updates the load order path for the given data object. This function updates the
+    LOAD_ORDER_PATH attribute with the specified path and sets the LOAD_ORDER_TXT
+    attribute to the file name of the path if the path is provided. If the path is
+    None, the LOAD_ORDER_TXT attribute is set to an empty string.
+
+    :param data: The data object with attributes to update.
+    :type data: Info
+    :param load_order_path: The new path to the load order file.
+                           Can be a string or a Path object.
+    :type load_order_path: str | Path
+    :return: None
+    """
+    data.LOAD_ORDER_PATH = load_order_path
     if load_order_path is not None:
-        info.LOAD_ORDER_TXT = os.path.basename(load_order_path)
+        data.LOAD_ORDER_TXT = Path(load_order_path).name
     else:
-        info.LOAD_ORDER_TXT = ""
+        data.LOAD_ORDER_TXT = ""
 
 
-def update_xedit_path(info, xedit_path):
-    info.XEDIT_PATH = xedit_path
-    if xedit_path is not None:
-        if ".exe" in xedit_path:
-            info.XEDIT_EXE = os.path.basename(xedit_path)
-        elif os.path.exists(xedit_path):
-            for file in os.listdir(xedit_path):
-                if file.endswith(".exe") and is_it_xedit(str(file).lower(), info):
-                    info.XEDIT_PATH = os.path.join(xedit_path, file)
-                    info.XEDIT_EXE = os.path.basename(info.XEDIT_PATH)
+def update_xedit_path(data: Info, xedit: str | Path) -> None:
+    """
+    Updates the `XEDIT_PATH` and `XEDIT_EXE` attributes in the provided `data` object
+    based on the provided `xedit` value. If `xedit` is a valid executable file path,
+    it assigns the path and file name accordingly. If `xedit` is a directory path,
+    it searches for an appropriate `.exe` file and assigns it to the `data` object.
+    If the `xedit` is not provided or invalid, it resets these attributes to empty
+    strings.
+
+    :param data: An Info object that contains `XEDIT_PATH` and `XEDIT_EXE` attributes
+        which are updated based on the provided `xedit` value.
+        Expected to act as a writable configuration holder.
+    :type data: Info
+    :param xedit: The path to the xEdit executable file or a directory containing
+        the xEdit executable file. Can be provided as a string or a pathlib.Path
+        object.
+    :type xedit: str | Path
+    :return: Nothing is returned. The provided `data` object is updated directly.
+    :rtype: None
+    """
+    data.XEDIT_PATH = xedit
+    if xedit is not None:
+        if ".exe" in str(xedit):
+            data.XEDIT_EXE = Path(xedit).name
+        elif Path(xedit).exists():
+            for xedit_file in os.listdir(xedit):
+                if xedit_file.endswith(".exe") and is_it_xedit(str(xedit_file).lower(), data):
+                    data.XEDIT_PATH = Path(xedit) / xedit_file
+                    data.XEDIT_EXE = Path(data.XEDIT_PATH).name
     else:
-        info.XEDIT_EXE = ""
-        info.XEDIT_PATH = ""
+        data.XEDIT_EXE = ""
+        data.XEDIT_PATH = ""
 
 
-def update_mo2_path(info, mo2_path):
+def update_mo2_path(data: Info, mo2_path: str | Path) -> None:
+    """
+    Updates the MO2 path in the provided Info object based on the given path or executable. If the path
+    provided is an executable, assigns that as the MO2 executable path. Otherwise, if it's a directory
+    that contains executable files matching a specific naming pattern, it assigns the matching executable
+    file as the MO2 executable. If no path is provided, it resets the MO2 path and executable values
+    within the Info object.
+
+    :param data: The Info object on which the MO2 path and executable values need to be updated.
+    :type data: Info
+    :param mo2_path: The path or file to analyze and assign as the new MO2 path or executable.
+    :type mo2_path: str | Path
+    :return: This function does not return any value.
+    :rtype: None
+    """
     if mo2_path is not None:
-        info.MO2_PATH = mo2_path
-        if ".exe" in mo2_path:
-            info.MO2_EXE = os.path.basename(mo2_path)
-        elif os.path.exists(mo2_path):
-            for file in os.listdir(mo2_path):
-                if file.endswith(".exe") and ("mod" in str(file).lower() or "mo2" in str(file).lower()):
-                    info.MO2_PATH = os.path.join(mo2_path, file)
-                    info.MO2_EXE = os.path.basename(info.MO2_PATH)
+        data.MO2_PATH = mo2_path
+        if ".exe" in str(mo2_path):
+            data.MO2_EXE = Path(mo2_path).name
+        elif Path(mo2_path).exists():
+            for mo2_file in os.listdir(mo2_path):
+                if mo2_file.endswith(".exe") and ("mod" in str(mo2_file).lower() or "mo2" in str(mo2_file).lower()):
+                    data.MO2_PATH = Path(mo2_path) / mo2_file
+                    data.MO2_EXE = Path(data.MO2_PATH).name
     else:
-        info.MO2_EXE = ""
-        info.MO2_PATH = ""
+        data.MO2_EXE = ""
+        data.MO2_PATH = ""
 
 
-def pact_update_settings(info):
-    update_load_order_path(info, pact_settings("LoadOrder TXT"))
-    update_xedit_path(info, pact_settings("XEDIT EXE"))
-    update_mo2_path(info, pact_settings("MO2 EXE"))
-    info.Cleaning_Timeout = int(pact_settings("Cleaning Timeout"))
-    info.Journal_Expiration = int(pact_settings("Journal Expiration"))
+def pact_update_settings(data: Info) -> None:
+    """
+    Updates the provided `Info` data object with settings fetched from PACT configuration.
+    The function retrieves various settings, validates them, and applies them to the
+    appropriate attributes of the given `Info` instance. This includes settings for
+    load order paths, executable paths, cleaning timeouts, and journal expiration periods.
 
-    if not isinstance(info.Cleaning_Timeout, int) or info.Cleaning_Timeout <= 0:
+    :param data: The `Info` instance to be updated with settings values.
+    :type data: Info
+    :raises ValueError: If the Cleaning Timeout value from PACT settings is not a
+        valid positive integer or is below the minimum required value of 30 seconds.
+    :raises ValueError: If the Journal Expiration value from PACT settings is not a
+        valid positive integer or is less than the minimum required value of 1 day.
+    :return: This function does not return a value. It updates the `data` object in place.
+    :rtype: None
+    """
+    load_order_path = pact_settings("LoadOrder TXT")
+    if isinstance(load_order_path, (str, Path)):
+        update_load_order_path(data, load_order_path)
+    xedit_exe_setting = pact_settings("XEDIT EXE")
+    if isinstance(xedit_exe_setting, (str, Path)):
+        update_xedit_path(data, xedit_exe_setting)
+    mo2_exe_setting = pact_settings("MO2 EXE")
+    if isinstance(mo2_exe_setting, (str, Path)):
+        update_mo2_path(data, mo2_exe_setting)
+    cleaning_timeout = pact_settings("Cleaning Timeout")
+    if cleaning_timeout is not None and isinstance(cleaning_timeout, (str, int)):
+        data.Cleaning_Timeout = int(cleaning_timeout)
+    journal_expiration = pact_settings("Journal Expiration")
+    if (
+        journal_expiration is not None
+        and isinstance(journal_expiration, (str, int))
+        and not isinstance(journal_expiration, list)
+    ):
+        data.Journal_Expiration = int(journal_expiration)
+
+    if not isinstance(data.Cleaning_Timeout, int) or data.Cleaning_Timeout <= 0:
         raise ValueError("""❌ ERROR : CLEANING TIMEOUT VALUE IN PACT SETTINGS IS NOT VALID.)
 Please change Cleaning Timeout to a valid positive number.""")
-    elif info.Cleaning_Timeout < 30:
+    elif data.Cleaning_Timeout < 30:  # noqa: RET506
         raise ValueError("""❌ ERROR : CLEANING TIMEOUT VALUE IN PACT SETTINGS IS TOO SMALL.)
 Cleaning Timeout must be set to at least 30 seconds or more.""")
 
-    if not isinstance(info.Journal_Expiration, int) or info.Journal_Expiration <= 0:
+    if not isinstance(data.Journal_Expiration, int) or data.Journal_Expiration <= 0:
         raise ValueError("""❌ ERROR : JOURNAL EXPIRATION VALUE IN PACT SETTINGS IS NOT VALID.)
 Please change Journal Expiration to a valid positive number.""")
-    elif info.Journal_Expiration < 1:
+    elif data.Journal_Expiration < 1:  # noqa: RET506
         raise ValueError("""❌ ERROR : JOURNAL EXPIRATION VALUE IN PACT SETTINGS IS TOO SMALL.)
 Journal Expiration must be set to at least 1 day or more.""")
 
@@ -249,33 +660,64 @@ Journal Expiration must be set to at least 1 day or more.""")
 pact_update_settings(info)
 if ".exe" in str(info.XEDIT_PATH) and info.XEDIT_EXE in info.xedit_list_specific:
     xedit_path = Path(info.XEDIT_PATH)
-    info.XEDIT_LOG_TXT = str(xedit_path.with_name(xedit_path.stem.upper() + '_log.txt'))
-    info.XEDIT_EXC_LOG = str(xedit_path.with_name(xedit_path.stem.upper() + 'Exception.log'))
-elif info.XEDIT_PATH and not ".exe" in str(info.XEDIT_PATH):
+    info.XEDIT_LOG_TXT = str(xedit_path.with_name(xedit_path.stem.upper() + "_log.txt"))
+    info.XEDIT_EXC_LOG = str(xedit_path.with_name(xedit_path.stem.upper() + "Exception.log"))
+elif info.XEDIT_PATH and ".exe" not in str(info.XEDIT_PATH):
     print(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Errors.Invalid_XEDIT_File"))
     input(PAUSE_MESSAGE)
     raise ValueError
 
 
 # Make sure Mod Organizer 2 is not already running.
-def check_process_mo2(progress_emitter):
+def check_process_mo2(progress_emitter: ProgressEmitter) -> bool:
+    """
+    Checks if Mod Organizer 2 (MO2) is currently running and reports an error if it
+    is detected. The function verifies the existence of the MO2 path and searches
+    for any running processes with a name matching the MO2 executable. If found,
+    an error message is printed, `progress_emitter` is used to indicate completion,
+    and the function returns True. Otherwise, it returns False.
+
+    :param progress_emitter: Emits signals to report progress or completion of the
+        operation.
+    :type progress_emitter: ProgressEmitter
+    :return: True if MO2 is found running; otherwise, False.
+    :rtype: bool
+    """
     pact_update_settings(info)
-    if os.path.exists(info.MO2_PATH):
-        mo2_procs = [proc for proc in psutil.process_iter(attrs=['pid', 'name']) if str(info.MO2_EXE).lower() in proc.name().lower()]
+    if Path(info.MO2_PATH).exists():
+        mo2_procs = [
+            proc
+            for proc in psutil.process_iter(attrs=["pid", "name"])
+            if str(info.MO2_EXE).lower() in proc.name().lower()
+        ]
         for proc in mo2_procs:
             if str(info.MO2_EXE).lower() in proc.name().lower():
                 print("""❌ ERROR : CANNOT START PACT WHILE MOD ORGANIZER 2 IS ALREADY RUNNING!
 PLEASE CLOSE MO2 AND RUN PACT AGAIN! (DO NOT RUN PACT THROUGH MO2)""")
                 progress_emitter.report_done()
+                return True
+    return False
 
 
 # Clear xedit log files to check them for each plugin separately.
-def clear_xedit_logs():
+def clear_xedit_logs() -> None:
+    """
+    Clears the xEdit log files if they exist in the specified paths. This function
+    attempts to delete specific log files related to xEdit, ensuring they are
+    removed from the system. It handles file existence before attempting
+    removal and manages exceptions that might arise during the process.
+
+    :raises PermissionError: Raised if the program does not have sufficient
+        permissions to delete the files.
+    :raises OSError: Raised for errors such as the file being locked or other
+        OS-related issues while attempting deletion.
+    :return: None
+    """
     try:
-        if os.path.exists(info.XEDIT_LOG_TXT):
-            os.remove(info.XEDIT_LOG_TXT)
-        if os.path.exists(info.XEDIT_EXC_LOG):
-            os.remove(info.XEDIT_EXC_LOG)
+        if Path(info.XEDIT_LOG_TXT).exists():
+            Path(info.XEDIT_LOG_TXT).unlink()
+        if Path(info.XEDIT_EXC_LOG).exists():
+            Path(info.XEDIT_EXC_LOG).unlink()
     except (PermissionError, OSError):
         print("❌ ERROR : CANNOT CLEAR XEDIT LOGS. Try running PACT in Admin Mode.")
         print("   If problems continue, please report this to the PACT Nexus page.")
@@ -283,16 +725,27 @@ def clear_xedit_logs():
 
 
 # Make sure right XEDIT is running for the right game.
-def check_settings_integrity():
+def check_settings_integrity() -> None:
+    """
+    Validates the integrity of specific settings to ensure required file paths and INI
+    settings are correctly defined and functional. The function performs a series of
+    checks, including the existence of necessary file paths and the compatibility between
+    load order configurations and the selected xEdit executable. It raises a ValueError
+    if critical requirements are found to be invalid or missing.
+
+    :raises ValueError: If the required file paths are missing, INI settings are
+        incorrect, or the load order file or xEdit executable does not meet the
+        validation criteria.
+    """
     pact_update_settings(info)
-    if os.path.exists(info.LOAD_ORDER_PATH) and os.path.exists(info.XEDIT_PATH):
+    if Path(info.LOAD_ORDER_PATH).exists() and Path(info.XEDIT_PATH).exists():
         print("✔️ REQUIRED FILE PATHS FOUND! CHECKING IF INI SETTINGS ARE CORRECT...")
     else:
         print(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Warnings.Invalid_INI_Path"))
         input(PAUSE_MESSAGE)
         raise ValueError
 
-    if os.path.exists(info.MO2_PATH):
+    if Path(info.MO2_PATH).exists():
         info.MO2Mode = True
     else:
         info.MO2Mode = False
@@ -301,13 +754,16 @@ def check_settings_integrity():
         "Fallout3.esm": info.lower_fo3,
         "FalloutNV.esm": info.lower_fnv,
         "Fallout4.esm": info.lower_fo4,
-        "Skyrim.esm": info.lower_sse
+        "Skyrim.esm": info.lower_sse,
     }
 
     if str(info.XEDIT_EXE).lower() not in info.lower_universal:
-        with open(info.LOAD_ORDER_PATH, "r", encoding="utf-8", errors="ignore") as LO_Check:
+        with Path(info.LOAD_ORDER_PATH).open(encoding="utf-8", errors="ignore") as LO_Check:
             LO_Plugins = LO_Check.read()
-            if not any(game in LO_Plugins and str(info.XEDIT_EXE).lower() in executables for game, executables in valid_xedit_executables.items()):
+            if not any(
+                game in LO_Plugins and str(info.XEDIT_EXE).lower() in executables
+                for game, executables in valid_xedit_executables.items()
+            ):
                 print(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Warnings.Invalid_INI_Setup"))
                 input(PAUSE_MESSAGE)
                 raise ValueError
@@ -317,162 +773,272 @@ def check_settings_integrity():
         raise ValueError
 
 
-def update_log_paths(info, game_mode=None):
-    path = Path(info.XEDIT_PATH)
+def update_log_paths(data: Info, game_mode: str | None = None) -> None:
+    """
+    Updates the paths for log files associated with xEdit. The function dynamically configures
+    the file names of log and exception logs based on the provided game mode. If no game mode is
+    specified, the log paths are constructed using the stem of the existing xEdit path.
+
+    :param data: An instance of the `Info` class containing the path to xEdit and pre-defined
+        attributes for the log file paths.
+    :type data: Info
+    :param game_mode: The optional game mode that determines the prefix or naming convention for
+        the log files.
+    :type game_mode: str | None
+    :return: This function does not return any value; it updates the given `data` object with
+        new log paths.
+    :rtype: None
+    """
+    path = Path(data.XEDIT_PATH)
     if game_mode:
-        info.XEDIT_LOG_TXT = str(path.with_name(f"{game_mode.upper()}Edit_log.txt"))
-        info.XEDIT_EXC_LOG = str(path.with_name(f"{game_mode.upper()}EditException.log"))
+        data.XEDIT_LOG_TXT = str(path.with_name(f"{game_mode.upper()}Edit_log.txt"))
+        data.XEDIT_EXC_LOG = str(path.with_name(f"{game_mode.upper()}EditException.log"))
     else:
-        info.XEDIT_LOG_TXT = str(path.with_name(f"{path.stem.upper()}_log.txt"))
-        info.XEDIT_EXC_LOG = str(path.with_name(f"{path.stem.upper()}Exception.log"))
+        data.XEDIT_LOG_TXT = str(path.with_name(f"{path.stem.upper()}_log.txt"))
+        data.XEDIT_EXC_LOG = str(path.with_name(f"{path.stem.upper()}Exception.log"))
 
     # Additional helper functions
 
 
-def create_specific_xedit_command(info, plugin_name):
-    xedit_exe_lower = str(info.XEDIT_EXE).lower()
-    match info.MO2Mode:
-        case True if xedit_exe_lower in info.lower_specific:
-            return f'"{info.MO2_PATH}" run "{info.XEDIT_PATH}" -a "-QAC -autoexit -autoload \\"{plugin_name}\\""'
-        case False if xedit_exe_lower in info.lower_specific:
-            return f'"{info.XEDIT_PATH}" -a -QAC -autoexit -autoload "{plugin_name}"'
+def create_xedit_command(data: Info, plugin_name: str, universal: bool, game_mode: str | None = None) -> str | None:
+    """
+    Generates a command-line string for executing xEdit, a utility tool
+    used in modding Bethesda games, based on provided configuration data.
+    This function supports execution through Mod Organizer 2 (MO2) as well
+    as standalone execution, allowing customization through parameters such
+    as game mode and whether partial forms functionality is enabled.
+
+    :param data: Represents the configuration and paths required for execution.
+    :param plugin_name: The name of the plugin file to be loaded by xEdit.
+    :param universal: Flag to determine whether the command is for universal game
+        mode compatibility.
+    :param game_mode: Specifies the game mode to be targeted (optional).
+    :return: A string representing the xEdit command-line, or None if an invalid
+        configuration is provided.
+    """
+    commandline = ""
+    match data.MO2Mode, universal:
+        case True, True:
+            commandline = f'"{data.MO2_PATH}" run "{data.XEDIT_PATH}" -a "-{game_mode} -QAC -autoexit -autoload \\"{plugin_name}\\""'
+        case True, False:
+            commandline = f'"{data.MO2_PATH}" run "{data.XEDIT_PATH}" -a "-QAC -autoexit -autoload \\"{plugin_name}\\""'
+        case False, True:
+            commandline = f'"{data.XEDIT_PATH}" -a -{game_mode} -QAC -autoexit -autoload "{plugin_name}"'
+        case False, False:
+            commandline = f'"{data.XEDIT_PATH}" -a -QAC -autoexit -autoload "{plugin_name}"'
         case _:
             print("Invalid xedit executable specified")
-            return None
 
-def create_universal_xedit_command(info, plugin_name, game_mode):
-    if info.MO2Mode:
-        return f'"{info.MO2_PATH}" run "{info.XEDIT_PATH}" -a "-{game_mode} -QAC -autoexit -autoload \\"{plugin_name}\\""'
-    else:
-        return f'"{info.XEDIT_PATH}" -a -{game_mode} -QAC -autoexit -autoload "{plugin_name}"'
+    if commandline:
+        return (
+            commandline.replace("-QAC", "-iknowwhatimdoing -QAC -allowmakepartial")
+            if pact_settings("Partial Forms")
+            else commandline
+        )
+    else:  # noqa: RET505
+        print("Invalid xedit executable specified")
+        return None
 
 
-def get_game_mode(info):
+def get_game_mode(data: Info) -> str:
+    """
+    Reads the load order file to determine the game mode. The function inspects each
+    line of the specified load order file to find the presence of specific markers
+    corresponding to different games such as Skyrim, Fallout 3, Fallout NV, or
+    Fallout 4. Based on the content, it returns a string identifying the game mode.
+    If the file cannot be found or accessed, it raises an appropriate exception. If
+    none of the expected markers are found in the file, a ValueError is raised.
+
+    :param data: An instance containing the attribute `LOAD_ORDER_PATH`, which
+        points to the path of the load order file to inspect.
+    :type data: Info
+    :return: A string identifying the determined game mode. Expected values are
+        "sse" for Skyrim, "fo3" for Fallout 3, "fnv" for Fallout NV, and "fo4"
+        for Fallout 4.
+    :rtype: str
+    :raises FileNotFoundError: If the load order file does not exist at the
+        specified path.
+    :raises ValueError: If none of the game mode markers are detected in the file.
+    :raises Exception: For any other errors encountered while accessing or reading
+        the file.
+    """
     # Read the load order file line by line to determine the game mode
     try:
-        with open(info.LOAD_ORDER_PATH, "r", encoding="utf-8", errors="ignore") as LO_Check:
+        with Path(data.LOAD_ORDER_PATH).open(encoding="utf-8", errors="ignore") as LO_Check:
             for line in LO_Check:
-                if "Skyrim.esm" in line:
-                    return "sse"
-                elif "Fallout3.esm" in line:
-                    return "fo3"
-                elif "FalloutNV.esm" in line:
-                    return "fnv"
-                elif "Fallout4.esm" in line:
-                    return "fo4"
+                match line.strip():
+                    case _ if "Skyrim.esm" in line:
+                        return "sse"
+                    case _ if "Fallout3.esm" in line:
+                        return "fo3"
+                    case _ if "FalloutNV.esm" in line:
+                        return "fnv"
+                    case _ if "Fallout4.esm" in line:
+                        return "fo4"
     except FileNotFoundError:
-        print(f"Load order file not found: {info.LOAD_ORDER_PATH}")
+        print(f"Load order file not found: {data.LOAD_ORDER_PATH}")
         raise
     except Exception as e:
-        print(f"Error reading load order file: {info.LOAD_ORDER_PATH}, error: {str(e)}")
+        print(f"Error reading load order file: {data.LOAD_ORDER_PATH}, error: {e!s}")
         raise
     else:
         raise ValueError("❌ ERROR: UNABLE TO DETERMINE GAME MODE!")
 
 
-def check_cpu_usage(proc):
+def check_cpu_usage(proc: psutil.Process) -> bool | None:
     """
-    Checks the CPU usage of a process.
+    Checks if the CPU usage of the given process is below a specified threshold,
+    or if the process status is among certain terminal states. The function
+    returns `False` if the process cannot be checked due to access permissions,
+    nonexistence, or errors such as a zombie process.
 
-    If CPU usage is below 1% after an interval of 5 seconds, returns True, indicating a likely error. 
-
-    Args:
-        proc (psutil.Process): The process to check.
-
-    Returns:
-        bool: True if CPU usage is low, False otherwise.
+    :param proc: The target process to check.
+    :type proc: psutil.Process
+    :return: Returns `True` if the process is running and meets the CPU usage
+        threshold or has a terminal state (`psutil.STATUS_ZOMBIE` or
+        `psutil.STATUS_DEAD`). Returns `False` if there is an error or the
+        process does not satisfy the conditions. May return `None` if no
+        conditions match.
+    :rtype: bool | None
+    :raises psutil.NoSuchProcess: If the specified process does not exist.
+    :raises psutil.AccessDenied: If there is no permission to access the process.
+    :raises psutil.ZombieProcess: If the process is a zombie.
+    :raises subprocess.CalledProcessError: If a subprocess-related error occurs.
     """
-    """proc.is_running() and (proc.cpu_percent(interval=5) < 1 or proc.status() == psutil.STATUS_ZOMBIE or proc.status() == psutil.STATUS_DEAD):
-        return True
-    return False"""
     try:
-        if proc.is_running() and (proc.cpu_percent(interval=5) < 1 or proc.status() == psutil.STATUS_ZOMBIE or proc.status() == psutil.STATUS_DEAD):  # You have to give cpu_percent an interval or it returns a meaningless result,
-            return True
-        return False
+        return proc.is_running() and (
+            proc.cpu_percent(interval=5) < 1 or proc.status() in {psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD}
+        )
     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, subprocess.CalledProcessError):
         return False
 
 
-def check_process_timeout(proc, info):
+def check_process_timeout(proc: psutil.Process, data: Info) -> bool:
     """
-    Checks if a process has run longer than a specified timeout.
+    Checks if a process has exceeded its timeout based on its creation time and a
+    specified cleaning timeout.
 
-    Args:
-        proc (psutil.Process): The process to check.
-        info (Info): An object containing the timeout value.
+    This function determines whether the elapsed time since the creation of a given
+    process exceeds the provided cleaning timeout value. The comparison is based
+    on the current system time and the process's creation timestamp.
 
-    Returns:
-        bool: True if the process has run longer than the timeout, False otherwise.
+    :param proc: The process to evaluate.
+    :type proc: psutil.Process
+    :param data: The object containing the Cleaning_Timeout used for comparison.
+    :type data: Info
+    :return: True if the process timeout has been exceeded, otherwise False.
+    :rtype: bool
     """
     create_time = proc.create_time()
-    if (time.time() - create_time) > info.Cleaning_Timeout:
-        return True
-    return False
+    return (time.time() - create_time) > data.Cleaning_Timeout
 
 
-def check_process_exceptions(info):
+def check_process_exceptions(data: Info) -> bool:
     """
-    Checks a process for exceptions.
+    Checks the content of the specified log file for specific exception phrases.
 
-    Args:
-        info (Info): An object containing the path to the exception log.
+    This function checks if a log file specified in the `data` object exists. If
+    the log file is present, the function reads its content and searches for
+    specific exception phrases that indicate errors. If such phrases are found,
+    it returns `True`, indicating that an exception matching the criteria is
+    detected. Otherwise, it returns `False`.
 
-    Returns:
-        bool: True if exceptions were found, False otherwise.
+    :param data: The `Info` object containing the path to the log file (`XEDIT_EXC_LOG`).
+    :type data: Info
+    :return: Returns `True` if specific exception phrases are found in the log
+             content, otherwise `False`.
+    :rtype: bool
     """
-    if os.path.exists(info.XEDIT_EXC_LOG):
-        xedit_exc_out = subprocess.check_output(['powershell', '-command', f'Get-Content {info.XEDIT_EXC_LOG}'])
+    if Path(data.XEDIT_EXC_LOG).exists():
+        xedit_exc_out = subprocess.check_output(["powershell", "-command", f"Get-Content {data.XEDIT_EXC_LOG}"])
         Exception_Check = xedit_exc_out.decode()
         if "which can not be found" in Exception_Check or "which it does not have" in Exception_Check:
             return True
     return False
 
 
-def handle_error(proc, plugin_name, info, error_message, add_ignore=True):
+def handle_error(
+    proc: psutil.Process, plugin_name: str, data: Info, error_message: str, add_ignore: bool = True
+) -> None:
     """
-    Handles an error case.
+    Handle errors that occur during a plugin processing, ensuring proper cleanup and error
+    handling for the given process. This function terminates the process, adjusts plugin
+    tracking states, updates failure lists, clears logs if debug mode is disabled, logs
+    the error message, and optionally updates an ignore list for the game mode.
 
-    Kills the process, clears logs, and updates relevant info.
-
-    Args:
-        proc (psutil.Process): The process to kill.
-        plugin_name (str): The name of the plugin being processed.
-        info (Info): An object containing relevant information.
-        error_message (str): The error message to print.
-        add_ignore (bool, str): Whether or not to add the plugin to the ignore list. Defaults to True.
+    :param proc: Process that is being handled, typically the plugin processing workflow.
+    :type proc: psutil.Process
+    :param plugin_name: Name of the plugin that caused the error.
+    :type plugin_name: str
+    :param data: Object that keeps track of processing states, error lists, and relevant
+        information about plugins.
+    :type data: Info
+    :param error_message: Message describing the error, intended for logging or display.
+    :type error_message: str
+    :param add_ignore: Indicates whether to add the plugin to the ignore list. Default is True.
+    :type add_ignore: bool
+    :return: This function does not return a value; its operations are intended for side effects.
+    :rtype: None
     """
     try:
         proc.kill()
-    except (PermissionError, psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, subprocess.CalledProcessError):
+    except (
+        PermissionError,
+        psutil.NoSuchProcess,
+        psutil.AccessDenied,
+        psutil.ZombieProcess,
+        subprocess.CalledProcessError,
+    ):
         pass
     finally:
         time.sleep(1)
-        clear_xedit_logs()
-        info.plugins_processed -= 1
-        info.clean_failed_list.append(plugin_name)
+        if not pact_settings("Debug Mode"):
+            clear_xedit_logs()
+        data.plugins_processed -= 1
+        if isinstance(data.clean_failed_list, set):
+            data.clean_failed_list.add(plugin_name)
+        else:
+            data.clean_failed_list.add(plugin_name)
         print(error_message)
         if add_ignore:
-            pact_ignore_update(plugin_name, get_game_mode(info).upper())
+            pact_ignore_update(plugin_name, get_game_mode(data).upper())
 
-def create_bat_command(info, plugin_name):
-    xedit_exe_lower = str(info.XEDIT_EXE).lower()
-    xedit_path_str = str(info.XEDIT_PATH)
 
-    if xedit_exe_lower in info.lower_specific:
-        update_log_paths(info)
-        bat_command = create_specific_xedit_command(info, plugin_name)
+def create_bat_command(data: Info, plugin_name: str) -> str | None:
+    """
+    Creates a batch command for xEdit operations based on the provided data and plugin name.
+    The function determines the appropriate executable or load order file settings, generates
+    a command, and performs necessary configuration updates. If configuration is incorrect,
+    an appropriate error is raised, and the user is notified.
+
+    :param data: Input information object encapsulating paths, filenames, and game-related details
+    :type data: Info
+    :param plugin_name: Name of the plugin that will be processed
+    :type plugin_name: str
+    :return: The generated batch command string if successful, or None if not applicable
+    :rtype: str | None
+    :raises ValueError: If the load order file or xEdit settings are invalid, causing the process to stop
+    :raises RuntimeError: If unable to start the cleaning process due to misconfigured settings or invalid paths
+    """
+    xedit_exe_lower = str(data.XEDIT_EXE).lower()
+    str(data.XEDIT_PATH)
+
+    if xedit_exe_lower in data.lower_specific:
+        update_log_paths(data)
+        bat_command = create_xedit_command(data, plugin_name, False)
         if bat_command:
             return bat_command
 
-    if "loadorder" in str(info.LOAD_ORDER_PATH).lower() and xedit_exe_lower in info.lower_universal:
-        game_mode = get_game_mode(info)
+    if "loadorder" in str(data.LOAD_ORDER_PATH).lower() and xedit_exe_lower in data.lower_universal:
+        game_mode = get_game_mode(data)
         if game_mode is None:
             print(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Errors.Invalid_LO_File"))
             input(PAUSE_MESSAGE)
             raise ValueError
 
-        update_log_paths(info, game_mode)
-        bat_command = create_universal_xedit_command(info, plugin_name, game_mode)
+        update_log_paths(data, game_mode)
+        bat_command = create_xedit_command(data, plugin_name, True, game_mode)
+
         if bat_command:
             return bat_command
 
@@ -483,69 +1049,130 @@ def create_bat_command(info, plugin_name):
     input(PAUSE_MESSAGE)
     raise RuntimeError("Unable to start the cleaning process")
 
-def run_auto_cleaning(plugin_name):
-    """
-    Runs the automatic cleaning process.
 
-    Args:
-        plugin_name (str): The name of the plugin to clean.
+def run_auto_cleaning(plugin_name: str) -> None:
+    """
+    Runs the automatic cleaning process for a specified plugin by creating and executing
+    a batch command in a separate subprocess. Clears logs, initiates a monitoring thread,
+    and increments the count of processed plugins upon completion.
+
+    :param plugin_name: Name of the plugin that requires cleaning.
+    :type plugin_name: str
+    :raises ValueError: If the batch command to be run in the subprocess is invalid.
+    :return: This function does not return any value.
+    :rtype: None
     """
     # Create command to run in subprocess
     bat_command = create_bat_command(info, plugin_name)
 
     # Clear logs and start subprocess
-    clear_xedit_logs()
-    print(f"\nCURRENTLY RUNNING : {bat_command}".replace("\\", "").replace('"', ""))
-    bat_process = subprocess.Popen(bat_command)
-    time.sleep(1)
+    if not pact_settings("Debug Mode"):
+        clear_xedit_logs()
+    print(f"\nCURRENTLY CLEANING : {plugin_name}")
+    if bat_command is None:
+        raise ValueError("Invalid command for subprocess")
+    bat_process = subprocess.Popen(bat_command, shell=True)
 
-    # Check subprocess for errors until it finishes
-    while bat_process.poll() is None:
-        xedit_procs = [proc for proc in psutil.process_iter(attrs=['pid', 'name', 'cpu_percent', 'create_time']) if is_it_xedit(proc.name().lower(), info)]
-        for proc in xedit_procs:
-            if proc.name().lower() == str(info.XEDIT_EXE).lower():
+    # Create a separate thread for monitoring the process
+    monitor_thread = threading.Thread(target=monitor_process, args=(bat_process, plugin_name))
+    monitor_thread.start()
+
+    # Wait for the cleaning process to finish
+    bat_process.wait()
+
+    # Increment processed plugins count
+    info.plugins_processed += 1
+
+
+def monitor_process(proc: subprocess.Popen, plugin_name: str) -> None:
+    """
+    Monitors a given process and performs various checks to handle specific errors or
+    issues. This function continuously monitors the specified process while it is
+    running and checks for conditions such as low CPU usage, timeout, or exceptions
+    indicative of errors. If an issue is detected, appropriate error handling measures
+    are executed, such as terminating the process and logging relevant information.
+
+    :param proc: The subprocess.Popen object representing the process to monitor.
+    :param plugin_name: The name of the plugin being monitored, used for logging
+                        and error identification.
+    :return: None
+    """
+    while proc.poll() is None:
+        xedit_procs = [
+            p
+            for p in psutil.process_iter(attrs=["pid", "name", "cpu_percent", "create_time"])
+            if is_it_xedit(p.name().lower(), info)
+        ]
+        for p in xedit_procs:
+            if p.name().lower() == str(info.XEDIT_EXE).lower():
                 # Check for low CPU usage (indicative of an error)
-                if check_cpu_usage(proc):
-                    handle_error(proc, plugin_name, info, "❌ ERROR : PLUGIN IS DISABLED OR HAS MISSING REQUIREMENTS! KILLING XEDIT AND ADDING PLUGIN TO IGNORE LIST...")
+                if check_cpu_usage(p):
+                    handle_error(
+                        p,
+                        plugin_name,
+                        info,
+                        "❌ ERROR : PLUGIN IS DISABLED OR HAS MISSING REQUIREMENTS! KILLING XEDIT AND ADDING PLUGIN TO IGNORE LIST...",
+                    )
                     pact_log_update(f"{plugin_name} -> Disabled or missing requirements")
                     break
                 # Check for process running longer than specified timeout
-                if check_process_timeout(proc, info):
-                    handle_error(proc, plugin_name, info, "❌ ERROR : XEDIT TIMED OUT (CLEANING PROCESS TOOK TOO LONG)! KILLING XEDIT...", add_ignore=False)
+                if check_process_timeout(p, info):
+                    handle_error(
+                        p,
+                        plugin_name,
+                        info,
+                        "❌ ERROR : XEDIT TIMED OUT (CLEANING PROCESS TOOK TOO LONG)! KILLING XEDIT...",
+                        add_ignore=False,
+                    )
                     pact_log_update(f"{plugin_name} -> XEdit timed out")
                     break
                 # Check for exceptions in process
                 if check_process_exceptions(info):
-                    handle_error(proc, plugin_name, info, "❌ ERROR : PLUGIN IS EMPTY OR HAS MISSING REQUIREMENTS! KILLING XEDIT AND ADDING PLUGIN TO IGNORE LIST...")
+                    handle_error(
+                        p,
+                        plugin_name,
+                        info,
+                        "❌ ERROR : PLUGIN IS EMPTY OR HAS MISSING REQUIREMENTS! KILLING XEDIT AND ADDING PLUGIN TO IGNORE LIST...",
+                    )
                     pact_log_update(f"{plugin_name} -> Empty or missing requirements")
                     break
         time.sleep(3)
-    # Increment processed plugins count
-    info.plugins_processed += 1
 
 
 # Compile the patterns outside the function
 udr_pattern = re.compile(r"Undeleting:\s*(.*)")
 itm_pattern = re.compile(r"Removing:\s*(.*)")
 nvm_pattern = re.compile(r"Skipping:\s*(.*)")
+partial_form_pattern = re.compile(r"Making Partial Form:\s*(.*)")
 
 
-def check_cleaning_results(plugin_name):
+def check_cleaning_results(plugin_name: str) -> None:
+    """
+    Check cleaning results of a specific plugin by processing the log files generated by xEdit. The function
+    analyzes patterns in the xEdit log file to determine whether cleaning actions were performed and updates
+    relevant tracking lists accordingly. If no cleaning actions are identified, the plugin is added to the
+    PACT ignore list and skip list. This function also clears the xEdit logs unless debug mode is enabled.
+
+    :param plugin_name: The name of the plugin for which cleaning results are being checked.
+    :type plugin_name: str
+    :return: None
+    """
     time.sleep(1)  # Wait to make sure xedit generates the logs.
-    if os.path.exists(info.XEDIT_LOG_TXT):
+    if Path(info.XEDIT_LOG_TXT).exists():
         cleaned_something = False
-        with open(info.XEDIT_LOG_TXT, "r", encoding="utf-8", errors="ignore") as XE_Check:
+        with Path(info.XEDIT_LOG_TXT).open(encoding="utf-8", errors="ignore") as XE_Check:
             # Define the patterns and associated actions
             patterns = {
                 udr_pattern: ("Cleaned UDRs", info.clean_results_UDR),
                 itm_pattern: ("Cleaned ITMs", info.clean_results_ITM),
                 nvm_pattern: ("Found Deleted Navmeshes", info.clean_results_NVM),
+                partial_form_pattern: ("Created Partial Forms", info.clean_results_PARTIAL_FORMS),
             }
             for line in XE_Check:
                 for pattern, (message, results_list) in patterns.items():
                     if pattern.search(line):
                         pact_log_update(f"\n{plugin_name} -> {message}")
-                        results_list.append(plugin_name)
+                        results_list.add(plugin_name)
                         cleaned_something = True
             if cleaned_something:
                 info.plugins_cleaned += 1
@@ -554,11 +1181,23 @@ def check_cleaning_results(plugin_name):
                 print("NOTHING TO CLEAN ! Adding plugin to PACT Ignore file...")
                 pact_ignore_update(plugin_name, get_game_mode(info).upper())
                 info.LCL_skip_list.append(plugin_name)
-        clear_xedit_logs()
+        if not pact_settings("Debug Mode"):
+            clear_xedit_logs()
 
 
-def get_plugin_list(load_order_path):
-    with open(load_order_path, "r", encoding="utf-8", errors="ignore") as lo_file:
+def get_plugin_list(load_order_path: str) -> list[str]:
+    """
+    Extracts and returns a list of plugins from a given load order file. The method processes the
+    load order file depending on whether its name contains "plugins.txt". For "plugins.txt" files,
+    it filters lines containing an asterisk and removes the asterisk. For other files, it excludes
+    lines with '.ghost' extensions.
+
+    :param load_order_path: Path to the load order file that contains plugin details.
+    :type load_order_path: str
+    :return: A list of plugins extracted from the load order file.
+    :rtype: list[str]
+    """
+    with Path(load_order_path).open(encoding="utf-8", errors="ignore") as lo_file:
         next(lo_file)  # Skip the first line
         if "plugins.txt" in load_order_path:
             plugin_list = [line.strip().replace("*", "") for line in lo_file if "*" in line.strip()]
@@ -567,45 +1206,53 @@ def get_plugin_list(load_order_path):
     return plugin_list
 
 
-def clean_plugin(plugin):
+def clean_plugin(plugin: str) -> None:
+    """
+    Cleans the provided plugin by performing automatic cleaning and verifying
+    the cleaning results.
+
+    :param plugin: The name of the plugin to be cleaned.
+    :type plugin: str
+    :return: None
+    """
     run_auto_cleaning(plugin)
     check_cleaning_results(plugin)
 
 
-def init_plugins_info():
+def init_plugins_info() -> tuple[list[str], int, list[str]]:
+    """
+    Initializes and retrieves information about plugins.
+
+    This function collects information about plugins by loading the plugin list
+    from a specific file path, filters out those plugins that are included in the
+    combination of skip lists (`VIP_skip_list` and `LCL_skip_list`), and calculates
+    the count of unique plugins that are not skipped.
+
+    :return: A tuple containing the following:
+             - A list of plugin names from the load order file.
+             - The count of unique plugins after excluding skipped plugins.
+             - The combined skip list of VIP and local skipped plugins.
+    :rtype: tuple[list[str], int, list[str]]
+    """
     ALL_skip_list = info.VIP_skip_list + info.LCL_skip_list
-    plugin_list = get_plugin_list(info.LOAD_ORDER_PATH)
+    plugin_list = get_plugin_list(str(info.LOAD_ORDER_PATH))
     count_plugins = len(set(plugin_list) - set(ALL_skip_list))
     return plugin_list, count_plugins, ALL_skip_list
 
 
-class ProgressEmitter(QObject):  # type: ignore
-    progress = Signal(int)
-    max_value = Signal(int)
-    plugin_value = Signal(str)
-    done = Signal()
-    visible = Signal(bool)
-    is_done = False
+def clean_plugins(progress_emitter: ProgressEmitter) -> None:
+    """
+    Cleans the plugins in the system based on the provided settings and progress emitter.
 
-    def report_max_value(self):
-        count = init_plugins_info()[1]
-        self.max_value.emit(count)
+    This function initiates the cleaning process for plugins, logs the progress, handles
+    ignored plugins, and categorizes plugins that pass or fail cleaning. It utilizes settings
+    and configurations from other system modules. The function ensures proper reporting of
+    progress, completion, and any issues encountered during the cleaning process.
 
-    def report_progress(self, count):
-        self.progress.emit(count)
-
-    def report_plugin(self, plugin):
-        self.plugin_value.emit(f"Cleaning {plugin} %v/%m - %p%")
-
-    def report_done(self):
-        self.done.emit()
-        self.is_done = True
-
-    def set_visible(self):
-        self.visible.emit(True)
-
-
-def clean_plugins(progress_emitter: ProgressEmitter):
+    :param progress_emitter: A `ProgressEmitter` object used to manage and report the progress
+        of the cleaning process.
+    :return: None
+    """
     progress_emitter.is_done = False
     print(f"❓ LOAD ORDER TXT is set to : {info.LOAD_ORDER_PATH}")
     print(f"❓ XEDIT EXE is set to : {info.XEDIT_PATH}")
@@ -615,8 +1262,10 @@ def clean_plugins(progress_emitter: ProgressEmitter):
         print("✔️ MO2 EXECUTABLE WAS FOUND! SWITCHING TO MOD ORGANIZER 2 MODE...")
     else:
         print("❌ MO2 EXECUTABLE NOT SET OR FOUND. SWITCHING TO VORTEX MODE...")
-    
-    info.LCL_skip_list.extend(yaml_settings("PACT Ignore.yaml", f"PACT_Ignore_{get_game_mode(info).upper()}"))
+
+    ignore_list = yaml_settings("PACT Ignore.yaml", f"PACT_Ignore_{get_game_mode(info).upper()}")
+    if ignore_list:
+        info.LCL_skip_list.extend(ignore_list)
 
     plugin_list, plugin_count, ALL_skip_list = init_plugins_info()
     progress_emitter.report_max_value()
@@ -625,27 +1274,45 @@ def clean_plugins(progress_emitter: ProgressEmitter):
     print(f"✔️ CLEANING STARTED... ( PLUGINS TO CLEAN: {plugin_count} )")
     log_start = time.perf_counter()
     log_time = datetime.datetime.now()
+    pact_journal_expire()
     pact_log_update(f"\nSTARTED CLEANING PROCESS AT : {log_time}")
     count_cleaned = 0
 
     for plugin in plugin_list:
-        if not any(plugin in elem for elem in ALL_skip_list) and re.search(r"(?:.+?)(?:\.(?:esl|esm|esp)+)$", plugin, re.IGNORECASE):
+        if not any(plugin in elem for elem in ALL_skip_list) and re.search(
+            r".+?\.(?:esl|esm|esp)+$", plugin, re.IGNORECASE
+        ):
             progress_emitter.report_plugin(plugin)
             clean_plugin(plugin)
             count_cleaned += 1
             print(f"Finished cleaning : {plugin} ({count_cleaned} / {plugin_count})")
             progress_emitter.report_progress(count_cleaned)
     completion_time = (str(time.perf_counter() - log_start))[:3]
-    pact_log_update(f"\n✔️ CLEANING COMPLETE! {info.XEDIT_EXE} processed all available plugins in {completion_time} seconds.")
-    pact_log_update(f"\n   {info.XEDIT_EXE} successfully processed {info.plugins_processed} plugins and cleaned {info.plugins_cleaned} of them.\n")
+    pact_log_update(
+        f"\n✔️ CLEANING COMPLETE! {info.XEDIT_EXE} processed all available plugins in {completion_time} seconds."
+    )
+    pact_log_update(
+        f"\n   {info.XEDIT_EXE} successfully processed {info.plugins_processed} plugins and cleaned {info.plugins_cleaned} of them.\n"
+    )
 
     print(f"\n✔️ CLEANING COMPLETE! {info.XEDIT_EXE} processed all available plugins in {completion_time} seconds.")
-    print(f"\n   {info.XEDIT_EXE} successfully processed {info.plugins_processed} plugins and cleaned {info.plugins_cleaned} of them.\n")
+    print(
+        f"\n   {info.XEDIT_EXE} successfully processed {info.plugins_processed} plugins and cleaned {info.plugins_cleaned} of them.\n"
+    )
 
-    for plugins, message in [(info.clean_failed_list, "❌ {0} WAS UNABLE TO CLEAN THESE PLUGINS: (Invalid Plugin Name or {0} Timed Out):"),
-                             (info.clean_results_UDR, "✔️ The following plugins had Undisabled Records and {0} properly disabled them:"),
-                             (info.clean_results_ITM, "✔️ The following plugins had Identical To Master Records and {0} successfully cleaned them:"),
-                             (info.clean_results_NVM, "❌ CAUTION : The following plugins contain Deleted Navmeshes!\n   Such plugins may cause navmesh related problems or crashes.")]:
+    for plugins, message in [
+        (info.clean_failed_list, "❌ {0} WAS UNABLE TO CLEAN THESE PLUGINS: (Invalid Plugin Name or {0} Timed Out):"),
+        (info.clean_results_UDR, "✔️ The following plugins had Undisabled Records and {0} properly disabled them:"),
+        (
+            info.clean_results_ITM,
+            "✔️ The following plugins had Identical To Master Records and {0} successfully cleaned them:",
+        ),
+        (
+            info.clean_results_NVM,
+            "❌ CAUTION : The following plugins contain Deleted Navmeshes!\n   Such plugins may cause navmesh related problems or crashes.",
+        ),
+        (info.clean_results_PARTIAL_FORMS, f"✔️ The following plugins had ITMs converted to Partial Forms {0}:"),
+    ]:
         if len(plugins) > 0:
             print(f"\n{message.format(info.XEDIT_EXE)}")
             for plugin in plugins:

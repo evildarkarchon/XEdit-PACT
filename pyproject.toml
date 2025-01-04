@@ -1,0 +1,105 @@
+[tool.poetry]
+name = "pact"
+version = "2.0"
+description = "A program to automatically run xEdit's quickautoclean on various Bethesda games."
+authors = ["Poet", "evildarkarchon"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.13"
+PySide6 = "^6.8.0.2"
+psutil = "^6.1.0"
+requests = "^2.32.3"
+tomlkit = "^0.13.2"
+ruamel-yaml = "^0.18.6"
+
+[tool.poetry.group.dev.dependencies]
+types-psutil = "^6.1.0.20241102"
+ruff = ">=0.8.0"
+mypy = "^1.13.0"
+pyinstaller = "^6.11.1"
+poetry-plugin-up = "^0.7.2"
+virtualenv = "^20.28.0"
+types-requests = "^2.32.0.20241016"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.mypy]
+enable_incomplete_feature = ["NewGenericSyntax"]
+
+[tool.pyright]
+typeCheckingMode = "standard"
+reportUnusedImport = false    # Redundant with Ruff F401
+
+[tool.ruff]
+indent-width = 4
+line-length = 120
+
+[tool.ruff.format]
+preview = true
+indent-style = "space"
+line-ending = "auto"
+quote-style = "double"
+skip-magic-trailing-comma = false
+
+[tool.ruff.lint]
+ignore = [
+	"ANN401",  # Allow use of typing.Any
+	"E501",    # Duplicate of B950 line-too-long
+	"E722",    # Duplicate of B001 bare-except
+	"PLR0904", # too-many-public-methods
+	"PLR0912", # too-many-branches
+	"PLR0914", # too-many-local-variables
+	"PLR0915", # too-many-statements
+	"PLR1702", # too-many-nested-blocks
+	"TRY003",  # Allow custom exception messages
+	"TRY400",  # Use `logging.exception` instead of `logging.error`
+	"PLR2004", # Allow magic values in comparisons
+	"PLW2901", # Allow overwriting loop variables
+]
+
+extend-select = [
+	"A",     # Builtin Shadowing
+	"ANN",   # Type Annotations
+	"ASYNC", # Async Suggestions
+	"ARG",   # Unused Arguments
+	"B",     # Bugs/Design Problems
+	"BLE",   # Blind Except
+	"C4",    # Comprehensions
+	"FA",    # Future Annotations
+	"FLY",   # F-Strings
+	"FURB",  # Modernization
+	"I",     # Import Sorting
+	"ICN",   # Import Naming Conventions
+	"ISC",   # Implicit String Concatenation
+	"LOG",   # Logging
+	"PERF",  # Performance Anti-Patterns
+	"PIE",   # Misc Lints
+	"PL",    # Pylint
+	"PT",    # PyTest
+	"PTH",   # Prefer Pathlib
+	"RET",   # Return
+	"RSE",   # Raise
+	"RUF",   # Ruff
+	"SIM",   # Simplify
+	"SLF",   # Self
+	"TCH",   # Type Checking
+	"TID",   # Tidy Imports
+	"TRY",   # Exception Anti-Patterns
+	"UP",    # pyupgrade (New Syntax Suggestions)
+
+	# "D",     # pydocstyle
+	# "C901",  # Complex Structures
+	# "COM",   # Commas
+	# "DTZ",   # Unsafe/Naive Datetimes
+	# "EM",    # Exception Messages
+	# "FBT",   # Boolean Traps
+	# "G",     # Logging Formatting
+	# "N",     # PEP8 Naming Conventions
+	# "PGH",   # PyGrep Hooks
+	# "PYI",   # Stub Files
+	# "Q",     # Quotes
+	# "S",     # Security Testing
+]
