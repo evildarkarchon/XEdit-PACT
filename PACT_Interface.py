@@ -29,7 +29,7 @@ from PACT_Start import (
     check_settings_integrity,
     clean_plugins,
     info,
-    is_it_xedit,
+    matches_condition,
     pact_settings,
     pact_update_check,
     pact_update_settings,
@@ -48,91 +48,20 @@ def remove_from_list(input_list: list, item: Any) -> list:
 
 
 class UiPACTMainWin(QMainWindow):
+    BUTTON_STYLE = "color: black; background-color: lightyellow; border-radius: 5px; border: 1px solid gray;"
+    BACKUP_BUTTON_STYLE = """
+        QPushButton {
+            color: black;
+            background-color: grey;
+            border-radius: 5px;
+            border: 1px solid gray;
+        }
+        QPushButton:hover {
+            background-color: lightblue;
+        }
     """
-    UiPACTMainWin serves as the main window for the Plugin Auto Cleaning Tool (PACT) application.
 
-    This class defines the main user interface layout, widgets, and functionality for the Plugin
-    Auto Cleaning Tool. It includes setup for buttons, layouts, labels, input fields, and other
-    UI components, as well as their connections to the corresponding events and actions. The
-    window facilitates plugin cleaning, settings configuration, file selection, and backup
-    operations through its graphical interface. It also includes timers and threads for
-    asynchronous operations.
-
-    :ivar central_widget: The central widget for the main window.
-    :type central_widget: QWidget
-    :ivar main_layout: The main vertical layout of the application.
-    :type main_layout: QVBoxLayout
-    :ivar timer: Timer responsible for periodic state updates.
-    :type timer: QTimer
-    :ivar pact_thread: Thread handling PACT operations.
-    :type pact_thread: PactThread | None
-    :ivar cleaning_thread: Thread responsible for cleaning tasks.
-    :type cleaning_thread: PactThread | None
-    :ivar top_layout: Horizontal layout for the update buttons.
-    :type top_layout: QHBoxLayout
-    :ivar RegBT_CHECK_UPDATES: Button to check for application updates.
-    :type RegBT_CHECK_UPDATES: QPushButton
-    :ivar RegBT_UPDATE_SETTINGS: Button to update application settings.
-    :type RegBT_UPDATE_SETTINGS: QPushButton
-    :ivar file_buttons_layout: Horizontal layout for file selection buttons.
-    :type file_buttons_layout: QHBoxLayout
-    :ivar RegBT_BROWSE_LO: Button to set the load order file.
-    :type RegBT_BROWSE_LO: QPushButton
-    :ivar RegBT_BROWSE_MO2: Button to set the MO2 executable.
-    :type RegBT_BROWSE_MO2: QPushButton
-    :ivar RegBT_BROWSE_XEDIT: Button to set the XEdit executable.
-    :type RegBT_BROWSE_XEDIT: QPushButton
-    :ivar LBL_SETTINGS1: Label with instructions for setting required files and executables.
-    :type LBL_SETTINGS1: QLabel
-    :ivar backup_layout: Horizontal layout for backup operation buttons.
-    :type backup_layout: QHBoxLayout
-    :ivar RegBT_BACKUP_PLUGINS: Button to initiate plugin backup.
-    :type RegBT_BACKUP_PLUGINS: QPushButton
-    :ivar RegBT_RESTORE_BACKUP: Button to restore a plugin backup.
-    :type RegBT_RESTORE_BACKUP: QPushButton
-    :ivar settings_layout: Grid layout for cleaning and journal settings.
-    :type settings_layout: QGridLayout
-    :ivar timeout_container: Container widget for cleaning timeout input.
-    :type timeout_container: QWidget
-    :ivar timeout_layout: Layout for cleaning timeout input fields.
-    :type timeout_layout: QVBoxLayout
-    :ivar journal_container: Container widget for journal expiration input.
-    :type journal_container: QWidget
-    :ivar journal_layout: Layout for journal expiration input fields.
-    :type journal_layout: QVBoxLayout
-    :ivar InputLabel_CT: Label displaying "Cleaning Timeout".
-    :type InputLabel_CT: QLabel
-    :ivar InputField_CT: Input field for cleaning timeout value.
-    :type InputField_CT: QLineEdit
-    :ivar seconds_label: Label specifying timeout units in seconds.
-    :type seconds_label: QLabel
-    :ivar InputLabel_JE: Label displaying "Journal Expiration".
-    :type InputLabel_JE: QLabel
-    :ivar InputField_JE: Input field for journal expiration value.
-    :type InputField_JE: QLineEdit
-    :ivar days_label: Label specifying expiration units in days.
-    :type days_label: QLabel
-    :ivar RegBT_CLEAN_PLUGINS: Button to start the cleaning process.
-    :type RegBT_CLEAN_PLUGINS: QPushButton
-    :ivar ProgressBar: Progress bar for displaying operation progress.
-    :type ProgressBar: QProgressBar
-    :ivar bottom_layout: Horizontal layout for the help and exit buttons.
-    :type bottom_layout: QHBoxLayout
-    :ivar RegBT_HELP: Button to display help information.
-    :type RegBT_HELP: QPushButton
-    :ivar RegBT_EXIT: Button to close the application.
-    :type RegBT_EXIT: QPushButton
-    """
     def __init__(self) -> None:
-        """
-        Main application window for the Plugin Auto Cleaning Tool (PACT).
-
-        This initialization method sets up the main application window, including layouts,
-        widgets, and event connections for PACT. The main responsibilities of this class
-        and its initialization process are to define the user interface, configure default
-        states, and ensure proper visual and functional aspects of the tool. The layout
-        contains sections for configuration, progress tracking, and plugin cleaning functionality.
-        """
         super().__init__()
 
         # Create central widget and main layout
@@ -529,7 +458,7 @@ class UiPACTMainWin(QMainWindow):
         xedit_procs = [
             proc
             for proc in psutil.process_iter(attrs=["pid", "name", "cpu_percent", "create_time"])
-            if is_it_xedit(proc.name(), info)
+            if matches_condition(proc.name(), info)
         ]
         xedit_running = False
         for proc in xedit_procs:
@@ -561,7 +490,7 @@ class UiPACTMainWin(QMainWindow):
             self.RegBT_BROWSE_MO2.setEnabled(False)
             self.RegBT_BROWSE_XEDIT.setEnabled(False)
             self.RegBT_EXIT.setEnabled(False)
-            if progress_emitter.is_done is True and isinstance(self.cleaning_thread, PactThread):
+            if progress_emitter.report_done is True and isinstance(self.cleaning_thread, PactThread):
                 try:
                     self.cleaning_thread.terminate()
                     self.cleaning_thread.wait()
@@ -955,7 +884,7 @@ folders to the Primary Backup folder, overwrite plugins and then run RESTORE."""
         :return: None
         """
         XEDIT_EXE, _ = QFileDialog.getOpenFileName(filter="*.exe")
-        if Path(XEDIT_EXE).exists() and is_it_xedit(XEDIT_EXE, info):
+        if Path(XEDIT_EXE).exists() and matches_condition(XEDIT_EXE, info):
             QMessageBox.information(self, "New MO2 Executable Set", "You have set XEDIT to: \n" + XEDIT_EXE)
             yaml_settings("PACT Settings.yaml", "PACT_Settings.XEDIT EXE", XEDIT_EXE)
             self.RegBT_BROWSE_XEDIT.setStyleSheet(
@@ -963,7 +892,7 @@ folders to the Primary Backup folder, overwrite plugins and then run RESTORE."""
             )
             self.RegBT_BROWSE_XEDIT.setText("✔️ XEDIT EXECUTABLE SET")
             self.configured_XEDIT = True
-        elif Path(XEDIT_EXE).exists() and not is_it_xedit(XEDIT_EXE, info):
+        elif Path(XEDIT_EXE).exists() and not matches_condition(XEDIT_EXE, info):
             self.RegBT_BROWSE_XEDIT.setText("❌ WRONG XEDIT EXE")
             self.RegBT_BROWSE_XEDIT.setStyleSheet(
                 "color: black; background-color: orange; border-radius: 5px; border: 1px solid gray;"
@@ -973,53 +902,90 @@ folders to the Primary Backup folder, overwrite plugins and then run RESTORE."""
 # CLEANING NEEDS A SEPARATE THREAD SO IT DOESN'T FREEZE PACT GUI
 class PactThread(QThread):
     """
-    Handles a threaded operation for plugins cleaning process, ensuring it runs without interrupting
-    the main application thread.
+    Handles cleaning operations in a separate thread that interacts with a progress bar.
 
-    This class extends QThread and is specifically designed to execute the plugins cleaning workflow.
-    It includes features such as detecting if a specific process (MO2) is running, ensuring user
-    settings integrity, and reporting progress via a provided QProgressBar instance.
+    The class provides functionality for executing plugin cleaning processes in a
+    dedicated thread. This ensures that the UI remains responsive during the
+    cleaning process, while the status is updated in the progress bar. The
+    thread also includes utilities to check for specific conditions (e.g.,
+    whether certain processes are running) and adjusts its behavior accordingly.
 
-    :ivar cleaning_done: Status flag indicating whether the cleaning process has been completed.
+    :ivar cleaning_done: Indicates whether the cleaning operations are completed.
     :type cleaning_done: bool
-
-    :ivar progress_bar: Progress bar widget used to display the operation progress.
+    :ivar progress_bar: A progress bar instance used to display progress updates.
     :type progress_bar: QProgressBar
     """
+    CLEANING_DELAY_MS = 1000  # Extracted constant for clarity
+
     def __init__(self, progress_bar: QProgressBar, parent: QObject | None = None) -> None:
         """
-        Represents a cleaning task handler that links a progress bar (QProgressBar) to
-        track the cleaning progress. This class provides an interface for monitoring
-        and updating the status of an ongoing cleaning process.
+        Initializes an instance of the class responsible for managing a progress bar and
+        indicating cleaning status. This class is designed to encapsulate the state and
+        control logic for the provided progress bar component.
 
-        :param progress_bar: A QProgressBar instance used to visually represent the progress
-            of the cleaning task.
-        :param parent: An optional QObject parent for the instance, enabling QObject-based
-            object hierarchy management.
-
-        :ivar progress_bar: The QProgressBar instance associated with the cleaning task.
+        :param progress_bar: The QProgressBar instance that this object will manage.
+                             It is used to display the progress visually to the user.
+        :param parent: Optional parent QObject for this instance. If provided, the parent
+                       will assume ownership of the object to manage its lifetime.
         """
         super().__init__(parent)
         self.cleaning_done = False
-        self.progress_bar = progress_bar
+        self.progress_bar: QProgressBar = progress_bar
 
-    def run(self) -> None:  # def Plugins_CLEAN():
+    def run(self) -> None:
         """
-        Runs the plugin cleaning process with specified procedures. This method performs
-        a sequence of actions to verify the status of the MO2 process, checks the
-        integrity of settings, cleans plugins, optionally updates the UI elements,
-        and ensures proper functionality with a delay mechanism.
+        Performs the main cleaning routine by first checking if a specific process
+        (Mod Organizer 2) is running. If the process is detected, the cleaning
+        routine is aborted, the progress bar is hidden, and the application quits
+        immediately. Otherwise, it proceeds with the cleaning operations, ensuring
+        a delay after the execution.
 
-        :raises RuntimeError: If the execution fails due to unforeseen reasons.
+        This function encapsulates the control flow of the cleaning operation,
+        managing the required checks and executions step-by-step.
+
+        :raises RuntimeError: if any cleaning operations fail during execution.
+
+        :return: None
         """
         is_mo2_running = check_process_mo2(progress_emitter)
         if is_mo2_running:
-            if self.progress_bar:
-                self.progress_bar.setVisible(False)
-            self.quit()
+            self._hide_progress_bar_and_quit()
+            return
+
+        self._perform_cleaning_operations()
+        self.msleep(self.CLEANING_DELAY_MS)
+
+    def _hide_progress_bar_and_quit(self) -> None:
+        """
+        Hides the progress bar if it is visible and quits the application. This function checks the visibility
+        of the progress bar, and if it is visible, it hides the progress bar before exiting the application.
+        No value is returned.
+
+        :return: None
+        """
+        if self.progress_bar:
+            self.progress_bar.setVisible(False)
+        self.quit()
+
+    @staticmethod
+    def _perform_cleaning_operations() -> None:
+        """
+        Performs a series of cleaning and integrity check operations.
+
+        This static method executes necessary actions to ensure that
+        settings are consistent and that plugins are cleaned up. It
+        relies on auxiliary functions for these operations to maintain
+        the system's operational integrity.
+
+        :raises RuntimeError: If an error occurs during checking of settings
+                              integrity.
+        :raises ValueError: If invalid progress emitter is encountered during
+                            plugin cleanup.
+
+        :return: None
+        """
         check_settings_integrity()
         clean_plugins(progress_emitter)
-        self.msleep(1000)
 
 
 if __name__ == "__main__":

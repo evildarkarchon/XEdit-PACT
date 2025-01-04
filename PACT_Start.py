@@ -17,100 +17,89 @@ from PySide6.QtCore import QObject, Signal
 - Comments marked as RESERVED in all scripts are intended for future updates or tests, do not edit / move / remove.
 - (..., encoding="utf-8", errors="ignore") needs to go with every opened file because unicode errors are a bitch.
 """
+
+
 class ProgressEmitter(QObject):  # type: ignore
     """
-    Class for emitting signals related to the progress of a task.
+    Manages and emits progress-related signals for a plugin cleaning process.
 
-    This class inherits from QObject and is designed to emit various signals indicating the progress,
-    maximum value, current plugin being processed, completion status, and visibility state. It is
-    primarily intended to be used in scenarios where tasks progress needs to be communicated to
-    the GUI or other observers.
+    This class is responsible for handling and reporting progress updates, including
+    the maximum value, current progress, and plugin-specific messages, as well as
+    emitting signals to indicate task completion and visibility updates. It provides
+    a structured way to track and communicate the status of a plugin cleaning operation.
 
-    :ivar progress: Signal to indicate the progress with an integer value.
-    :type progress: Signal(int)
-    :ivar max_value: Signal to emit the maximum value of the progress range.
-    :type max_value: Signal(int)
-    :ivar plugin_value: Signal to communicate a description related to the currently processing plugin.
-    :type plugin_value: Signal(str)
-    :ivar done: Signal to emit when a task has been completed.
-    :type done: Signal()
-    :ivar visible: Signal to indicate if the progress should be made visible.
-    :type visible: Signal(bool)
-    :ivar is_done: Boolean attribute to indicate whether the task has been completed.
-    :type is_done: bool
+    :ivar PROGRESS_MESSAGE_TEMPLATE: Template used for formatting progress messages for plugins.
+    :type PROGRESS_MESSAGE_TEMPLATE: str
+    :ivar progress: Signal emitted with the current progress value as an integer.
+    :type progress: Signal
+    :ivar max_value: Signal emitted with the maximum progress value as an integer.
+    :type max_value: Signal
+    :ivar plugin_value: Signal emitted with plugin-specific progress details as a string.
+    :type plugin_value: Signal
+    :ivar done: Signal emitted when the progress is completed.
+    :type done: Signal
+    :ivar visible: Signal emitted to control the visibility of progress tracking (e.g., UI visibility).
+    :type visible: Signal
+    :ivar task_completed: A boolean indicating whether the cleaning task is completed.
+    :type task_completed: bool
     """
+    PROGRESS_MESSAGE_TEMPLATE = "Cleaning {plugin} %v/%m - %p%"  # Extract constant for plugin message format
+
     progress = Signal(int)
     max_value = Signal(int)
     plugin_value = Signal(str)
     done = Signal()
     visible = Signal(bool)
-    is_done = False
+    task_completed = False  # Renamed from `is_done` for clarity
 
-    def report_max_value(self) -> None:
+    @staticmethod
+    def _initialize_plugin_info() -> int:
         """
-        Emits the maximum value count obtained from the initialization of plugin information.
+        Initializes plugin information and retrieves the maximum plugin count.
+        :return: The maximum plugin count.
+        """
+        return init_plugins_info()[1]
 
-        This method initializes plugin information and retrieves the respective count related to a
-        maximum value. It then triggers an emission of this count to notify other components or listeners.
+    def emit_max_value(self) -> None:  # Renamed from `report_max_value`
+        """
+        Emits the maximum value processed by the plugin.
 
-        :raises TypeError: If the emit method is called improperly or with invalid arguments.
-        :raises ValueError: If there are issues in retrieving or processing the plugin count.
+        This method calculates the maximum count of data being processed using an
+        internal initialization function. It then emits this calculated maximum count
+        via the `max_value` signal.
 
         :return: None
         """
-        count = init_plugins_info()[1]
-        self.max_value.emit(count)
+        max_count = self._initialize_plugin_info()
+        self.max_value.emit(max_count)
 
     def report_progress(self, count: int) -> None:
         """
-        Reports progress by emitting the current count as a signal.
-
-        This method is primarily used to update progress-related functionality,
-        such as updating a UI element or tracking the advancement of a process.
-        The count value represents the current progress state.
-
-        :param count: The current progress value to be emitted.
-        :type count: int
-
-        :return: None
+        Emits the current progress value.
+        :param count: The current progress value.
         """
         self.progress.emit(count)
 
     def report_plugin(self, plugin: str) -> None:
         """
-        Reports the progress of cleaning a plugin to a specific plugin value signal.
-
-        This method emits a formatted string containing information about the
-        cleaning progress of a given plugin. The emitted string includes the
-        plugin name and placeholders for the current value (%v), maximum value
-        (%m), and percentage completed (%p%) of the cleaning process.
-
-        :param plugin: The name of the plugin to be reported.
-        :type plugin: str
-        :return: This method does not return any value.
-        :rtype: None
+        Emits a formatted description string about the current plugin process.
+        :param plugin: The name of the current plugin.
         """
-        self.plugin_value.emit(f"Cleaning {plugin} %v/%m - %p%")
+        self.plugin_value.emit(self.PROGRESS_MESSAGE_TEMPLATE.format(plugin=plugin))
 
     def report_done(self) -> None:
         """
-        Sets the process as done by emitting the `done` signal and updating the
-        `is_done` status.
-
-        :raises: Emits the `done` signal. Does not raise exceptions.
-        :returns: None
+        Marks the process as complete by emitting the `done` signal,
+        and updating the task completion status.
         """
         self.done.emit()
-        self.is_done = True
+        self.task_completed = True
 
-    def set_visible(self) -> None:
+    def emit_visibility(self, value = True) -> None:  # Renamed from `set_visible`
         """
-        Sets the visibility state of the object to visible by emitting a visible signal.
-
-        :return: None
-        :rtype: None
+        Emits a signal to set visibility to true.
         """
-        self.visible.emit(True)
+        self.visible.emit(value)
 # =================== PACT TOML FILE ===================
 
 yaml_cache = {}  # Cache for YAML files to prevent multiple reads.
@@ -271,8 +260,8 @@ class Info:
     :type plugins_processed: int
     :ivar plugins_cleaned: Number of plugins successfully cleaned.
     :type plugins_cleaned: int
-    :ivar LCL_skip_list: Localized skip list at runtime.
-    :type LCL_skip_list: list[str]
+    :ivar local_skip_list: Localized skip list at runtime.
+    :type local_skip_list: list[str]
     :ivar FO3_skip_list: Specific skip list for Fallout 3 plugins.
     :type FO3_skip_list: list[str]
     :ivar FNV_skip_list: Specific skip list for Fallout New Vegas plugins.
@@ -342,7 +331,7 @@ class Info:
     plugins_processed: int = 0
     plugins_cleaned: int = 0
 
-    LCL_skip_list: list[str] = field(default_factory=list)
+    local_skip_list: list[str] = field(default_factory=list)
 
     # HARD EXCLUDE PLUGINS PER GAME HERE
     FO3_skip_list: list[str] = field(default_factory=list)
@@ -372,31 +361,39 @@ class Info:
             + (self.SSE_skip_list or [])
         )
 
-
-def is_it_xedit(compare_string: str, data: Info) -> bool:
+def normalize_name(input_string: str) -> str:
     """
-    Determine if the given string matches certain conditions based on the provided
-    data.
+    Normalize the input string by extracting the name portion of the path
+    and converting it to lowercase.
 
-    The function checks if the name component of the given string (converted to lowercase)
-    exists either in the `lower_specific` or `lower_universal` attributes of the `data` object.
-    Returns `True` if a match is found, otherwise returns `False`.
+    :param input_string: The input string representing a file or directory
+        path.
+    :type input_string: str
+    :return: The lowercase name extracted from the input path.
+    :rtype: str
+    """
+    return Path(input_string).name.lower()
 
-    :param compare_string: The string to check against the conditions.
+
+def matches_condition(compare_string: str, data: Info) -> bool:
+    """
+    Checks if the normalized form of a given comparison string matches any of the
+    lowercase specific or universal entries in the provided data object.
+
+    The function uses the `normalize_name` method to preprocess the `compare_string`,
+    and then checks for its membership in two lowercase collections (`lower_specific`
+    and `lower_universal`) in the `data` object.
+
+    :param compare_string: The string to be compared after normalization.
     :type compare_string: str
-
-    :param data: An object of type `Info` that contains the attributes `lower_specific`
-                 and `lower_universal` for comparison.
+    :param data: The information object containing lowercase collections to compare against.
     :type data: Info
-
-    :return: A boolean value indicating whether the `compare_string` satisfies any of
-             the conditions within attributes of `data`.
+    :return: A boolean value indicating if the normalized `compare_string`
+             matches any entry in the `lower_specific` or `lower_universal` properties of `data`.
     :rtype: bool
     """
-    return bool(
-        Path(compare_string).name.lower() in data.lower_specific
-        or Path(compare_string).name.lower() in data.lower_universal
-    )
+    normalized_name = normalize_name(compare_string)
+    return normalized_name in data.lower_specific or normalized_name in data.lower_universal
 
 
 if not Path("PACT Ignore.yaml").exists():
@@ -569,7 +566,7 @@ def update_xedit_path(data: Info, xedit: str | Path) -> None:
             data.XEDIT_EXE = Path(xedit).name
         elif Path(xedit).exists():
             for xedit_file in os.listdir(xedit):
-                if xedit_file.endswith(".exe") and is_it_xedit(str(xedit_file).lower(), data):
+                if xedit_file.endswith(".exe") and matches_condition(str(xedit_file), data):
                     data.XEDIT_PATH = Path(xedit) / xedit_file
                     data.XEDIT_EXE = Path(data.XEDIT_PATH).name
     else:
@@ -1086,56 +1083,60 @@ def run_auto_cleaning(plugin_name: str) -> None:
 
 def monitor_process(proc: subprocess.Popen, plugin_name: str) -> None:
     """
-    Monitors a given process and performs various checks to handle specific errors or
-    issues. This function continuously monitors the specified process while it is
-    running and checks for conditions such as low CPU usage, timeout, or exceptions
-    indicative of errors. If an issue is detected, appropriate error handling measures
-    are executed, such as terminating the process and logging relevant information.
+    Monitors the given subprocess, handling any runtime issues or errors related
+    to the process, specifically monitoring its behavior and managing its lifecycle.
 
-    :param proc: The subprocess.Popen object representing the process to monitor.
-    :param plugin_name: The name of the plugin being monitored, used for logging
-                        and error identification.
-    :return: None
+    This function continuously observes the provided subprocess for conditions
+    that meet pre-defined error scenarios. Upon detecting such conditions,
+    appropriate error-handling functions are invoked, and the process is
+    managed or terminated accordingly.
+
+    :param proc: The subprocess object representing the process to be monitored.
+                 It should be a subprocess.Popen instance.
+    :type proc: subprocess.Popen
+    :param plugin_name: The string name of the plugin associated with the monitored process.
+                        Helps in identifying and logging process-specific issues.
+    :type plugin_name: str
+    :return: This function does not return a value; it modifies application state
+             and process lifecycle as necessary.
+    :rtype: None
     """
+    ERROR_MESSAGES = {
+        "disabled_or_missing": "❌ ERROR : PLUGIN IS DISABLED OR HAS MISSING REQUIREMENTS! KILLING XEDIT AND ADDING PLUGIN TO IGNORE LIST...",
+        "timeout": "❌ ERROR : XEDIT TIMED OUT (CLEANING PROCESS TOOK TOO LONG)! KILLING XEDIT...",
+        "empty_or_missing": "❌ ERROR : PLUGIN IS EMPTY OR HAS MISSING REQUIREMENTS! KILLING XEDIT AND ADDING PLUGIN TO IGNORE LIST...",
+    }
+
+    def handle_process_error(xedit_process: psutil.Process, error_type: str, add_ignore: bool = True) -> None:
+        """Handles xedit_process errors by logging and terminating."""
+        handle_error(xedit_process, plugin_name, info, ERROR_MESSAGES[error_type], add_ignore)
+        pact_log_update(f"{plugin_name} -> {error_type.replace('_', ' ').capitalize()}")
+
+    def check_errors(xedit_process: psutil.Process) -> bool:
+        """Checks for various xedit_process-related errors and handles them."""
+        if check_cpu_usage(xedit_process):
+            handle_process_error(xedit_process, "disabled_or_missing")
+            return True
+        if check_process_timeout(xedit_process, info):
+            handle_process_error(xedit_process, "timeout", add_ignore=False)
+            return True
+        if check_process_exceptions(info):
+            handle_process_error(xedit_process, "empty_or_missing")
+            return True
+        return False
+
     while proc.poll() is None:
-        xedit_procs = [
-            p
-            for p in psutil.process_iter(attrs=["pid", "name", "cpu_percent", "create_time"])
-            if is_it_xedit(p.name().lower(), info)
+        relevant_procs = [
+            p for p in psutil.process_iter(attrs=["pid", "name", "cpu_percent", "create_time"])
+            if matches_condition(p.name(), info) and p.name().lower() == str(info.XEDIT_EXE).lower()
         ]
-        for p in xedit_procs:
-            if p.name().lower() == str(info.XEDIT_EXE).lower():
-                # Check for low CPU usage (indicative of an error)
-                if check_cpu_usage(p):
-                    handle_error(
-                        p,
-                        plugin_name,
-                        info,
-                        "❌ ERROR : PLUGIN IS DISABLED OR HAS MISSING REQUIREMENTS! KILLING XEDIT AND ADDING PLUGIN TO IGNORE LIST...",
-                    )
-                    pact_log_update(f"{plugin_name} -> Disabled or missing requirements")
-                    break
-                # Check for process running longer than specified timeout
-                if check_process_timeout(p, info):
-                    handle_error(
-                        p,
-                        plugin_name,
-                        info,
-                        "❌ ERROR : XEDIT TIMED OUT (CLEANING PROCESS TOOK TOO LONG)! KILLING XEDIT...",
-                        add_ignore=False,
-                    )
-                    pact_log_update(f"{plugin_name} -> XEdit timed out")
-                    break
-                # Check for exceptions in process
-                if check_process_exceptions(info):
-                    handle_error(
-                        p,
-                        plugin_name,
-                        info,
-                        "❌ ERROR : PLUGIN IS EMPTY OR HAS MISSING REQUIREMENTS! KILLING XEDIT AND ADDING PLUGIN TO IGNORE LIST...",
-                    )
-                    pact_log_update(f"{plugin_name} -> Empty or missing requirements")
-                    break
+
+        for process in relevant_procs:
+            if check_errors(process):
+                if proc:
+                    proc.kill()
+                    proc.wait()
+                break  # Exit from the xedit_process loop on error
         time.sleep(3)
 
 
@@ -1146,41 +1147,54 @@ nvm_pattern = re.compile(r"Skipping:\s*(.*)")
 partial_form_pattern = re.compile(r"Making Partial Form:\s*(.*)")
 
 
+# Constants
+LOG_PATTERNS = {
+    udr_pattern: ("Cleaned UDRs", info.clean_results_UDR),
+    itm_pattern: ("Cleaned ITMs", info.clean_results_ITM),
+    nvm_pattern: ("Found Deleted Navmeshes", info.clean_results_NVM),
+    partial_form_pattern: ("Created Partial Forms", info.clean_results_PARTIAL_FORMS),
+}
+
+
+def process_log_line(line: str, plugin_name: str) -> bool:
+    """
+    Process a single log line to check for cleaning patterns and update results.
+
+    :param line: The log line to process.
+    :param plugin_name: Name of the plugin for which results are being checked.
+    :return: True if a cleaning action was detected, False otherwise.
+    """
+    for pattern, (message, results_list) in LOG_PATTERNS.items():
+        if pattern.search(line):
+            pact_log_update(f"\n{plugin_name} -> {message}")
+            results_list.add(plugin_name)
+            return True
+    return False
+
+
 def check_cleaning_results(plugin_name: str) -> None:
     """
-    Check cleaning results of a specific plugin by processing the log files generated by xEdit. The function
-    analyzes patterns in the xEdit log file to determine whether cleaning actions were performed and updates
-    relevant tracking lists accordingly. If no cleaning actions are identified, the plugin is added to the
-    PACT ignore list and skip list. This function also clears the xEdit logs unless debug mode is enabled.
+    Check cleaning results of a specific plugin by processing the log files generated by xEdit.
 
-    :param plugin_name: The name of the plugin for which cleaning results are being checked.
-    :type plugin_name: str
-    :return: None
+    :param plugin_name: Name of the plugin for which cleaning results are being checked.
     """
-    time.sleep(1)  # Wait to make sure xedit generates the logs.
-    if Path(info.XEDIT_LOG_TXT).exists():
-        cleaned_something = False
-        with Path(info.XEDIT_LOG_TXT).open(encoding="utf-8", errors="ignore") as XE_Check:
-            # Define the patterns and associated actions
-            patterns = {
-                udr_pattern: ("Cleaned UDRs", info.clean_results_UDR),
-                itm_pattern: ("Cleaned ITMs", info.clean_results_ITM),
-                nvm_pattern: ("Found Deleted Navmeshes", info.clean_results_NVM),
-                partial_form_pattern: ("Created Partial Forms", info.clean_results_PARTIAL_FORMS),
-            }
-            for line in XE_Check:
-                for pattern, (message, results_list) in patterns.items():
-                    if pattern.search(line):
-                        pact_log_update(f"\n{plugin_name} -> {message}")
-                        results_list.add(plugin_name)
-                        cleaned_something = True
-            if cleaned_something:
-                info.plugins_cleaned += 1
-            else:
-                pact_log_update(f"\n{plugin_name} -> NOTHING TO CLEAN")
-                print("NOTHING TO CLEAN ! Adding plugin to PACT Ignore file...")
-                pact_ignore_update(plugin_name, get_game_mode(info).upper())
-                info.LCL_skip_list.append(plugin_name)
+    time.sleep(1)  # Ensure xEdit logs are generated.
+    log_file_path = Path(info.XEDIT_LOG_TXT)
+    if log_file_path.exists():
+        did_clean = False
+        with log_file_path.open(encoding="utf-8", errors="ignore") as log_file:
+            for line in log_file:
+                if process_log_line(line, plugin_name):
+                    did_clean = True
+
+        if did_clean:
+            info.plugins_cleaned += 1
+        else:
+            pact_log_update(f"\n{plugin_name} -> NOTHING TO CLEAN")
+            print("NOTHING TO CLEAN! Adding plugin to PACT Ignore file...")
+            pact_ignore_update(plugin_name, get_game_mode(info).upper())
+            info.local_skip_list.append(plugin_name)
+
         if not pact_settings("Debug Mode"):
             clear_xedit_logs()
 
@@ -1225,7 +1239,7 @@ def init_plugins_info() -> tuple[list[str], int, list[str]]:
 
     This function collects information about plugins by loading the plugin list
     from a specific file path, filters out those plugins that are included in the
-    combination of skip lists (`VIP_skip_list` and `LCL_skip_list`), and calculates
+    combination of skip lists (`VIP_skip_list` and `local_skip_list`), and calculates
     the count of unique plugins that are not skipped.
 
     :return: A tuple containing the following:
@@ -1234,91 +1248,107 @@ def init_plugins_info() -> tuple[list[str], int, list[str]]:
              - The combined skip list of VIP and local skipped plugins.
     :rtype: tuple[list[str], int, list[str]]
     """
-    ALL_skip_list = info.VIP_skip_list + info.LCL_skip_list
+    ALL_skip_list = info.VIP_skip_list + info.local_skip_list
     plugin_list = get_plugin_list(str(info.LOAD_ORDER_PATH))
     count_plugins = len(set(plugin_list) - set(ALL_skip_list))
     return plugin_list, count_plugins, ALL_skip_list
 
 
+PLUGIN_REGEX = r".+?\.(?:esl|esm|esp)+$"  # Extracted constant for plugin validation
+
+
 def clean_plugins(progress_emitter: ProgressEmitter) -> None:
     """
-    Cleans the plugins in the system based on the provided settings and progress emitter.
-
-    This function initiates the cleaning process for plugins, logs the progress, handles
-    ignored plugins, and categorizes plugins that pass or fail cleaning. It utilizes settings
-    and configurations from other system modules. The function ensures proper reporting of
-    progress, completion, and any issues encountered during the cleaning process.
-
-    :param progress_emitter: A `ProgressEmitter` object used to manage and report the progress
-        of the cleaning process.
-    :return: None
+    Cleans plugins in the system and reports progress.
     """
-    progress_emitter.is_done = False
-    print(f"❓ LOAD ORDER TXT is set to : {info.LOAD_ORDER_PATH}")
-    print(f"❓ XEDIT EXE is set to : {info.XEDIT_PATH}")
-    print(f"❓ MO2 EXE is set to : {info.MO2_PATH}")
+    initialize_clean_process(progress_emitter)
+    plugins_to_clean, total_plugins, skip_lists = fetch_plugin_info()
+    ignore_list = fetch_ignore_list()
+    info.local_skip_list.extend(ignore_list)
+
+    progress_emitter.emit_max_value()
+    progress_emitter.emit_visibility()
+
+    print(f"✔️ CLEANING STARTED... ( PLUGINS TO CLEAN: {total_plugins} )")
+    start_time = time.perf_counter()
+
+    cleaned_plugin_count = clean_all_plugins(
+        plugins_to_clean, skip_lists, progress_emitter
+    )
+
+    report_cleaning_completion(start_time, cleaned_plugin_count, total_plugins)
+    log_failed_plugins()
+    progress_emitter.report_done()
+
+
+# Helper Functions
+def initialize_clean_process(progress_emitter: ProgressEmitter) -> None:
+    """Initializes the cleaning process by setting up configurations and mode."""
+    progress_emitter.task_completed = False
+    print(f"❓ LOAD ORDER TXT is set to: {info.LOAD_ORDER_PATH}")
+    print(f"❓ XEDIT EXE is set to: {info.XEDIT_PATH}")
+    print(f"❓ MO2 EXE is set to: {info.MO2_PATH}")
 
     if info.MO2Mode:
-        print("✔️ MO2 EXECUTABLE WAS FOUND! SWITCHING TO MOD ORGANIZER 2 MODE...")
+        print("✔️ MO2 FOUND! SWITCHING TO MOD ORGANIZER 2 MODE...")
     else:
-        print("❌ MO2 EXECUTABLE NOT SET OR FOUND. SWITCHING TO VORTEX MODE...")
+        print("❌ MO2 NOT FOUND. SWITCHING TO VORTEX MODE...")
 
-    ignore_list = yaml_settings("PACT Ignore.yaml", f"PACT_Ignore_{get_game_mode(info).upper()}")
-    if ignore_list:
-        info.LCL_skip_list.extend(ignore_list)
 
-    plugin_list, plugin_count, ALL_skip_list = init_plugins_info()
-    progress_emitter.report_max_value()
-    progress_emitter.set_visible()
+def fetch_ignore_list() -> list[str]:
+    """Fetches the list of plugins to ignore from settings."""
+    return yaml_settings("PACT Ignore.yaml", f"PACT_Ignore_{get_game_mode(info).upper()}")
 
-    print(f"✔️ CLEANING STARTED... ( PLUGINS TO CLEAN: {plugin_count} )")
-    log_start = time.perf_counter()
-    log_time = datetime.datetime.now()
-    pact_journal_expire()
-    pact_log_update(f"\nSTARTED CLEANING PROCESS AT : {log_time}")
-    count_cleaned = 0
 
-    for plugin in plugin_list:
-        if not any(plugin in elem for elem in ALL_skip_list) and re.search(
-            r".+?\.(?:esl|esm|esp)+$", plugin, re.IGNORECASE
-        ):
+def fetch_plugin_info() -> tuple[list[str], int, list[str]]:
+    """Initializes and fetches plugin-related information."""
+    return init_plugins_info()
+
+
+def clean_all_plugins(
+        plugins: list[str], skip_lists: list[str], progress_emitter: ProgressEmitter
+) -> int:
+    """Cleans all plugins and returns the count of cleaned plugins."""
+    cleaned_count = 0
+    for plugin in plugins:
+        if should_clean(plugin, skip_lists):
             progress_emitter.report_plugin(plugin)
             clean_plugin(plugin)
-            count_cleaned += 1
-            print(f"Finished cleaning : {plugin} ({count_cleaned} / {plugin_count})")
-            progress_emitter.report_progress(count_cleaned)
-    completion_time = (str(time.perf_counter() - log_start))[:3]
-    pact_log_update(
-        f"\n✔️ CLEANING COMPLETE! {info.XEDIT_EXE} processed all available plugins in {completion_time} seconds."
-    )
-    pact_log_update(
-        f"\n   {info.XEDIT_EXE} successfully processed {info.plugins_processed} plugins and cleaned {info.plugins_cleaned} of them.\n"
+            cleaned_count += 1
+            print(f"Finished cleaning: {plugin} ({cleaned_count})")
+            progress_emitter.report_progress(cleaned_count)
+    return cleaned_count
+
+
+def should_clean(plugin: str, skip_lists: list[str]) -> bool:
+    """Checks whether a plugin should be cleaned."""
+    return (
+            not any(plugin in skip for skip in skip_lists)
+            and re.search(PLUGIN_REGEX, plugin, re.IGNORECASE)
     )
 
-    print(f"\n✔️ CLEANING COMPLETE! {info.XEDIT_EXE} processed all available plugins in {completion_time} seconds.")
-    print(
-        f"\n   {info.XEDIT_EXE} successfully processed {info.plugins_processed} plugins and cleaned {info.plugins_cleaned} of them.\n"
-    )
 
-    for plugins, message in [
-        (info.clean_failed_list, "❌ {0} WAS UNABLE TO CLEAN THESE PLUGINS: (Invalid Plugin Name or {0} Timed Out):"),
-        (info.clean_results_UDR, "✔️ The following plugins had Undisabled Records and {0} properly disabled them:"),
-        (
-            info.clean_results_ITM,
-            "✔️ The following plugins had Identical To Master Records and {0} successfully cleaned them:",
-        ),
-        (
-            info.clean_results_NVM,
-            "❌ CAUTION : The following plugins contain Deleted Navmeshes!\n   Such plugins may cause navmesh related problems or crashes.",
-        ),
-        (info.clean_results_PARTIAL_FORMS, f"✔️ The following plugins had ITMs converted to Partial Forms {0}:"),
-    ]:
-        if len(plugins) > 0:
-            print(f"\n{message.format(info.XEDIT_EXE)}")
+def report_cleaning_completion(start_time: float, cleaned_count: int, total_count: int) -> None:
+    """Reports and logs the results of the cleaning process."""
+    elapsed_time = round(time.perf_counter() - start_time, 2)
+    pact_log_update(f"\n✔️ CLEANING COMPLETE! Processed all plugins in {elapsed_time} seconds.")
+    print(f"\n✔️ CLEANING COMPLETE! Processed {cleaned_count}/{total_count} plugins in {elapsed_time} seconds.")
+
+
+def log_failed_plugins() -> None:
+    """Logs any plugins that failed during cleaning."""
+    categories = [
+        (info.clean_failed_list, "❌ Plugins that failed cleaning:"),
+        (info.clean_results_UDR, "✔️ Plugins with Undisabled Records cleaned:"),
+        (info.clean_results_ITM, "✔️ Plugins with Identical To Master Records cleaned:"),
+        (info.clean_results_NVM, "❌ Caution: Plugins with Deleted Navmeshes."),
+        (info.clean_results_PARTIAL_FORMS, "✔️ Plugins with ITMs converted to Partial Forms:"),
+    ]
+    for plugins, message in categories:
+        if plugins:
+            print(f"\n{message}")
             for plugin in plugins:
                 print(plugin)
-
-    progress_emitter.report_done()
 
 
 if __name__ == "__main__":
