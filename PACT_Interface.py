@@ -293,29 +293,25 @@ class UiPACTMainWin(QMainWindow):
     @staticmethod
     def create_button(text: str, **kwargs: Any) -> QPushButton:
         """
-        Creates a customizable QPushButton instance with adjustable styles, sizes,
-        and click handling.
+        Creates a QPushButton with customizable properties such as minimum size, stylesheet, padding, and
+        event handlers. Provides default styles and fallback values for properties not explicitly specified
+        in `kwargs`.
 
-        This function allows you to create a QPushButton with default or custom
-        values for minimum width, minimum height, padding, stylesheet, and event
-        connections such as click handlers. It also provides a basic hover effect
-        and ensures that styles can be further customized if needed.
+        Args:
+            text (str): The text to display on the button.
+            **kwargs (Any): Additional keyword arguments to customize the button:
+                - min_width (int, optional): The minimum width for the button. Default is 100.
+                - min_height (int, optional): The minimum height for the button. Default is 30.
+                - padding (tuple[int, int], optional): Padding for the button in the format
+                  (vertical, horizontal). Default is (8, 20).
+                - stylesheet (str, optional): Custom stylesheet to override default styles.
+                - clicked (Callable, optional): A callable function to connect to the button's
+                  `clicked` signal.
+                - enabled (bool, optional): Whether the button should be enabled or disabled.
 
-        :param text: The text label displayed on the button.
-        :type text: str
-        :param kwargs: Additional customization options for button creation. Supports
-            the following keys:
-                - min_width (int): Minimum width of the button.
-                - min_height (int): Minimum height of the button.
-                - padding (Tuple[int, int]): Padding inside the button, specified as
-                  (vertical, horizontal).
-                - stylesheet (str): Additional styles to be applied to the button.
-                - clicked (Callable): A callable to be connected to the button's
-                  clicked event.
-                - enabled (bool): Whether the button should be initially enabled.
-        :type kwargs: Any
-        :return: A QPushButton instance with the specified customizations applied.
-        :rtype: QPushButton
+        Returns:
+            QPushButton: A QPushButton instance with applied configuration.
+
         """
         button = QPushButton(text)
 
@@ -381,185 +377,211 @@ class UiPACTMainWin(QMainWindow):
         This includes the initialization for the "Load Order", "MO2", and "XEdit" buttons.
         The method determines the availability of respective configuration files or executables
         and updates corresponding button styles and states.
-
         :raises KeyError: If the settings keys ("LoadOrder TXT", "MO2 EXE", "XEDIT EXE") are
                           not found in the `pact_settings` function outputs.
-
-        :attributes:
-          - RegBT_BROWSE_LO: Button associated with the "Load Order" feature.
-          - RegBT_BROWSE_MO2: Button associated with the "MO2" executable configuration.
-          - RegBT_BROWSE_XEDIT: Button associated with the "XEdit" executable configuration.
-          - configured_LO: Boolean indicating the state of the "Load Order" configuration.
-          - configured_MO2: Boolean indicating the state of the "MO2" configuration.
-          - configured_XEDIT: Boolean indicating the state of the "XEdit" configuration.
         """
-        # Initialize states for load order button
-        if "loadorder" in str(pact_settings("LoadOrder TXT")) or "plugins" in str(pact_settings("LoadOrder TXT")):
-            load_order_txt = pact_settings("LoadOrder TXT")
-            if isinstance(load_order_txt, str) and Path(load_order_txt).is_file():
-                self.RegBT_BROWSE_LO.setStyleSheet(
-                    "color: black; background-color: lightgreen; border-radius: 5px; border: 1px solid gray;"
-                )
-                self.RegBT_BROWSE_LO.setText("✔️ LOAD ORDER FILE SET")
-                self.configured_LO = True
-            else:
-                self.RegBT_BROWSE_LO.setStyleSheet(
-                    "color: black; background-color: lightyellow; border-radius: 5px; border: 1px solid gray;"
-                )
-                self.RegBT_BROWSE_LO.setText("❓ LOAD ORDER FILE NOT FOUND")
-                self.configured_LO = False
+        # Define common button states and validation criteria
+        button_configs = [
+            {
+                "button": self.RegBT_BROWSE_LO,
+                "setting_key": "LoadOrder TXT",
+                "validation_pattern": ["loadorder", "plugins"],
+                "success_text": "✔️ LOAD ORDER FILE SET",
+                "error_text": "❓ LOAD ORDER FILE NOT FOUND",
+                "config_attr": "configured_LO"
+            },
+            {
+                "button": self.RegBT_BROWSE_MO2,
+                "setting_key": "MO2 EXE",
+                "validation_pattern": ["ModOrganizer"],
+                "success_text": "✔️ MO2 EXECUTABLE SET",
+                "error_text": "❓ MO2 EXECUTABLE NOT FOUND",
+                "config_attr": "configured_MO2"
+            },
+            {
+                "button": self.RegBT_BROWSE_XEDIT,
+                "setting_key": "XEDIT EXE",
+                "validation_pattern": ["Edit"],
+                "success_text": "✔️ XEDIT EXECUTABLE SET",
+                "error_text": "❓ XEDIT EXECUTABLE NOT FOUND",
+                "config_attr": "configured_XEDIT"
+            }
+        ]
 
-        # Initialize states for MO2 button
-        if "ModOrganizer" in str(pact_settings("MO2 EXE")):
-            mo2_exe_path = pact_settings("MO2 EXE")
-            if isinstance(mo2_exe_path, str) and Path(mo2_exe_path).is_file():
-                self.RegBT_BROWSE_MO2.setStyleSheet(
-                    "color: black; background-color: lightgreen; border-radius: 5px; border: 1px solid gray;"
-                )
-                self.RegBT_BROWSE_MO2.setText("✔️ MO2 EXECUTABLE SET")
-                self.configured_MO2 = True
-            else:
-                self.RegBT_BROWSE_MO2.setStyleSheet(
-                    "color: black; background-color: lightyellow; border-radius: 5px; border: 1px solid gray;"
-                )
-                self.RegBT_BROWSE_MO2.setText("❓ MO2 EXECUTABLE NOT FOUND")
-                self.configured_MO2 = False
+        # Apply configuration to each button
+        for config in button_configs:
+            self._configure_button(**config)
 
-        # Initialize states for XEdit button
-        if "Edit" in str(pact_settings("XEDIT EXE")):
-            xedit_exe = pact_settings("XEDIT EXE")
-            if isinstance(xedit_exe, str) and Path(xedit_exe).is_file():
-                self.RegBT_BROWSE_XEDIT.setStyleSheet(
-                    "color: black; background-color: lightgreen; border-radius: 5px; border: 1px solid gray;"
-                )
-                self.RegBT_BROWSE_XEDIT.setText("✔️ XEDIT EXECUTABLE SET")
-                self.configured_XEDIT = True
-            else:
-                self.RegBT_BROWSE_XEDIT.setStyleSheet(
-                    "color: black; background-color: lightyellow; border-radius: 5px; border: 1px solid gray;"
-                )
-                self.RegBT_BROWSE_XEDIT.setText("❓ XEDIT EXECUTABLE NOT FOUND")
-                self.configured_XEDIT = False
+    def _configure_button(self, button, setting_key, validation_pattern, success_text,
+                          error_text, config_attr) -> None:
+        """
+    Configures a button's state based on the validation of its associated setting.
 
-    # ============== CLEAN PLUGINS BUTTON STATES ================
+    :param button: The button to configure
+    :param setting_key: The key for retrieving the setting value
+    :param validation_pattern: List of strings to check in the setting value
+    :param success_text: Text to display on successful validation
+    :param error_text: Text to display on failed validation
+    :param config_attr: The attribute name to store the configuration state
+        """
+        # Get setting value
+        setting_value = pact_settings(setting_key)
+        setting_str = str(setting_value)
+
+        # Check if setting meets validation pattern
+        if any(pattern in setting_str for pattern in validation_pattern):
+            # Validate if path exists
+            if isinstance(setting_value, str) and Path(setting_value).is_file():
+                self._update_button_state(button, True, success_text)
+                setattr(self, config_attr, True)
+            else:
+                self._update_button_state(button, False, error_text)
+                setattr(self, config_attr, False)
+
+    @staticmethod
+    def _update_button_state(button, is_success, text) -> None:
+        """
+        Updates a button's visual state.
+
+        :param button: The button to update
+        :param is_success: Whether to apply success or warning styling
+        :param text: Text to display on the button
+        """
+        style_color = "lightgreen" if is_success else "lightyellow"
+        button.setStyleSheet(
+            f"color: black; background-color: {style_color}; border-radius: 5px; border: 1px solid gray;"
+        )
+        button.setText(text)
 
     @staticmethod
     def is_xedit_running() -> bool:
         """
         Checks if the xEdit application is currently running.
 
-        This function scans through the list of active processes and determines if any of
-        them matches the executable name of the xEdit application, as specified in the
-        provided configuration or context.
-
-        :return: Returns True if the xEdit application is running, False otherwise.
-        :rtype: bool
+        :return: True if xEdit is running, False otherwise
         """
         xedit_procs = [
             proc
             for proc in psutil.process_iter(attrs=["pid", "name", "cpu_percent", "create_time"])
             if matches_condition(proc.name(), info)
         ]
-        xedit_running = False
-        for proc in xedit_procs:
-            if proc.name().lower() == str(info.XEDIT_EXE).lower():
-                xedit_running = True
-        return xedit_running
+        return any(proc.name().lower() == str(info.XEDIT_EXE).lower() for proc in xedit_procs)
 
     def timed_states(self) -> None:
         """
         Checks and updates the state of the cleaning operation.
 
-        This function handles updating the button states and visual styles based on
-        the current cleaning process, as well as monitoring the cleaning thread. If
-        a cleaning thread exists and the process finishes, the thread is terminated
-        and reset. The function also checks if the external `xEdit` tool is running
-        and adjusts UI elements accordingly. Ensures proper control states and
-        appearance of all relevant GUI elements.
-
-        :raises AttributeError: When an attribute related to the cleaning thread is
-            accessed improperly.
-        :rtype: None
+        Updates UI based on cleaning thread status and xEdit process state.
         """
         xedit_running = self.is_xedit_running()
 
         if self.cleaning_thread is None:
             self.init_start_button(xedit_running)
         else:
-            self.RegBT_BROWSE_LO.setEnabled(False)
-            self.RegBT_BROWSE_MO2.setEnabled(False)
-            self.RegBT_BROWSE_XEDIT.setEnabled(False)
-            self.RegBT_EXIT.setEnabled(False)
-            if progress_emitter.report_done is True and isinstance(self.cleaning_thread, PactThread):
+            # Disable configuration buttons during cleaning
+            self._set_config_buttons_enabled(False)
+
+            # Handle thread completion
+            if progress_emitter.emit_done is True and isinstance(self.cleaning_thread, PactThread):
                 try:
                     self.cleaning_thread.terminate()
                     self.cleaning_thread.wait()
                     self.reset_thread()
                 except AttributeError:
                     pass
-            if "STOP CLEANING" not in self.RegBT_CLEAN_PLUGINS.text() and xedit_running is False:
-                self.RegBT_CLEAN_PLUGINS.setText("START CLEANING")
+
+            # Update clean button if needed
+            if "STOP CLEANING" not in self.RegBT_CLEAN_PLUGINS.text() and not xedit_running:
+                self._update_button_state(
+                    self.RegBT_CLEAN_PLUGINS,
+                    is_success=None,  # Use default style
+                    text="START CLEANING"
+                )
                 self.RegBT_CLEAN_PLUGINS.setStyleSheet(
                     "color: black; background-color: lightblue; border-radius: 5px; border: 1px solid gray;"
                 )
 
+    def _set_config_buttons_enabled(self, enabled) -> None:
+        """
+        Sets the enabled state of all configuration buttons.
+
+        :param enabled: Whether buttons should be enabled
+        """
+        self.RegBT_BROWSE_LO.setEnabled(enabled)
+        self.RegBT_BROWSE_MO2.setEnabled(enabled)
+        self.RegBT_BROWSE_XEDIT.setEnabled(enabled)
+        self.RegBT_EXIT.setEnabled(enabled)
+
     def start_cleaning(self) -> None:
         """
-        Starts the cleaning process by initializing and configuring a background thread
-        and updating the user interface for controlling the cleaning operation.
-
-        When invoked, this method ensures the cleaning process is handled in a separate
-        thread. It connects various signals for updating the interface components, such
-        as a progress bar, provides feedback to the user during the operation, and ensures
-        thread management for resource safety. If the cleaning process is interrupted,
-        appropriate termination steps are executed.
-
-        :raises RuntimeError: If any background thread actions fail during execution
-                              or signal handling.
-        :return: None
+    Starts the cleaning process in a background thread.
         """
         if self.cleaning_thread is None:
+            # Create and configure cleaning thread
             self.cleaning_thread = PactThread(progress_bar=self.ProgressBar)
             self.cleaning_thread.start()
-            self.cleaning_thread.finished.connect(self.init_start_and_reset)
-            progress_emitter.progress.connect(self.ProgressBar.setValue)
-            progress_emitter.max_value.connect(self.ProgressBar.setMaximum)
-            progress_emitter.plugin_value.connect(self.ProgressBar.setFormat)
-            progress_emitter.visible.connect(self.ProgressBar.setVisible)
-            progress_emitter.done.connect(self.cleaning_thread.terminate)
-            progress_emitter.done.connect(self.cleaning_thread.wait)
-            progress_emitter.done.connect(self.reset_thread)
-            self.RegBT_CLEAN_PLUGINS.setText("STOP CLEANING")
+
+            # Connect signals
+            self._connect_thread_signals()
+
+            # Update UI
+            self._update_button_state(
+                self.RegBT_CLEAN_PLUGINS,
+                is_success=None,  # Custom styling
+                text="STOP CLEANING"
+            )
             self.RegBT_CLEAN_PLUGINS.setStyleSheet(
                 "color: black; background-color: pink; border-radius: 5px; border: 1px solid gray;"
             )
+
+            # Update button connections
             self.RegBT_CLEAN_PLUGINS.clicked.disconnect()
             self.RegBT_CLEAN_PLUGINS.clicked.connect(self.stop_cleaning)
 
+    # noinspection PyUnresolvedReferences
+    def _connect_thread_signals(self) -> None:
+        """
+        Connects all signals for the cleaning thread.
+        """
+        # For QThread's finished signal
+        if hasattr(self.cleaning_thread, 'finished'):
+            self.cleaning_thread.finished.connect(self.init_start_and_reset)
+
+        # For progress_emitter signals
+        if hasattr(progress_emitter, 'progress'):
+            progress_emitter.progress.connect(self.ProgressBar.setValue)
+
+        if hasattr(progress_emitter, 'max_value'):
+            progress_emitter.max_value.connect(self.ProgressBar.setMaximum)
+
+        if hasattr(progress_emitter, 'plugin_value'):
+            progress_emitter.plugin_value.connect(self.ProgressBar.setFormat)
+
+        if hasattr(progress_emitter, 'visible'):
+            progress_emitter.visible.connect(self.ProgressBar.setVisible)
+
+        if hasattr(progress_emitter, 'done'):
+            progress_emitter.done.connect(self.cleaning_thread.terminate)
+            progress_emitter.done.connect(self.cleaning_thread.wait)
+            progress_emitter.done.connect(self.reset_thread)
+
     def init_start_button(self, xedit_running: bool = False) -> None:
         """
-        Initializes the state of the Start button based on the current configuration and
-        application context. Enables or configures different UI elements related to the
-        button depending on the provided conditions. The function ensures that buttons
-        become actionable when corresponding configurations are met and modifies their
-        appearance for user interaction readiness.
+        Initializes the state of the Start button based on configuration.
 
-        :param xedit_running: Flag to indicate whether xEdit is currently running.
-        :type xedit_running: bool
-        :return: None
-        :rtype: None
+        :param xedit_running: Flag to indicate whether xEdit is running
         """
-        if self.RegBT_BROWSE_LO and not self.RegBT_BROWSE_LO.isEnabled():
-            self.RegBT_BROWSE_LO.setEnabled(True)
-        if self.RegBT_BROWSE_MO2 and not self.RegBT_BROWSE_MO2.isEnabled():
-            self.RegBT_BROWSE_MO2.setEnabled(True)
-        if self.RegBT_BROWSE_XEDIT and not self.RegBT_BROWSE_XEDIT.isEnabled():
-            self.RegBT_BROWSE_XEDIT.setEnabled(True)
-        if self.RegBT_EXIT and not self.RegBT_EXIT.isEnabled():
-            self.RegBT_EXIT.setEnabled(True)
-        if self.configured_LO and self.configured_XEDIT and xedit_running is False:
+        # Enable configuration buttons
+        self._set_config_buttons_enabled(True)
+
+        # Configure cleaning button based on prerequisites
+        if self.configured_LO and self.configured_XEDIT and not xedit_running:
             self.RegBT_CLEAN_PLUGINS.setEnabled(True)
-            self.RegBT_CLEAN_PLUGINS.setText("START CLEANING")
+            self._update_button_state(
+                self.RegBT_CLEAN_PLUGINS,
+                is_success=None,  # Custom styling
+                text="START CLEANING"
+            )
             self.RegBT_CLEAN_PLUGINS.setStyleSheet(
                 "color: black; background-color: lightblue; border-radius: 5px; border: 1px solid gray;"
             )
@@ -569,58 +591,45 @@ class UiPACTMainWin(QMainWindow):
     def reset_thread(self) -> None:
         """
         Resets the thread by clearing its reference.
-
-        This method sets the `cleaning_thread` attribute to None, effectively resetting
-        any ongoing or set-up thread associated.
-
-        :return: None
         """
         self.cleaning_thread = None
 
     def init_start_and_reset(self) -> None:
         """
-        Initializes the start button and resets the related thread.
-
-        This method performs two main tasks. Firstly, it initializes the start button
-        by calling the `init_start_button` method, ensuring that it is prepared for
-        further operations. Secondly, it resets the thread associated with the
-        execution process by calling the `reset_thread` method, aligning the system to
-        a clean initial state.
-
-        :return: None
+        Initializes the start button and resets the thread.
         """
         self.init_start_button()
         self.reset_thread()
 
     def stop_cleaning(self) -> None:
         """
-        Stops the ongoing cleaning process if it is currently running. The method disables
-        certain UI components, updates the UI texts and styles to indicate the stopping process,
-        and waits for any running threads or associated programs to finish execution. After
-        ensuring proper shutdown, it resets UI components appropriately.
-
-        :return: None
+        Stops the ongoing cleaning process.
         """
         if self.cleaning_thread is not None:
             progress_emitter.is_done = True
             self.RegBT_CLEAN_PLUGINS.setEnabled(False)
+
+            # Wait for xEdit to close
             is_stopping = False
             while self.is_xedit_running():
                 if not is_stopping:
-                    self.RegBT_CLEAN_PLUGINS.setText("...STOPPING...")
+                    self._update_button_state(
+                        self.RegBT_CLEAN_PLUGINS,
+                        is_success=None,  # Custom styling
+                        text="...STOPPING..."
+                    )
                     self.RegBT_CLEAN_PLUGINS.setStyleSheet(
                         "color: black; background-color: orange; border-radius: 5px; border: 1px solid gray;"
                     )
                     is_stopping = True
-                if (
-                    self.cleaning_thread is not None
-                ):  # In case the thread is terminated before the while loop is broken.
+
+                # Handle thread completion during wait
+                if self.cleaning_thread is not None:
                     loop = QEventLoop()
                     self.cleaning_thread.finished.connect(loop.quit)
                     loop.exec()
-            print(
-                "\n❌ CLEANING STOPPED! PLEASE WAIT UNTIL ALL RUNNING PROGRAMS ARE CLOSED BEFORE STARTING AGAIN!\n"
-            )  # With the new while loop, this message might need to change - evildarkarchon
+
+            print("\n❌ CLEANING STOPPED! PLEASE WAIT UNTIL ALL RUNNING PROGRAMS ARE CLOSED BEFORE STARTING AGAIN!\n")
             self.ProgressBar.setFormat("Cleaning Stopped!")
             self.ProgressBar.setValue(0)
 
@@ -656,33 +665,30 @@ folders to the Primary Backup folder, overwrite plugins and then run RESTORE."""
     @staticmethod
     def help_popup() -> None:
         """
-        Display a help popup dialog with options for the user and an external link to a Discord invitation.
+        Displays a help popup dialog with a predefined message. If the "Ok" button is pressed, it opens a URL
+        to a specified help resource, otherwise dismisses the dialog.
 
-        The help popup is launched as a `QMessageBox` with predefined text, options, and a URL link
-        redirecting the user to an external help or community page if they choose to proceed.
-
-        :raise: This method does not explicitly raise errors but relies on PySide6 widgets whose behavior
-                might trigger runtime exceptions depending on the application state or environment constraints.
-
-        :return: None
+        Returns:
+            None
         """
-        Box_Help = QMessageBox()
-        Box_Help.setIcon(QMessageBox.Icon.Question)
-        Box_Help.setWindowTitle("Need Help?")
-        Box_Help.setText(UiPACTMainWin.help_box_msg)  # RESERVED | Box_Help.setInformativeText("...")
-        Box_Help.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
-        if Box_Help.exec() != QMessageBox.StandardButton.Cancel:
+        box_help = QMessageBox()
+        box_help.setIcon(QMessageBox.Icon.Question)
+        box_help.setWindowTitle("Need Help?")
+        box_help.setText(UiPACTMainWin.help_box_msg)  # RESERVED | box_help.setInformativeText("...")
+        box_help.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        if box_help.exec() != QMessageBox.StandardButton.Cancel:
             QDesktopServices.openUrl(QUrl("https://discord.com/invite/7ZZbrsGQh4"))
 
     def update_popup(self) -> None:
         """
-        Updates the application interface by checking for updates and displays a popup
-        message informing the user of their update status. If a new version of PACT is
-        available, provides a link to the PACT Nexus Page.
+        Displays a popup message indicating whether the PACT version is up-to-date or if an update is available.
 
-        :raises RuntimeError: If the update process encounters a critical internal
-                               error and fails to proceed.
-        :return: None
+        If the PACT version is up-to-date, an informational message is shown. If an update is
+        available, a warning message is shown with an option to open the PACT Nexus page.
+
+        Raises:
+            TypeError: If the URL passed to QDesktopServices.openUrl is invalid.
+
         """
         if pact_update_check():
             QMessageBox.information(self, "PACT Update", "You have the latest version of PACT!")
@@ -693,240 +699,204 @@ folders to the Primary Backup folder, overwrite plugins and then run RESTORE."""
             )
             QDesktopServices.openUrl(QUrl("https://www.nexusmods.com/fallout4/mods/56255"))
 
-    """ @staticmethod
-    def backup_popup():
-        Box_Backup = QMessageBox()
-        Box_Backup.setIcon(QMessageBox.Question)  # type: ignore
-        Box_Backup.setWindowTitle("PACT Backup")
-        Box_Backup.setText(UiPACTMainWin.backup_box_msg)  # RESERVED | Box_Backup.setInformativeText("...")
-        Box_Backup.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)  # type: ignore
-        if Box_Backup.exec() != QtWidgets.QMessageBox.Cancel:  # type: ignore
-            UiPACTMainWin.pact_create_backup()
-
-    @staticmethod
-    def pact_create_backup():
-        plugins_folder = Path(QFileDialog.getExistingDirectory())
-        if plugins_folder:
-            primary_backup = Path("PACT BACKUP/Primary Backup")
-            if not primary_backup.exists():
-                primary_backup.mkdir(parents=True, exist_ok=True)
-                print("CREATING PRIMARY BACKUP, PLEASE WAIT...")
-                for files in plugins_folder.glob("**/*"):
-                    for file in files:
-                        if info.plugins_pattern.search(file):
-                            try:
-                                plugin_path = plugins_folder.joinpath(file)
-                                copy_path = primary_backup.joinpath(file)
-                                shutil.copy2(plugin_path, copy_path)
-                            except (PermissionError, OSError):
-                                print(f"❌ ERROR : Unable to create a backup for {file}")
-                                print("   You can run PACT in admin mode and try again.")
-                                continue
-                print("PRIMARY BACKUP CREATED!")
-            else:
-                print("PROCESSING ADDITIONAL BACKUP, PLEASE WAIT...")
-                for files in plugins_folder.glob("**/*"):
-                    for file in files:
-                        if info.plugins_pattern.search(file):
-                            plugin_backup = Path("PACT BACKUP", "Primary Backup", file)
-                            plugin_current = plugins_folder.joinpath(file)
-                            if plugin_backup.exists():
-                                hash1 = hashlib.sha256(plugin_backup.read_bytes()).hexdigest()
-                                hash2 = hashlib.sha256(plugin_current.read_bytes()).hexdigest()
-                                if hash1 != hash2:  # Compare hashes between current and backup plugins.
-                                    current_date = datetime.date.today().strftime('%y-%m-%d')
-                                    dated_backup = Path("PACT BACKUP", f"BACKUP {current_date}")
-                                    if not dated_backup.exists():
-                                        dated_backup.mkdir(parents=True, exist_ok=True)
-                                    shutil.copy2(plugin_current, dated_backup)
-                                    # Remove plugin name from PACT Ignore list if hashes are different.
-                                    with open("PACT Ignore.txt", "r", encoding="utf-8", errors="ignore") as Ignore_List:
-                                        Ignore_Check = Ignore_List.read()
-                                        if str(file) in Ignore_Check:
-                                            Ignore_Check = Ignore_Check.replace(str(file), "")
-                                    ignore_list = yaml_settings(f"PACT Ignore.yaml", f"PACT_Ignore_{get_game_mode(info).upper()}")
-                                    ignore_list = remove_from_list(ignore_list, str(file))
-                                    yaml_settings(f"PACT Ignore.yaml", f"PACT_Ignore_{get_game_mode(info).upper()}", ignore_list)
-                            else:  # Create plugin backup if not already in Primary Backup.
-                                current_date = datetime.date.today().strftime('%y-%m-%d')
-                                dated_backup = Path("PACT BACKUP", f"BACKUP {current_date}")
-                                if not dated_backup.exists():
-                                    dated_backup.mkdir(parents=True, exist_ok=True)
-                                shutil.copy2(plugin_current, dated_backup)
-                print("ADDITIONAL BACKUP PROCESSED!")
-
-    @staticmethod
-    def restore_popup():
-        Box_Restore = QMessageBox()
-        Box_Restore.setIcon(QMessageBox.Question)  # type: ignore
-        Box_Restore.setWindowTitle("PACT Restore")
-        Box_Restore.setText(UiPACTMainWin.restore_box_msg)  # RESERVED | Box_Restore.setInformativeText("...")
-        Box_Restore.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)  # type: ignore
-        if Box_Restore.exec() != QMessageBox.Cancel:  # type: ignore
-            UiPACTMainWin.pact_restore_backup()
-
-    @staticmethod
-    def pact_restore_backup():
-        plugins_folder = Path(QFileDialog.getExistingDirectory())
-        if plugins_folder:
-            primary_backup = Path("PACT BACKUP", "Primary Backup")
-            if not primary_backup.exists():
-                print("❌ ERROR : You need to create a backup before you can restore it!")
-            else:
-                print("RESTORING PRIMARY BACKUP, PLEASE WAIT...")
-                for files in primary_backup.glob("**/*"):
-                    for file in files:
-                        if info.plugins_pattern.search(file):
-                            plugin_backup = primary_backup.joinpath(file)
-                            plugin_current = plugins_folder.joinpath(file)
-                            if plugin_backup.exists() and plugin_current.exists():
-                                try:
-                                    shutil.copy2(plugin_backup, plugin_current)
-                                except (PermissionError, OSError):
-                                    print(f"❌ ERROR : Unable to restore a backup for {file}")
-                                    print("   You can run PACT in admin mode and try again.")
-                                    continue
-                print("PRIMARY BACKUP RESTORED!")"""  # This is commented out because it's not functional right now.
-
     def pact_placeholder_popup(self) -> None:
         """
-        Displays an informational popup dialog indicating that the requested feature
-        is a placeholder and is not currently available.
+        Displays an informational popup to indicate that a feature is currently unavailable.
 
-        This method invokes a `QMessageBox` dialog with a predefined title and message,
-        informing the user about the unavailability of the feature.
+        This method creates a QMessageBox with a pre-defined title and message content,
+        informing the user that the specific feature is not yet implemented or accessible.
 
-        :return: None
+        Raises:
+            None
         """
         QMessageBox.information(self, "PACT Placeholder", "This feature is not available yet!")
 
     # ================= MAIN BUTTON FUNCTIONS ===================
 
+    # Constants for UI elements
+    SUCCESS_STYLE = "color: black; background-color: lightgreen; border-radius: 5px; border: 1px solid gray;"
+    ERROR_STYLE = "color: black; background-color: orange; border-radius: 5px; border: 1px solid gray;"
+    CONFIG_FILE = "PACT Settings.yaml"
+
     def update_settings(self) -> None:
         """
-        Updates the application settings for Cleaning Timeout and Journal Expiration
-        based on user input, writes them to the YAML configuration file, and displays
-        an information message to confirm changes.
+        Updates the application settings related to PACT configurations such as Cleaning
+        Timeout and Journal Expiration. The settings are fetched from user input fields,
+        validated, and saved to the configuration file.
 
-        This method reads input values from specific input fields, updates the YAML
-        settings file with the provided values, and notifies the user of successful
-        updates using a message box.
-
-        :raises ValueError: If the text inputs cannot be converted to integers.
-
-        :rtype: None
+        Raises:
+            ValueError: If the input values for timeout or expiration days are not valid integers.
         """
         pact_update_settings(info)
-        value_CT = int(self.InputField_CT.text())
-        value_JE = int(self.InputField_JE.text())
-        yaml_settings("PACT Settings.yaml", "PACT_Settings.Cleaning Timeout", value_CT)
-        yaml_settings("PACT Settings.yaml", "PACT_Settings.Journal Expiration", value_JE)
-        QMessageBox.information(self, "PACT Settings", "All PACT settings have been updated and refreshed!")
+
+        try:
+            cleaning_timeout_value = int(self.InputField_CT.text())
+            journal_expiration_days = int(self.InputField_JE.text())
+
+            yaml_settings(self.CONFIG_FILE, "PACT_Settings.Cleaning Timeout", cleaning_timeout_value)
+            yaml_settings(self.CONFIG_FILE, "PACT_Settings.Journal Expiration", journal_expiration_days)
+
+            QMessageBox.information(self, "PACT Settings", "All PACT settings have been updated and refreshed!")
+        except ValueError:
+            QMessageBox.warning(self, "Invalid Input",
+                                "Please enter valid integer values for timeout and expiration days.")
+
+    def _select_file(self, file_type, file_filter, config_key, button, success_text,
+                     validation_func=None, error_text="❌ WRONG FILE", attr_name=None) -> bool:
+        """
+        Performs a file selection operation and updates the UI and configuration based on the selected file and validation
+        results. Displays a success or error message depending on the outcome.
+
+        Args:
+            file_type: A string representing the type of file being selected (e.g., "Image", "Configuration File").
+            file_filter: A string defining the file types to filter during file selection (e.g., "*.png;*.jpg").
+            config_key: A string key corresponding to the location in the configuration file where the file path should be stored.
+            button: A QPushButton object whose text and style will be updated based on the operation result.
+            success_text: A string to display on the button when the file selection and validation are successful.
+            validation_func: An optional callable function to validate the selected file. This function should return
+                a boolean indicating whether the file is valid or not.
+            error_text: A string to display on the button when the selected file fails validation. Default is "❌ WRONG FILE".
+            attr_name: An optional string representing the name of a boolean attribute in the class. When provided and the
+                operation is successful, the attribute will be updated to True.
+
+        Returns:
+            bool: True if the file is successfully selected and validated, otherwise False.
+        """
+        file_path, _ = QFileDialog.getOpenFileName(filter=file_filter)
+
+        if not file_path or not Path(file_path).exists():
+            return False
+
+        # Perform validation if a validation function is provided
+        is_valid = True
+        if validation_func is not None:
+            is_valid = validation_func(file_path)
+
+        if is_valid:
+            QMessageBox.information(self, f"New {file_type} Set", f"You have set the {file_type} to:\n{file_path}")
+            yaml_settings(self.CONFIG_FILE, config_key, file_path)
+            button.setStyleSheet(self.SUCCESS_STYLE)
+            button.setText(success_text)
+
+            # Update configured attribute if provided
+            if attr_name and hasattr(self, attr_name):
+                setattr(self, attr_name, True)
+
+            return True
+        else:
+            button.setStyleSheet(self.ERROR_STYLE)
+            button.setText(error_text)
+            return False
 
     def select_file_lo(self) -> None:
         """
-        The `select_file_lo` method allows users to select a load order file through a file dialog. It validates the file path,
-        confirms its existence, and ensures it includes either "loadorder" or "plugins" in its name. The method also updates the
-        application's settings and UI based on the file's validity, providing feedback to the user.
+        Selects a load order file and validates its structure.
 
-        :raises FileNotFoundError: Raised only when an expected valid file does not exist in the given path.
-        :raises ValueError: Raised when the selected file is not properly configured to contain specific identifiers.
+        This method allows users to choose a load order text file, validates its
+        contents, and updates related configurations. The validation ensures that
+        the chosen file name contains "loadorder" or "plugins", indicating it
+        meets the load order file naming conventions.
 
-        :return: None
+        Returns:
+            None
         """
-        LO_file, _ = QFileDialog.getOpenFileName(filter="*.txt")
-        if Path(LO_file).exists() and ("loadorder" in LO_file or "plugins" in LO_file):
-            QMessageBox.information(self, "New Load Order File Set", f"You have set the new path to: {LO_file} \n")
-            yaml_settings("PACT Settings.yaml", "PACT_Settings.LoadOrder TXT", LO_file)
-            self.RegBT_BROWSE_LO.setStyleSheet(
-                "color: black; background-color: lightgreen; border-radius: 5px; border: 1px solid gray;"
-            )
-            self.RegBT_BROWSE_LO.setText("✔️ LOAD ORDER FILE SET")
-            self.configured_LO = True
-        elif Path(LO_file).exists() and "loadorder" not in LO_file and "plugins" not in LO_file:
-            self.RegBT_BROWSE_LO.setStyleSheet(
-                "color: black; background-color: orange; border-radius: 5px; border: 1px solid gray;"
-            )
-            self.RegBT_BROWSE_LO.setText("❌ WRONG LO FILE")
+
+        def validate_load_order(file_path):
+            return "loadorder" in file_path or "plugins" in file_path
+
+        self._select_file(
+            file_type="Load Order File",
+            file_filter="*.txt",
+            config_key="PACT_Settings.LoadOrder TXT",
+            button=self.RegBT_BROWSE_LO,
+            success_text="✔️ LOAD ORDER FILE SET",
+            validation_func=validate_load_order,
+            error_text="❌ WRONG LO FILE",
+            attr_name="configured_LO"
+        )
 
     def select_file_mo2(self) -> None:
         """
-        Allows user to select and set the MO2 executable file through a file dialog. Updates
-        the application UI and configuration upon selection.
+        Selects a file for the MO2 executable configuration.
 
-        :param self: Instance of the class where this method is defined.
+        This method facilitates the selection of an MO2 executable file by
+        opening a file dialog with predefined filters and setting configuration
+        values upon successful file selection. If the operation is successful,
+        the method updates the corresponding user interface elements and sets
+        internal state attributes.
 
-        :raises FileNotFoundError: Raised if the selected file path does not exist.
-
-        :raises RuntimeError: Raised if there is an error updating the YAML settings.
-
-        :return: None
+        Raises:
+            TypeError: If any argument passed to `_select_file` method is of an
+                incorrect type.
+            ValueError: If an invalid value is encountered during the file
+                selection or configuration process.
         """
-        MO2_EXE, _ = QFileDialog.getOpenFileName(filter="*.exe")
-        if Path(MO2_EXE).exists():
-            QMessageBox.information(self, "New MO2 Executable Set", "You have set MO2 to: \n" + MO2_EXE)
-            yaml_settings("PACT Settings.yaml", "PACT_Settings.MO2 EXE", MO2_EXE)
-            self.RegBT_BROWSE_MO2.setStyleSheet(
-                "color: black; background-color: lightgreen; border-radius: 5px; border: 1px solid gray;"
-            )
-            self.RegBT_BROWSE_MO2.setText("✔️ MO2 EXECUTABLE SET")
-            self.configured_MO2 = True
+        self._select_file(
+            file_type="MO2 Executable",
+            file_filter="*.exe",
+            config_key="PACT_Settings.MO2 EXE",
+            button=self.RegBT_BROWSE_MO2,
+            success_text="✔️ MO2 EXECUTABLE SET",
+            attr_name="configured_MO2"
+        )
 
     def select_file_xedit(self) -> None:
         """
-        This function provides a dialog for the user to select an executable file for XEDIT.
-        The selected file is checked to ensure it exists and meets the necessary XEDIT criteria.
-        If valid, it updates the relevant configuration settings and modifies the appearance
-        and text of a button in the user interface.
+        Selects and validates an XEDIT executable file.
 
-        :raises ValueError: if the selected file is not compatible with XEDIT requirements.
+        This method allows users to select a specific XEDIT executable file, validates it
+        based on predetermined conditions, and updates the application's configuration settings
+        accordingly.
 
-        :return: None
+        Returns:
+            None
         """
-        XEDIT_EXE, _ = QFileDialog.getOpenFileName(filter="*.exe")
-        if Path(XEDIT_EXE).exists() and matches_condition(XEDIT_EXE, info):
-            QMessageBox.information(self, "New MO2 Executable Set", "You have set XEDIT to: \n" + XEDIT_EXE)
-            yaml_settings("PACT Settings.yaml", "PACT_Settings.XEDIT EXE", XEDIT_EXE)
-            self.RegBT_BROWSE_XEDIT.setStyleSheet(
-                "color: black; background-color: lightgreen; border-radius: 5px; border: 1px solid gray;"
-            )
-            self.RegBT_BROWSE_XEDIT.setText("✔️ XEDIT EXECUTABLE SET")
-            self.configured_XEDIT = True
-        elif Path(XEDIT_EXE).exists() and not matches_condition(XEDIT_EXE, info):
-            self.RegBT_BROWSE_XEDIT.setText("❌ WRONG XEDIT EXE")
-            self.RegBT_BROWSE_XEDIT.setStyleSheet(
-                "color: black; background-color: orange; border-radius: 5px; border: 1px solid gray;"
-            )
+
+        def validate_xedit(file_path):
+            return matches_condition(file_path, info)
+
+        self._select_file(
+            file_type="XEDIT Executable",
+            file_filter="*.exe",
+            config_key="PACT_Settings.XEDIT EXE",
+            button=self.RegBT_BROWSE_XEDIT,
+            success_text="✔️ XEDIT EXECUTABLE SET",
+            validation_func=validate_xedit,
+            error_text="❌ WRONG XEDIT EXE",
+            attr_name="configured_XEDIT"
+        )
 
 
 # CLEANING NEEDS A SEPARATE THREAD SO IT DOESN'T FREEZE PACT GUI
 class PactThread(QThread):
     """
-    Handles cleaning operations in a separate thread that interacts with a progress bar.
+    Manages a progress bar and facilitates a cleaning operation process.
 
-    The class provides functionality for executing plugin cleaning processes in a
-    dedicated thread. This ensures that the UI remains responsive during the
-    cleaning process, while the status is updated in the progress bar. The
-    thread also includes utilities to check for specific conditions (e.g.,
-    whether certain processes are running) and adjusts its behavior accordingly.
+    This class is designed to encapsulate the logic for controlling a GUI-based progress
+    bar and performing a sequence of cleaning operations. It ensures safe and correct
+    execution through checks, such as detecting if a specific process (Mod Organizer 2)
+    is running, and handles application state updates accordingly.
 
-    :ivar cleaning_done: Indicates whether the cleaning operations are completed.
-    :type cleaning_done: bool
-    :ivar progress_bar: A progress bar instance used to display progress updates.
-    :type progress_bar: QProgressBar
+    Attributes:
+        CLEANING_DELAY_MS (int): The delay in milliseconds to wait after the execution of
+            cleaning operations.
+        cleaning_done (bool): Indicates whether the cleaning operation has been completed.
+        progress_bar (QProgressBar): The progress bar instance managed by the class.
     """
     CLEANING_DELAY_MS = 1000  # Extracted constant for clarity
 
     def __init__(self, progress_bar: QProgressBar, parent: QObject | None = None) -> None:
         """
-        Initializes an instance of the class responsible for managing a progress bar and
-        indicating cleaning status. This class is designed to encapsulate the state and
-        control logic for the provided progress bar component.
+        Initializes a processing handler with a progress bar and an optional parent.
 
-        :param progress_bar: The QProgressBar instance that this object will manage.
-                             It is used to display the progress visually to the user.
-        :param parent: Optional parent QObject for this instance. If provided, the parent
-                       will assume ownership of the object to manage its lifetime.
+        This constructor sets up the initial state of the handler, associating it with
+        a provided progress bar and an optional parent object. Additionally, it
+        initializes the `cleaning_done` flag to `False`.
+
+        Args:
+            progress_bar: The QProgressBar instance to associate with the processing
+                handler. Used to visually track the progress of tasks.
+            parent: The optional parent QObject. Defaults to None.
         """
         super().__init__(parent)
         self.cleaning_done = False
@@ -934,20 +904,22 @@ class PactThread(QThread):
 
     def run(self) -> None:
         """
-        Performs the main cleaning routine by first checking if a specific process
-        (Mod Organizer 2) is running. If the process is detected, the cleaning
-        routine is aborted, the progress bar is hidden, and the application quits
-        immediately. Otherwise, it proceeds with the cleaning operations, ensuring
-        a delay after the execution.
+        Performs the execution of a cleaning task after ensuring specific conditions.
 
-        This function encapsulates the control flow of the cleaning operation,
-        managing the required checks and executions step-by-step.
+        The method first ensures that a required process is not already running. If the process is found to
+        be running, it terminates the task. Otherwise, it proceeds with performing cleaning operations,
+        introduces a delay, and completes the task.
 
-        :raises RuntimeError: if any cleaning operations fail during execution.
+        Args:
+            self: An instance of the class that encapsulates this method.
 
-        :return: None
+        Raises:
+            None.
+
+        Returns:
+            None.
         """
-        is_mo2_running = check_process_mo2(progress_emitter)
+        is_mo2_running = check_process_mo2(progress_emitter, info)
         if is_mo2_running:
             self._hide_progress_bar_and_quit()
             return
@@ -957,11 +929,15 @@ class PactThread(QThread):
 
     def _hide_progress_bar_and_quit(self) -> None:
         """
-        Hides the progress bar if it is visible and quits the application. This function checks the visibility
-        of the progress bar, and if it is visible, it hides the progress bar before exiting the application.
-        No value is returned.
+        Hides the progress bar and quits the application.
 
-        :return: None
+        This method checks if a progress bar exists and hides it by setting its
+        visibility to False. Afterward, it triggers the quit mechanism for the
+        application. It is typically used to ensure that the progress bar is
+        properly hidden before the application exits.
+
+        Returns:
+            None
         """
         if self.progress_bar:
             self.progress_bar.setVisible(False)
@@ -970,19 +946,17 @@ class PactThread(QThread):
     @staticmethod
     def _perform_cleaning_operations() -> None:
         """
-        Performs a series of cleaning and integrity check operations.
+        Performs a series of cleaning operations to ensure the integrity of the system's
+        settings and tidy up associated plugins.
 
-        This static method executes necessary actions to ensure that
-        settings are consistent and that plugins are cleaned up. It
-        relies on auxiliary functions for these operations to maintain
-        the system's operational integrity.
+        This method is responsible for executing actions required to maintain and verify
+        the proper functioning of settings configurations while cleaning up any associated
+        plugins. It is designed to operate as a utility method that does not alter or return
+        any external/internal state but ensures an environment clean-up process is executed
+        appropriately.
 
-        :raises RuntimeError: If an error occurs during checking of settings
-                              integrity.
-        :raises ValueError: If invalid progress emitter is encountered during
-                            plugin cleanup.
-
-        :return: None
+        Returns:
+            None
         """
         check_settings_integrity()
         clean_plugins(progress_emitter)
