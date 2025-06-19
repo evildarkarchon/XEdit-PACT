@@ -1,3 +1,4 @@
-﻿/Claude Code Quality Assessment.md
-/PACT Ignore.yaml
+﻿/PACT Ignore.yaml
 /PACT Settings.yaml
+/PACT Data/PACT Config.yaml
+*.backup
