@@ -6,11 +6,12 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from PactLib.state_manager import StateManager
-from cleaning_service import CleaningService
-from cleaning_worker import CleaningWorker
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QFileDialog, QWidget
+
+from PactLib.cleaning_service import CleaningService
+from PactLib.cleaning_worker import CleaningWorker
+from PactLib.state_manager import StateManager
 
 if TYPE_CHECKING:
     from config_manager import ConfigManager

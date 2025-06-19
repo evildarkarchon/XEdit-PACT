@@ -11,7 +11,7 @@ from typing import Any, Callable
 import psutil
 import ruamel.yaml
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class YamlManager:

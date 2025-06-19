@@ -10,7 +10,7 @@ from ruamel import yaml
 
 from PactLib.utils import yaml_settings, yaml_settings_write
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class ConfigManager:

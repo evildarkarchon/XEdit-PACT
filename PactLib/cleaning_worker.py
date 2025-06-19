@@ -11,10 +11,10 @@ from PactLib.cleaning_service import CleaningService
 from PactLib.state_manager import StateManager
 
 if TYPE_CHECKING:
-    from cleaning_service import CleaningService
-    from state_manager import StateManager
+    from PactLib.cleaning_service import CleaningService
+    from PactLib.state_manager import StateManager
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class CleaningWorker(QThread):
