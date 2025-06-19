@@ -68,6 +68,12 @@ poetry run pyinstaller PACT.spec
 5. **Error Recovery**: Extensive try-except blocks around file operations and subprocess calls
 6. **Game Detection**: Automatic detection of installed games and their mod managers (MO2/Vortex)
 
+## Environment Specifics
+
+- **Poetry vs Virtual Environment**:
+  * On Windows: Use `poetry` for dependency management and running commands
+  * On Linux: Use the virtual environment located in the `.virtualenv` directory instead of poetry
+
 ## Testing Approach
 
 When testing changes:

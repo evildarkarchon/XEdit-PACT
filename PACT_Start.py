@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import os
 import re
@@ -6,12 +8,14 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import ClassVar, TypeAlias
+from typing import Any, ClassVar, TypeAlias
+import tempfile
 
+import portalocker
 import psutil
 import requests
 import ruamel.yaml
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, QMutex, QMutexLocker
 
 """AUTHOR NOTES (POET)
 - Comments marked as RESERVED in all scripts are intended for future updates or tests, do not edit / move / remove.
@@ -24,12 +28,14 @@ from typing import Any
 
 class ProgressEmitter(QObject):  # type: ignore
     """
-    Manages and emits progress-related signals for a plugin cleaning process.
+    Thread-safe progress emitter for plugin cleaning process.
 
     This class is responsible for handling and reporting progress updates, including
     the maximum value, current progress, and plugin-specific messages, as well as
     emitting signals to indicate task completion and visibility updates. It provides
     a structured way to track and communicate the status of a plugin cleaning operation.
+    
+    All methods are thread-safe and can be called from any thread.
     """
     # Template used for formatting progress messages for plugins
     PROGRESS_MESSAGE_TEMPLATE = "Cleaning {plugin} %v/%m - %p%"
@@ -42,9 +48,36 @@ class ProgressEmitter(QObject):  # type: ignore
     visible = Signal(bool)  # Controls progress tracking visibility
 
     def __init__(self) -> None:
-        """Initialize the ProgressEmitter."""
+        """Initialize the thread-safe ProgressEmitter."""
         super().__init__()
-        self.task_completed = False
+        self._mutex = QMutex()
+        self._task_completed = False
+        self._is_done = False
+        
+    @property
+    def task_completed(self) -> bool:
+        """Thread-safe getter for task completion status."""
+        with QMutexLocker(self._mutex):
+            return self._task_completed
+            
+    @task_completed.setter
+    def task_completed(self, value: bool) -> None:
+        """Thread-safe setter for task completion status."""
+        with QMutexLocker(self._mutex):
+            self._task_completed = value
+            
+    @property
+    def is_done(self) -> bool:
+        """Thread-safe getter for done status."""
+        with QMutexLocker(self._mutex):
+            return self._is_done
+            
+    @is_done.setter
+    def is_done(self, value: bool) -> None:
+        """Thread-safe setter for done status."""
+        with QMutexLocker(self._mutex):
+            self._is_done = value
+            
 
     @staticmethod
     def _initialize_plugin_info() -> int:
@@ -58,65 +91,84 @@ class ProgressEmitter(QObject):  # type: ignore
 
     def emit_max_value(self) -> None:
         """
-        Emit the maximum value for progress tracking.
+        Thread-safe method to emit the maximum value for progress tracking.
 
         Calculates the maximum count of data being processed and emits this value
         via the `max_value` signal.
         """
-        max_count = self._initialize_plugin_info()
-        self.max_value.emit(max_count)
+        with QMutexLocker(self._mutex):
+            max_count = self._initialize_plugin_info()
+            self.max_value.emit(max_count)
 
     def emit_progress(self, current_count: int) -> None:
         """
-        Emit the current progress value.
+        Thread-safe method to emit the current progress value.
 
         Args:
             current_count: The current progress value.
         """
-        self.progress.emit(current_count)
+        with QMutexLocker(self._mutex):
+            self.progress.emit(current_count)
 
     def emit_plugin_info(self, plugin_name: str) -> None:
         """
-        Emit a formatted description about the current plugin process.
+        Thread-safe method to emit a formatted description about the current plugin process.
 
         Args:
             plugin_name: The name of the current plugin.
         """
-        formatted_message = self.PROGRESS_MESSAGE_TEMPLATE.format(plugin=plugin_name)
-        self.plugin_value.emit(formatted_message)
+        with QMutexLocker(self._mutex):
+            formatted_message = self.PROGRESS_MESSAGE_TEMPLATE.format(plugin=plugin_name)
+            self.plugin_value.emit(formatted_message)
 
     def emit_done(self) -> None:
         """
-        Mark the process as complete.
+        Thread-safe method to mark the process as complete.
 
         Emits the `done` signal and updates the task completion status.
         """
-        self.done.emit()
-        self.task_completed = True
+        with QMutexLocker(self._mutex):
+            self.done.emit()
+            self._task_completed = True
+            self._is_done = True
 
     def emit_visibility(self, is_visible: bool = True) -> None:
         """
-        Emit a signal to set visibility.
+        Thread-safe method to emit a signal to set visibility.
 
         Args:
             is_visible: Whether the progress should be visible. Defaults to True.
         """
-        self.visible.emit(is_visible)
+        with QMutexLocker(self._mutex):
+            self.visible.emit(is_visible)
 # =================== PACT TOML FILE ===================
 
 class YamlManager:
     """
-    A class to manage YAML file operations with caching capabilities.
+    Thread-safe YAML file manager with caching capabilities and file locking.
+    
+    This class provides thread-safe access to YAML files with automatic
+    file locking to prevent concurrent access issues.
     """
     def __init__(self):
         self._cache: dict[str, Any] = {}
+        self._cache_lock = threading.RLock()  # Reentrant lock for cache access
+        self._file_locks: dict[str, threading.RLock] = {}  # Per-file locks
+        self._file_locks_lock = threading.Lock()  # Lock for managing file locks
         self._yaml = ruamel.yaml.YAML()
         self._yaml.indent(offset=2)
         self._yaml.width = 300
+        
+    def _get_file_lock(self, yaml_path: str) -> threading.RLock:
+        """Get or create a lock for the specified file path."""
+        with self._file_locks_lock:
+            if yaml_path not in self._file_locks:
+                self._file_locks[yaml_path] = threading.RLock()
+            return self._file_locks[yaml_path]
 
     def get_value(self, yaml_path: str, key_path: str | list[str]) -> Any:
         """
-        Retrieve a value from the YAML file at the specified key path.
+        Thread-safe method to retrieve a value from the YAML file at the specified key path.
 
         Args:
             yaml_path: Path to the YAML file
@@ -125,43 +177,47 @@ class YamlManager:
         Returns:
             The value at the specified key path or None if not found
         """
-        data = self._load_yaml(yaml_path)
-        keys = self._parse_key_path(key_path)
+        file_lock = self._get_file_lock(yaml_path)
+        with file_lock:
+            data = self._load_yaml(yaml_path)
+            keys = self._parse_key_path(key_path)
 
-        # Traverse the YAML structure
-        value = data
-        for key in keys:
-            if isinstance(value, dict) and key in value:
-                value = value[key]
-            else:
-                if "Path" not in (key_path if isinstance(key_path, str) else ".".join(key_path)):
-                    print(f"❌ ERROR (YamlManager) : Trying to grab a None value for : '{key_path}'")
-                return None  # Key not found
+            # Traverse the YAML structure
+            value = data
+            for key in keys:
+                if isinstance(value, dict) and key in value:
+                    value = value[key]
+                else:
+                    if "Path" not in (key_path if isinstance(key_path, str) else ".".join(key_path)):
+                        print(f"❌ ERROR (YamlManager) : Trying to grab a None value for : '{key_path}'")
+                    return None  # Key not found
 
-        return value
+            return value
 
     def set_value(self, yaml_path: str, key_path: str | list[str], new_value: Any) -> None:
         """
-        Set a value in the YAML file at the specified key path.
+        Thread-safe method to set a value in the YAML file at the specified key path.
 
         Args:
             yaml_path: Path to the YAML file
             key_path: Dot-separated string or list of keys to traverse
             new_value: Value to set at the specified key path
         """
-        data = self._load_yaml(yaml_path)
-        keys = self._parse_key_path(key_path)
+        file_lock = self._get_file_lock(yaml_path)
+        with file_lock:
+            data = self._load_yaml(yaml_path)
+            keys = self._parse_key_path(key_path)
 
-        # Navigate to the parent of the final key
-        current = data
-        for key in keys[:-1]:
-            current = current[key]
+            # Navigate to the parent of the final key
+            current = data
+            for key in keys[:-1]:
+                current = current[key]
 
-        # Set the value at the final key
-        current[keys[-1]] = new_value
+            # Set the value at the final key
+            current[keys[-1]] = new_value
 
-        # Save changes back to file
-        self._save_yaml(yaml_path, data)
+            # Save changes back to file
+            self._save_yaml(yaml_path, data)
 
     @staticmethod
     def _parse_key_path(key_path: str | list[str]) -> list[str]:
@@ -169,28 +225,76 @@ class YamlManager:
         return key_path.split(".") if isinstance(key_path, str) else key_path
 
     def _load_yaml(self, yaml_path: str) -> Any:
-        """Load YAML file, using cache if available."""
-        if yaml_path not in self._cache:
-            try:
-                with Path(yaml_path).open(encoding="utf-8") as yaml_file:
-                    self._cache[yaml_path] = self._yaml.load(yaml_file)
-            except (FileNotFoundError, PermissionError, ruamel.yaml.YAMLError) as e:
-                print(f"❌ ERROR: Failed to load YAML file '{yaml_path}': {str(e)}")
-                self._cache[yaml_path] = {}
+        """Thread-safe method to load YAML file, using cache if available."""
+        with self._cache_lock:
+            if yaml_path not in self._cache:
+                try:
+                    with self._file_lock_context(yaml_path):
+                        with Path(yaml_path).open(encoding="utf-8") as yaml_file:
+                            self._cache[yaml_path] = self._yaml.load(yaml_file)
+                except (FileNotFoundError, PermissionError, ruamel.yaml.YAMLError) as e:
+                    print(f"❌ ERROR: Failed to load YAML file '{yaml_path}': {str(e)}")
+                    self._cache[yaml_path] = {}
 
-        return self._cache[yaml_path]
+            return self._cache[yaml_path]
+            
+    def _file_lock_context(self, yaml_path: str):
+        """Context manager for file-level locking using portalocker."""
+        class FileLockContext:
+            def __init__(self, file_path: str):
+                self.file_path = file_path
+                self.lock_file = None
+                
+            def __enter__(self):
+                # Create a lock file for this YAML file
+                lock_path = Path(self.file_path).with_suffix('.lock')
+                self.lock_file = open(lock_path, 'w')
+                try:
+                    portalocker.lock(self.lock_file, portalocker.LOCK_EX | portalocker.LOCK_NB)
+                except portalocker.LockException:
+                    # If we can't get the lock immediately, wait for it
+                    portalocker.lock(self.lock_file, portalocker.LOCK_EX)
+                return self
+                
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                if self.lock_file:
+                    portalocker.unlock(self.lock_file)
+                    self.lock_file.close()
+                    # Clean up the lock file
+                    try:
+                        Path(self.file_path).with_suffix('.lock').unlink(missing_ok=True)
+                    except OSError:
+                        pass  # Ignore cleanup errors
+                        
+        return FileLockContext(yaml_path)
 
     def _save_yaml(self, yaml_path: str, data: Any) -> None:
-        """Save data to YAML file and update cache."""
+        """Thread-safe method to save data to YAML file and update cache."""
         try:
-            with Path(yaml_path).open("w", encoding="utf-8") as yaml_file:
-                self._yaml.dump(data, yaml_file)
-            self._cache[yaml_path] = data  # Update cache
+            # Use atomic write operation
+            temp_path = Path(yaml_path).with_suffix('.tmp')
+            with self._file_lock_context(yaml_path):
+                with temp_path.open("w", encoding="utf-8") as temp_file:
+                    self._yaml.dump(data, temp_file)
+                    temp_file.flush()
+                    os.fsync(temp_file.fileno())  # Force write to disk
+                
+                # Atomic move
+                temp_path.replace(Path(yaml_path))
+                
+            # Update cache after successful write
+            with self._cache_lock:
+                self._cache[yaml_path] = data
         except (FileNotFoundError, PermissionError) as e:
             print(f"❌ ERROR: Failed to save YAML file '{yaml_path}': {str(e)}")
+            # Clean up temp file if it exists
+            try:
+                Path(yaml_path).with_suffix('.tmp').unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
-# Create a singleton instance
+# Create a thread-safe singleton instance
 yaml_manager = YamlManager()
 
 
@@ -227,7 +331,7 @@ def pact_settings(setting: str | None = None) -> str | bool | int | list[str] | 
 
     # Initialize settings file if it doesn't exist
     if not Path(settings_path).exists():
-        default_settings = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.default_settings")
+        default_settings = yaml_settings(str(PACT_YAML_PATH), "PACT_Data.default_settings")
         if default_settings is not None:
             with Path(settings_path).open("w", encoding="utf-8") as settings_file:
                 settings_file.write(default_settings)
@@ -246,12 +350,14 @@ def pact_settings(setting: str | None = None) -> str | bool | int | list[str] | 
 @dataclass
 class Info:
     """
-    This class represents configuration and data management for various applications and plugins.
+    Thread-safe configuration and data management for various applications and plugins.
 
     The `Info` class manages paths, settings, and processing details related to Mod Organizer 2 (MO2),
     xEdit, and various plugin lists for Bethesda games like Fallout and Skyrim. It also integrates with
     external settings defined in YAML files for customizable behavior. The class is designed to provide
     organization and processing support for modding tools and their corresponding lists and logs.
+    
+    All methods and property access are protected by locks to ensure thread safety.
 
     Attributes:
         MO2_EXE (str | Path): Path or name of the Mod Organizer 2 executable.
@@ -302,41 +408,102 @@ class Info:
     Cleaning_Timeout: int = 300
 
     MO2Mode: bool = False
-    xedit_list_fallout3: list[str] = field(default_factory=lambda: yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO3") or [])
-    lower_fo3: ClassVar[set[str]] = {item.lower() for item in xedit_list_fallout3} or set()
-    xedit_list_newvegas: list[str] = field(default_factory=lambda: yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FNV") or [])
-    lower_fnv: ClassVar[set[str]] = {item.lower() for item in xedit_list_newvegas} or set()
-    xedit_list_fallout4: list[str] = field(default_factory=lambda: yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO4") or [])
-    xedit_list_fallout4.extend(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.FO4VR") or [])
-    lower_fo4: ClassVar[set[str]] = {item.lower() for item in xedit_list_fallout4} or set()
-    xedit_list_skyrimse: list[str] = field(default_factory=lambda: yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.SSE") or [])
-    skyrimvr_list: list[str] = field(default_factory=lambda: yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.SkyrimVR") or [])
-    xedit_list_skyrimse.extend(skyrimvr_list)
-    lower_sse: ClassVar[set[str]] = {item.lower() for item in xedit_list_skyrimse} or set()
+    xedit_list_fallout3: list[str] = field(default_factory=lambda: yaml_settings(str(PACT_YAML_PATH), "PACT_Data.XEdit_Lists.FO3") or [])
+    xedit_list_newvegas: list[str] = field(default_factory=lambda: yaml_settings(str(PACT_YAML_PATH), "PACT_Data.XEdit_Lists.FNV") or [])
+    xedit_list_fallout4: list[str] = field(default_factory=lambda: yaml_settings(str(PACT_YAML_PATH), "PACT_Data.XEdit_Lists.FO4") or [])
+    xedit_list_skyrimse: list[str] = field(default_factory=lambda: yaml_settings(str(PACT_YAML_PATH), "PACT_Data.XEdit_Lists.SSE") or [])
+    skyrimvr_list: list[str] = field(default_factory=lambda: yaml_settings(str(PACT_YAML_PATH), "PACT_Data.XEdit_Lists.SkyrimVR") or [])
     xedit_list_universal: list[str] = field(default_factory=list)
     xedit_list_specific: list[str] = field(default_factory=list)
+    
+    # These will be populated in __post_init__
+    lower_fo3: set[str] = field(default_factory=set)
+    lower_fnv: set[str] = field(default_factory=set) 
+    lower_fo4: set[str] = field(default_factory=set)
+    lower_sse: set[str] = field(default_factory=set)
+    lower_specific: set[str] = field(default_factory=set)
+    lower_universal: set[str] = field(default_factory=set)
 
     def __post_init__(self) -> None:
-        self.xedit_list_universal = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.XEdit_Lists.Universal") or []
-        self.FO3_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FO3") or []
-        self.FNV_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FNV") or []
-        self.FO4_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.FO4") or []
-        self.SSE_skip_list = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Skip_Lists.SSE") or []
-        self.VIP_skip_list = (
-            (self.FO3_skip_list or [])
-            + (self.FNV_skip_list or [])
-            + (self.FO4_skip_list or [])
-            + (self.SSE_skip_list or [])
-        )
-        self.xedit_list_specific = (
-            self.xedit_list_fallout3
-            + self.xedit_list_newvegas
-            + self.xedit_list_fallout4
-            + self.xedit_list_skyrimse
-        )
+        # Initialize thread safety locks
+        self._lock = threading.RLock()
+        self._counter_lock = threading.Lock()  # Separate lock for counters
+        
+        # Initialize data with thread safety
+        with self._lock:
+            # Load additional lists
+            self.xedit_list_universal = yaml_settings(str(PACT_YAML_PATH), "PACT_Data.XEdit_Lists.Universal") or []
+            
+            # Extend lists with VR versions
+            fo4vr_list = yaml_settings(str(PACT_YAML_PATH), "PACT_Data.XEdit_Lists.FO4VR") or []
+            self.xedit_list_fallout4.extend(fo4vr_list)
+            self.xedit_list_skyrimse.extend(self.skyrimvr_list)
+            
+            # Create combined specific list
+            self.xedit_list_specific = (
+                self.xedit_list_fallout3
+                + self.xedit_list_newvegas
+                + self.xedit_list_fallout4
+                + self.xedit_list_skyrimse
+            )
+            
+            # Create lowercase sets for fast lookups
+            self.lower_fo3 = {item.lower() for item in self.xedit_list_fallout3}
+            self.lower_fnv = {item.lower() for item in self.xedit_list_newvegas}
+            self.lower_fo4 = {item.lower() for item in self.xedit_list_fallout4}
+            self.lower_sse = {item.lower() for item in self.xedit_list_skyrimse}
+            self.lower_specific = {item.lower() for item in self.xedit_list_specific}
+            self.lower_universal = {item.lower() for item in self.xedit_list_universal}
+            
+            # Load skip lists
+            self.FO3_skip_list = yaml_settings(str(PACT_YAML_PATH), "PACT_Data.Skip_Lists.FO3") or []
+            self.FNV_skip_list = yaml_settings(str(PACT_YAML_PATH), "PACT_Data.Skip_Lists.FNV") or []
+            self.FO4_skip_list = yaml_settings(str(PACT_YAML_PATH), "PACT_Data.Skip_Lists.FO4") or []
+            self.SSE_skip_list = yaml_settings(str(PACT_YAML_PATH), "PACT_Data.Skip_Lists.SSE") or []
+            self.VIP_skip_list = (
+                (self.FO3_skip_list or [])
+                + (self.FNV_skip_list or [])
+                + (self.FO4_skip_list or [])
+                + (self.SSE_skip_list or [])
+            )
+            
+    def increment_processed(self) -> None:
+        """Thread-safe increment of processed plugins counter."""
+        with self._counter_lock:
+            self.plugins_processed += 1
+            
+    def decrement_processed(self) -> None:
+        """Thread-safe decrement of processed plugins counter."""
+        with self._counter_lock:
+            self.plugins_processed -= 1
+            
+    def increment_cleaned(self) -> None:
+        """Thread-safe increment of cleaned plugins counter."""
+        with self._counter_lock:
+            self.plugins_cleaned += 1
+            
+    def add_to_failed_list(self, plugin_name: str) -> None:
+        """Thread-safe addition to failed plugins list."""
+        with self._lock:
+            self.clean_failed_list.add(plugin_name)
+            
+    def add_to_skip_list(self, plugin_name: str) -> None:
+        """Thread-safe addition to local skip list."""
+        with self._lock:
+            self.local_skip_list.append(plugin_name)
+            
+    def add_to_clean_results(self, plugin_name: str, result_type: str) -> None:
+        """Thread-safe addition to cleaning results."""
+        with self._lock:
+            if result_type == "UDR":
+                self.clean_results_UDR.add(plugin_name)
+            elif result_type == "ITM":
+                self.clean_results_ITM.add(plugin_name)
+            elif result_type == "NVM":
+                self.clean_results_NVM.add(plugin_name)
+            elif result_type == "PARTIAL_FORMS":
+                self.clean_results_PARTIAL_FORMS.add(plugin_name)
 
-    lower_specific: ClassVar[set[str]] = {item.lower() for item in xedit_list_specific} or set()
-    lower_universal: ClassVar[set[str]] = {item.lower() for item in xedit_list_universal} or set()
 
     clean_results_UDR: set[str] = field(default_factory=set)  # Undisabled References
     clean_results_ITM: set[str] = field(default_factory=set)  # Identical To Master
@@ -400,10 +567,10 @@ def matches_condition(compare_string: str, data: Info) -> bool:
     return normalized_name in data.lower_specific or normalized_name in data.lower_universal
 
 
-if not Path("PACT Ignore.yaml").exists():
-    default_ignorefile = yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.default_ignorefile")
+if not PACT_IGNORE_PATH.exists():
+    default_ignorefile = yaml_settings(str(PACT_YAML_PATH), "PACT_Data.default_ignorefile")
     if default_ignorefile is not None:
-        with Path("PACT Ignore.yaml").open("w", encoding="utf-8") as file:
+        with PACT_IGNORE_PATH.open("w", encoding="utf-8") as file:
             file.write(default_ignorefile)
     else:
         print("❌ ERROR: Default ignore file could not be loaded.")
@@ -433,18 +600,31 @@ def pact_journal_expire() -> None:
             journal_path.unlink()
 
 
+# Thread-safe logging with file locking
+_log_lock = threading.Lock()
+
 def pact_log_update(log_message: str) -> None:
     """
-    Appends a given log message to the "PACT Journal.log" file. The log file is opened in append mode to
-    ensure messages are added to the end of the file. It supports UTF-8 encoding and ignores any errors
-    during the opening process.
+    Thread-safe method to append a log message to the "PACT Journal.log" file.
+    
+    Uses file locking to prevent concurrent write issues.
 
     Args:
         log_message: The message string to be written into the log file.
-
     """
-    with Path("PACT Journal.log").open("a", encoding="utf-8", errors="ignore") as LOG_PACT:
-        LOG_PACT.write(log_message)
+    with _log_lock:
+        try:
+            with PACT_JOURNAL_PATH.open("a", encoding="utf-8", errors="ignore") as LOG_PACT:
+                # Use file locking to prevent concurrent writes
+                portalocker.lock(LOG_PACT, portalocker.LOCK_EX)
+                try:
+                    LOG_PACT.write(log_message)
+                    LOG_PACT.flush()
+                    os.fsync(LOG_PACT.fileno())  # Force write to disk
+                finally:
+                    portalocker.unlock(LOG_PACT)
+        except OSError as e:
+            print(f"Warning: Could not write to log file: {e}")
 
 
 def pact_ignore_update(plugin: str, game: str) -> None:
@@ -457,9 +637,9 @@ def pact_ignore_update(plugin: str, game: str) -> None:
         plugin: The name of the plugin to be added to the ignore list.
         game: The name of the game for which the plugin should be ignored.
     """
-    ignore_list = yaml_settings("PACT Ignore.yaml", f"PACT_Ignore_{game}") or []
+    ignore_list = yaml_settings(str(PACT_IGNORE_PATH), f"PACT_Ignore_{game}") or []
     ignore_list.append(plugin)
-    yaml_settings("PACT Ignore.yaml", f"PACT_Ignore_{game}", ignore_list)
+    yaml_settings(str(PACT_IGNORE_PATH), f"PACT_Ignore_{game}", ignore_list)
 
 
 # =================== WARNING MESSAGES ==================
@@ -475,7 +655,9 @@ GITHUB_API_URL = "https://api.github.com/repos/evildarkarchon/XEdit-PACT/release
 PACT_VERSION_KEY = "PACT_Data.version"
 OUTDATED_WARNING_KEY = "PACT_Data.Warnings.Outdated_PACT"
 UPDATE_FAILED_WARNING_KEY = "PACT_Data.Warnings.PACT_Update_Failed"
-PACT_YAML_PATH = "PACT Data/PACT Main.yaml"
+PACT_YAML_PATH = Path("PACT Data") / "PACT Main.yaml"
+PACT_IGNORE_PATH = Path("PACT Ignore.yaml")
+PACT_JOURNAL_PATH = Path("PACT Journal.log")
 SEPARATOR = "==============================================================================="
 
 def pact_update_check() -> bool:
@@ -502,7 +684,7 @@ def pact_update_check() -> bool:
 
     try:
         return _check_version_and_report()
-    except (OSError, requests.exceptions.RequestException):
+    except (requests.exceptions.RequestException, requests.exceptions.ConnectionError, requests.exceptions.Timeout):
         _show_update_check_failed_message()
         return False
 
@@ -530,11 +712,12 @@ def _show_update_check_failed_message() -> None:
 
 # =================== TERMINAL OUTPUT START ====================
 print(
-    f"Hello World! | Plugin Auto Cleaning Tool (PACT) | Version {yaml_settings('PACT Data/PACT Main.yaml', 'PACT_Data.version')!s} | FO3, FNV, FO4, SSE"
+    f"Hello World! | Plugin Auto Cleaning Tool (PACT) | Version {yaml_settings(str(PACT_YAML_PATH), 'PACT_Data.version')!s} | FO3, FNV, FO4, SSE"
 )
 print("MAKE SURE TO SET THE CORRECT LOAD ORDER AND XEDIT PATHS BEFORE CLEANING PLUGINS")
 print("===============================================================================")
 
+# Create thread-safe global info instance
 info = Info()
 
 
@@ -589,17 +772,17 @@ def update_path_and_executable(data: InfoObject, path_attr: str, exe_attr: str,
 
 def find_xedit_executable(data: InfoObject, directory: Path) -> Path | None:
     """Find an appropriate xEdit executable in the given directory."""
-    for xedit_file in os.listdir(directory):
-        if xedit_file.endswith(".exe") and matches_condition(str(xedit_file), data):
-            return directory / xedit_file
+    for xedit_file in directory.iterdir():
+        if xedit_file.suffix == ".exe" and matches_condition(xedit_file.name, data):
+            return xedit_file
     return None
 
 
-def find_mo2_executable(directory: Path) -> Path | None:
+def find_mo2_executable(data: InfoObject, directory: Path) -> Path | None:
     """Find an appropriate MO2 executable in the given directory."""
-    for mo2_file in os.listdir(directory):
-        if mo2_file.endswith(".exe") and ("mod" in str(mo2_file).lower() or "mo2" in str(mo2_file).lower()):
-            return directory / mo2_file
+    for mo2_file in directory.iterdir():
+        if mo2_file.suffix == ".exe" and ("mod" in mo2_file.name.lower() or "mo2" in mo2_file.name.lower()):
+            return mo2_file
     return None
 
 
@@ -637,11 +820,11 @@ def update_mo2_path(data: InfoObject, mo2_path: PathLike | None) -> None:
     update_path_and_executable(data, "MO2_PATH", "MO2_EXE", mo2_path, find_mo2_executable)
 
 
-def validate_positive_integer(value: any, min_value: int, error_invalid: str, error_too_small: str) -> None:
+def validate_positive_integer(value: Any, min_value: int, error_invalid: str, error_too_small: str) -> None:
     """Validate that a value is a positive integer and not smaller than min_value."""
     if not isinstance(value, int) or value <= 0:
         raise ValueError(error_invalid)
-    elif value < min_value:
+    if value < min_value:
         raise ValueError(error_too_small)
 
 
@@ -697,14 +880,22 @@ def pact_update_settings(data: InfoObject) -> None:
 
 # The original function call and post-processing logic
 pact_update_settings(info)
-if ".exe" in str(info.XEDIT_PATH) and info.XEDIT_EXE in info.xedit_list_specific:
-    xedit_path = Path(info.XEDIT_PATH)
-    info.XEDIT_LOG_TXT = str(xedit_path.with_name(xedit_path.stem.upper() + "_log.txt"))
-    info.XEDIT_EXC_LOG = str(xedit_path.with_name(xedit_path.stem.upper() + "Exception.log"))
-elif info.XEDIT_PATH and ".exe" not in str(info.XEDIT_PATH):
-    print(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Errors.Invalid_XEDIT_File"))
-    input(PAUSE_MESSAGE)
-    raise ValueError
+try:
+    if ".exe" in str(info.XEDIT_PATH) and info.XEDIT_EXE in info.xedit_list_specific:
+        xedit_path = Path(info.XEDIT_PATH)
+        info.XEDIT_LOG_TXT = str(xedit_path.with_name(xedit_path.stem.upper() + "_log.txt"))
+        info.XEDIT_EXC_LOG = str(xedit_path.with_name(xedit_path.stem.upper() + "Exception.log"))
+    elif info.XEDIT_PATH and ".exe" not in str(info.XEDIT_PATH):
+        # During import, just log the issue without blocking
+        error_msg = yaml_settings(str(PACT_YAML_PATH), "PACT_Data.Errors.Invalid_XEDIT_File")
+        if error_msg:
+            print(f"⚠️  Configuration warning: {error_msg}")
+        else:
+            print("⚠️  Configuration warning: Invalid XEDIT file path")
+        # Don't raise an error during import - let the GUI handle this
+except (AttributeError, ValueError, KeyError, TypeError, FileNotFoundError) as e:
+    print(f"⚠️  Configuration warning during import: {e}")
+    # Continue with import, let the application handle configuration issues later
 
 
 def check_process_mo2(progress_emitter: ProgressEmitter, settings: InfoObject) -> bool:
@@ -794,7 +985,7 @@ def check_settings_integrity() -> None:
     if Path(info.LOAD_ORDER_PATH).exists() and Path(info.XEDIT_PATH).exists():
         print("✔️ REQUIRED FILE PATHS FOUND! CHECKING IF INI SETTINGS ARE CORRECT...")
     else:
-        print(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Warnings.Invalid_INI_Path"))
+        print(yaml_settings(str(PACT_YAML_PATH), "PACT_Data.Warnings.Invalid_INI_Path"))
         input(PAUSE_MESSAGE)
         raise ValueError
 
@@ -817,11 +1008,11 @@ def check_settings_integrity() -> None:
                 game in lo_plugins and str(info.XEDIT_EXE).lower() in executables
                 for game, executables in valid_xedit_executables.items()
             ):
-                print(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Warnings.Invalid_INI_Setup"))
+                print(yaml_settings(str(PACT_YAML_PATH), "PACT_Data.Warnings.Invalid_INI_Setup"))
                 input(PAUSE_MESSAGE)
                 raise ValueError
     elif "loadorder" not in str(info.LOAD_ORDER_PATH) and str(info.XEDIT_EXE).lower() in info.lower_universal:
-        print(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Errors.Invalid_LO_File"))
+        print(yaml_settings(str(PACT_YAML_PATH), "PACT_Data.Errors.Invalid_LO_File"))
         input(PAUSE_MESSAGE)
         raise ValueError
 
@@ -942,7 +1133,7 @@ def get_game_mode(data: Info) -> str:
     except FileNotFoundError:
         print(f"Load order file not found: {data.LOAD_ORDER_PATH}")
         raise
-    except Exception as e:
+    except (UnicodeDecodeError, OSError, PermissionError) as e:
         print(f"Error reading load order file: {data.LOAD_ORDER_PATH}, error: {e!s}")
         raise
     else:
@@ -982,7 +1173,7 @@ def check_cpu_usage(proc: psutil.Process) -> bool | None:
                 proc.cpu_percent(interval=5) < CPU_USAGE_THRESHOLD or
                 proc.status() in PROCESS_TERMINAL_STATES
         )
-    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, subprocess.CalledProcessError):
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
         return False
 
 def check_process_timeout(proc: psutil.Process, data: 'Info') -> bool:
@@ -1053,7 +1244,6 @@ def handle_error(
             psutil.NoSuchProcess,
             psutil.AccessDenied,
             psutil.ZombieProcess,
-            subprocess.CalledProcessError,
     ):
         pass
     finally:
@@ -1061,8 +1251,8 @@ def handle_error(
         if not pact_settings("Debug Mode"):
             clear_xedit_logs()
 
-        data.plugins_processed -= 1
-        data.clean_failed_list.add(plugin_name)
+        data.decrement_processed()
+        data.add_to_failed_list(plugin_name)
         print(error_message)
 
         if add_ignore:
@@ -1116,7 +1306,7 @@ def create_bat_command(data: 'Info', plugin_name: str) -> str | None:
     if "loadorder" in load_order_path and xedit_exe_lower in data.lower_universal:
         game_mode = get_game_mode(data)
         if game_mode is None:
-            print(yaml_settings("PACT Data/PACT Main.yaml", "PACT_Data.Errors.Invalid_LO_File"))
+            print(yaml_settings(str(PACT_YAML_PATH), "PACT_Data.Errors.Invalid_LO_File"))
             input(PAUSE_MESSAGE)
             raise ValueError("Invalid load order file")
 
@@ -1161,8 +1351,8 @@ def run_auto_cleaning(plugin_name: str) -> None:
     # Wait for the cleaning process to finish
     bat_process.wait()
 
-    # Increment processed plugins count
-    info.plugins_processed += 1
+    # Thread-safe increment of processed plugins count
+    info.increment_processed()
 
 
 def monitor_process(proc: subprocess.Popen, plugin_name: str) -> None:
@@ -1233,7 +1423,7 @@ LOG_PATTERNS = {
 
 def process_log_line(line: str, plugin_name: str) -> bool:
     """
-    Processes a given log line and checks for matches against predefined log patterns.
+    Thread-safe processing of log lines with pattern matching.
 
     This function iterates through a dictionary of compiled regular expression patterns
     and their corresponding messages and result list mappings. If the log line matches
@@ -1250,7 +1440,15 @@ def process_log_line(line: str, plugin_name: str) -> bool:
     for pattern, (message, results_list) in LOG_PATTERNS.items():
         if pattern.search(line):
             pact_log_update(f"\n{plugin_name} -> {message}")
-            results_list.add(plugin_name)
+            # Thread-safe addition to results
+            if results_list == info.clean_results_UDR:
+                info.add_to_clean_results(plugin_name, "UDR")
+            elif results_list == info.clean_results_ITM:
+                info.add_to_clean_results(plugin_name, "ITM")
+            elif results_list == info.clean_results_NVM:
+                info.add_to_clean_results(plugin_name, "NVM")
+            elif results_list == info.clean_results_PARTIAL_FORMS:
+                info.add_to_clean_results(plugin_name, "PARTIAL_FORMS")
             return True
     return False
 
@@ -1278,12 +1476,12 @@ def check_cleaning_results(plugin_name: str) -> None:
                     did_clean = True
 
         if did_clean:
-            info.plugins_cleaned += 1
+            info.increment_cleaned()
         else:
             pact_log_update(f"\n{plugin_name} -> NOTHING TO CLEAN")
             print("NOTHING TO CLEAN! Adding plugin to PACT Ignore file...")
             pact_ignore_update(plugin_name, get_game_mode(info).upper())
-            info.local_skip_list.append(plugin_name)
+            info.add_to_skip_list(plugin_name)
 
         if not pact_settings("Debug Mode"):
             clear_xedit_logs()
@@ -1389,7 +1587,7 @@ def initialize_clean_process(progress_emitter: ProgressEmitter) -> None:
 
 def fetch_ignore_list() -> list[str]:
     """Fetches the list of plugins to ignore from settings."""
-    return yaml_settings("PACT Ignore.yaml", f"PACT_Ignore_{get_game_mode(info).upper()}")
+    return yaml_settings(str(PACT_IGNORE_PATH), f"PACT_Ignore_{get_game_mode(info).upper()}")
 
 
 def fetch_plugin_info() -> tuple[list[str], int, list[str]]:

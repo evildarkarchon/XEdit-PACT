@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import psutil
-from PySide6.QtCore import QEventLoop, QObject, QSize, Qt, QThread, QTimer, QUrl
+from PySide6.QtCore import QObject, QSize, Qt, QThread, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QFont, QIntValidator
 from PySide6.QtWidgets import (
     QApplication,
@@ -80,7 +80,7 @@ class UiPACTMainWin(QMainWindow):
         # Main window setup
         self.setObjectName("PACT_WINDOW")
         self.setWindowTitle(
-            f"Plugin Auto Cleaning Tool {yaml_settings('PACT Data/PACT Main.yaml', 'PACT_Data.version')}"
+            f"Plugin Auto Cleaning Tool {yaml_settings(str(Path('PACT Data') / 'PACT Main.yaml'), 'PACT_Data.version')}"
         )
         self.setMinimumSize(QSize(640, 480))
         self.setMaximumSize(QSize(640, 480))
@@ -482,13 +482,17 @@ class UiPACTMainWin(QMainWindow):
             self._set_config_buttons_enabled(False)
 
             # Handle thread completion
-            if progress_emitter.emit_done is True and isinstance(self.cleaning_thread, PactThread):
+            if progress_emitter.is_done is True and isinstance(self.cleaning_thread, PactThread):
                 try:
-                    self.cleaning_thread.terminate()
-                    self.cleaning_thread.wait()
-                    self.reset_thread()
+                    # Wait for thread to finish naturally instead of forcing termination
+                    if self.cleaning_thread.isFinished():
+                        self.reset_thread()
+                    elif not self.cleaning_thread.isRunning():
+                        # Thread stopped unexpectedly
+                        self.reset_thread()
                 except AttributeError:
-                    pass
+                    # Thread might be None or deleted
+                    self.reset_thread()
 
             # Update clean button if needed
             if "STOP CLEANING" not in self.RegBT_CLEAN_PLUGINS.text() and not xedit_running:
@@ -519,10 +523,12 @@ class UiPACTMainWin(QMainWindow):
         if self.cleaning_thread is None:
             # Create and configure cleaning thread
             self.cleaning_thread = PactThread(progress_bar=self.ProgressBar)
-            self.cleaning_thread.start()
 
-            # Connect signals
+            # Connect signals BEFORE starting thread to avoid race condition
             self._connect_thread_signals()
+
+            # Now start the thread
+            self.cleaning_thread.start()
 
             # Update UI
             self._update_button_state(
@@ -561,8 +567,8 @@ class UiPACTMainWin(QMainWindow):
             progress_emitter.visible.connect(self.ProgressBar.setVisible)
 
         if hasattr(progress_emitter, 'done'):
-            progress_emitter.done.connect(self.cleaning_thread.terminate)
-            progress_emitter.done.connect(self.cleaning_thread.wait)
+            # Don't forcefully terminate threads - let them finish naturally
+            # The timed_states method will handle cleanup when thread finishes
             progress_emitter.done.connect(self.reset_thread)
 
     def init_start_button(self, xedit_running: bool = False) -> None:
@@ -609,9 +615,11 @@ class UiPACTMainWin(QMainWindow):
             progress_emitter.is_done = True
             self.RegBT_CLEAN_PLUGINS.setEnabled(False)
 
-            # Wait for xEdit to close
+            # Wait for xEdit to close with timeout to prevent infinite loops
             is_stopping = False
-            while self.is_xedit_running():
+            max_wait_iterations = 100  # Prevent infinite waiting
+            iteration_count = 0
+            while self.is_xedit_running() and iteration_count < max_wait_iterations:
                 if not is_stopping:
                     self._update_button_state(
                         self.RegBT_CLEAN_PLUGINS,
@@ -623,11 +631,10 @@ class UiPACTMainWin(QMainWindow):
                     )
                     is_stopping = True
 
-                # Handle thread completion during wait
-                if self.cleaning_thread is not None:
-                    loop = QEventLoop()
-                    self.cleaning_thread.finished.connect(loop.quit)
-                    loop.exec()
+                # Process events to keep UI responsive and add small delay
+                QApplication.processEvents()
+                QThread.msleep(100)  # Small delay to prevent busy waiting
+                iteration_count += 1
 
             print("\n❌ CLEANING STOPPED! PLEASE WAIT UNTIL ALL RUNNING PROGRAMS ARE CLOSED BEFORE STARTING AGAIN!\n")
             self.ProgressBar.setFormat("Cleaning Stopped!")
