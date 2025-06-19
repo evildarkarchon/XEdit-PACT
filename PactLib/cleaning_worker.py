@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QThread, Signal
 
+from PactLib.cleaning_service import CleaningService
+from PactLib.state_manager import StateManager
+
 if TYPE_CHECKING:
     from cleaning_service import CleaningService
     from state_manager import StateManager
@@ -34,9 +37,9 @@ class CleaningWorker(QThread):
     ) -> None:
         """Initialize the cleaning worker."""
         super().__init__()
-        self.service = service
-        self.state = state
-        self.plugins = plugins
+        self.service: CleaningService = service
+        self.state: StateManager = state
+        self.plugins: list[str] = plugins
         self._should_stop = False
 
     def run(self) -> None:
@@ -83,7 +86,7 @@ class CleaningWorker(QThread):
                     f"({result.duration:.1f}s) - {result.message}"
                 )
 
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             logger.error(f"Error in cleaning worker: {e}")
             self.error.emit(str(e))
         finally:

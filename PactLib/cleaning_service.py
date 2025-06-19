@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from PactLib.utils import detect_xedit_game, run_process_with_realtime_output
 
@@ -33,14 +34,14 @@ class CleaningService:
         """Initialize the cleaning service."""
         self.config = config
         self.state = state
-        self.progress_callback: callable | None = None
-        self.log_callback: callable | None = None
+        self.progress_callback: Callable | None = None
+        self.log_callback: Callable | None = None
 
-    def set_progress_callback(self, callback: callable | None) -> None:
+    def set_progress_callback(self, callback: Callable | None) -> None:
         """Set callback for progress updates."""
         self.progress_callback = callback
 
-    def set_log_callback(self, callback: callable | None) -> None:
+    def set_log_callback(self, callback: Callable | None) -> None:
         """Set callback for log line updates."""
         self.log_callback = callback
 
@@ -68,7 +69,7 @@ class CleaningService:
             # Run normal cleaning
             return self._run_normal_clean(plugin_name, state_snapshot)
 
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError, KeyError) as e:
             logger.error(f"Error cleaning {plugin_name}: {e}")
             return CleanResult(
                 success=False,
@@ -225,7 +226,7 @@ class CleaningService:
                 duration=duration,
             )
 
-        except Exception as e:
+        except (OSError, subprocess.TimeoutExpired, subprocess.SubprocessError, ValueError) as e:
             logger.error(f"Error executing cleaning command for {plugin_name}: {e}")
             return CleanResult(
                 success=False,
@@ -236,7 +237,7 @@ class CleaningService:
 
     def _parse_cleaning_output(self, line: str, plugin_name: str) -> None:
         """Parse xEdit output line for cleaning statistics and progress."""
-        import re
+        import re  # noqa: PLC0415
 
         # Pattern matching for xEdit cleaning operations
         patterns = {

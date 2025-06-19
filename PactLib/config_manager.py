@@ -18,7 +18,7 @@ class ConfigManager:
 
     def __init__(self, config_path: Path) -> None:
         """Initialize the configuration manager."""
-        self._path = config_path
+        self._path: Path = config_path
         self._ensure_config_exists()
 
     def _ensure_config_exists(self) -> None:
@@ -32,27 +32,28 @@ class ConfigManager:
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value using dot notation."""
         try:
-            value = yaml_settings(str(self._path), key)
-            return value if value is not None else default
-        except Exception as e:
+            value = yaml_settings(str(self._path), key)  
+        except (yaml.YAMLError, FileNotFoundError, PermissionError) as e:
             logger.error(f"Error reading config key '{key}': {e}")
             return default
-
+        else:
+            return value if value is not None else default
     def set(self, key: str, value: Any) -> bool:
         """Set configuration value using dot notation."""
         try:
             yaml_settings_write(str(self._path), value, key)
-            return True
-        except Exception as e:
+        except (yaml.YAMLError, FileNotFoundError, PermissionError, OSError) as e:
             logger.error(f"Error writing config key '{key}': {e}")
             return False
+        else:
+            return True
 
     def get_all(self) -> dict[str, Any]:
         """Get all configuration as a dictionary."""
         try:
             with self._path.open(encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
-        except Exception as e:
+        except (yaml.YAMLError, FileNotFoundError, PermissionError, OSError) as e:
             logger.error(f"Error reading configuration file: {e}")
             return {}
 
@@ -74,8 +75,8 @@ class ConfigManager:
 
     def get_paths(self) -> dict[str, Path | None]:
         """Get all configured paths."""
-        paths = {}
-        path_keys = [
+        paths: dict[str, Path | None] = {}
+        path_keys: list[str] = [
             "Load_Order.File",
             "Mod_Organizer.Binary",
             "Mod_Organizer.Install_Path",
@@ -103,7 +104,7 @@ class ConfigManager:
 
     def validate_paths(self) -> dict[str, bool]:
         """Validate all configured paths exist."""
-        paths = self.get_paths()
+        paths: dict[str, Path | None] = self.get_paths()
         return {
             name: path.exists() if path else False
             for name, path in paths.items()

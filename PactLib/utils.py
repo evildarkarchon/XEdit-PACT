@@ -6,7 +6,7 @@ import contextlib
 import logging
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import psutil
 import ruamel.yaml
@@ -87,7 +87,7 @@ class YamlManager:
                     else:
                         with path.open(encoding="utf-8") as yaml_file:
                             self._cache[yaml_path] = self._yaml.load(yaml_file) or {}
-                except Exception as e:
+                except (OSError, ruamel.yaml.YAMLError, ValueError) as e:
                     logger.error(f"Failed to load YAML file '{yaml_path}': {e}")
                     self._cache[yaml_path] = {}
 
@@ -112,7 +112,7 @@ class YamlManager:
             # Update cache
             with self._cache_lock:
                 self._cache[yaml_path] = data
-        except Exception as e:
+        except (OSError, ruamel.yaml.YAMLError, ValueError) as e:
             logger.error(f"Failed to save YAML file '{yaml_path}': {e}")
             # Clean up temp file if it exists
             with contextlib.suppress(OSError):
@@ -172,10 +172,11 @@ def check_process(pid: int, threshold: int = 5) -> bool:
     """
     try:
         process = psutil.Process(pid)
-        cpu_percent = process.cpu_percent(interval=1)
-        return cpu_percent > threshold
+        cpu_percent: float = process.cpu_percent(interval=1)
     except (psutil.NoSuchProcess, psutil.AccessDenied):
         return False
+    else:
+        return cpu_percent > threshold
 
 
 def detect_xedit_game(xedit_path: str) -> str | None:
@@ -218,7 +219,7 @@ def run_process(command: list[str], timeout: int | None = None) -> tuple[int, st
     Returns:
         Tuple of (exit_code, stdout, stderr)
     """
-    import subprocess
+    import subprocess  # noqa: PLC0415
 
     try:
         result = subprocess.run(
@@ -229,16 +230,17 @@ def run_process(command: list[str], timeout: int | None = None) -> tuple[int, st
             errors="ignore",
             timeout=timeout, check=False,
         )
-        return result.returncode, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
         return -1, "", "Process timed out"
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         return -1, "", str(e)
+    else:
+        return result.returncode, result.stdout, result.stderr
 
 
 def run_process_with_realtime_output(
     command: list[str], 
-    output_callback: callable | None = None,
+    output_callback: Callable[[str], None] | None = None,
     timeout: int | None = None,
     working_dir: str | Path | None = None
 ) -> tuple[int, str, str]:
@@ -254,9 +256,9 @@ def run_process_with_realtime_output(
     Returns:
         Tuple of (exit_code, stdout, stderr)
     """
-    import subprocess
-    import threading
-    import time
+    import subprocess  # noqa: PLC0415
+    import threading  # noqa: PLC0415
+    import time  # noqa: PLC0415
     
     start_time = time.time()
     stdout_lines = []
@@ -275,7 +277,7 @@ def run_process_with_realtime_output(
             cwd=str(working_dir) if working_dir else None
         )
         
-        def read_output(pipe: Any, line_list: list[str], callback: callable | None) -> None:
+        def read_output(pipe: Any, line_list: list[str], callback: Callable[[str], None] | None) -> None:
             """Read output from pipe and call callback for each line."""
             try:
                 for line in iter(pipe.readline, ''):
@@ -284,7 +286,7 @@ def run_process_with_realtime_output(
                         line_list.append(line)
                         if callback:
                             callback(line)
-            except Exception as e:
+            except (OSError, ValueError) as e:
                 logger.error(f"Error reading process output: {e}")
             finally:
                 pipe.close()
@@ -319,13 +321,13 @@ def run_process_with_realtime_output(
         
         return process.returncode, '\n'.join(stdout_lines), '\n'.join(stderr_lines)
         
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
         return -1, "", str(e)
 
 
 def monitor_log_file(
     log_path: str | Path,
-    line_callback: callable,
+    line_callback: Callable[[str], None],
     stop_event: threading.Event,
     poll_interval: float = 0.1
 ) -> None:
@@ -359,5 +361,5 @@ def monitor_log_file(
                 else:
                     threading.Event().wait(poll_interval)
                     
-    except Exception as e:
+    except (OSError, ValueError) as e:
         logger.error(f"Error monitoring log file '{log_path}': {e}")

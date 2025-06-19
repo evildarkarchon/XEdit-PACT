@@ -2,3 +2,5 @@
 /PACT Settings.yaml
 /PACT Data/PACT Config.yaml
 *.backup
+__pycache__/
+*.pyc

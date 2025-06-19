@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from PactLib.state_manager import StateManager
 from cleaning_service import CleaningService
 from cleaning_worker import CleaningWorker
 from PySide6.QtCore import QObject, Signal
@@ -34,9 +35,9 @@ class GuiController(QObject):
     ) -> None:
         """Initialize the GUI controller."""
         super().__init__(parent)
-        self.state = state
-        self.config = config
-        self.service = CleaningService(config, state)
+        self.state: StateManager = state
+        self.config: ConfigManager = config
+        self.service: CleaningService = CleaningService(config, state)
         self.worker: CleaningWorker | None = None
 
         # Load initial configuration
@@ -55,13 +56,13 @@ class GuiController(QObject):
         )
 
         # Load settings
-        settings = self.config.get_settings()
+        settings: dict[str, Any] = self.config.get_settings()
         self.state.update(**settings)
 
     def configure_load_order(self, parent_widget: QWidget) -> bool:
         """Configure load order file."""
         current_path = self.state.get("load_order_path")
-        initial_dir = str(current_path.parent) if current_path else ""
+        initial_dir: str | None = str(current_path.parent) if current_path else ""
 
         file_path, _ = QFileDialog.getOpenFileName(
             parent_widget,
@@ -88,7 +89,7 @@ class GuiController(QObject):
     def configure_mo2(self, parent_widget: QWidget) -> bool:
         """Configure Mod Organizer 2."""
         current_path = self.state.get("mo2_exe_path")
-        initial_dir = str(current_path.parent) if current_path else ""
+        initial_dir: str | None = str(current_path.parent) if current_path else ""
 
         file_path, _ = QFileDialog.getOpenFileName(
             parent_widget,
@@ -101,7 +102,7 @@ class GuiController(QObject):
             path = Path(file_path)
             if path.exists() and path.name.lower() == "modorganizer.exe":
                 # Update state
-                install_path = path.parent
+                install_path: Path = path.parent
                 self.state.update_configuration_paths(
                     mo2_exe_path=path,
                     mo2_install_path=install_path,
@@ -124,7 +125,7 @@ class GuiController(QObject):
     def configure_xedit(self, parent_widget: QWidget) -> bool:
         """Configure xEdit."""
         current_path = self.state.get("xedit_exe_path")
-        initial_dir = str(current_path.parent) if current_path else ""
+        initial_dir: str | None = str(current_path.parent) if current_path else ""
 
         file_path, _ = QFileDialog.getOpenFileName(
             parent_widget,
@@ -137,7 +138,7 @@ class GuiController(QObject):
             path = Path(file_path)
             if path.exists():
                 # Validate it's an xEdit executable
-                valid_names = ["fo3edit", "fnvedit", "fo4edit", "sseedit", "tes5edit"]
+                valid_names: list[str] = ["fo3edit", "fnvedit", "fo4edit", "sseedit", "tes5edit"]
                 if not any(name in path.name.lower() for name in valid_names):
                     self.show_error.emit(
                         "Error",
@@ -194,11 +195,11 @@ class GuiController(QObject):
                             plugins.append(line)
 
             logger.info(f"Found {len(plugins)} plugins in load order")
-            return plugins
-
-        except Exception as e:
+        except (OSError, UnicodeDecodeError) as e:
             logger.error(f"Error reading load order: {e}")
             return []
+        else:
+            return plugins
 
     def start_cleaning(self) -> None:
         """Start the cleaning process."""
@@ -215,7 +216,7 @@ class GuiController(QObject):
             return
 
         # Get plugins to clean
-        plugins = self.get_plugins_to_clean()
+        plugins: list[str] | None = self.get_plugins_to_clean()
         if not plugins:
             self.show_error.emit("No Plugins", "No plugins found in load order")
             return

@@ -7,13 +7,14 @@ import logging
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Slot
+from PySide6.QtCore import QCoreApplication, Slot
 from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import (
     QApplication,
     QGroupBox,
     QHBoxLayout,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPushButton,
     QStatusBar,
@@ -36,7 +37,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
@@ -45,8 +46,8 @@ class MainWindow(QMainWindow):
     def __init__(self, state: StateManager, controller: GuiController) -> None:
         """Initialize the main window."""
         super().__init__()
-        self.state = state
-        self.controller = controller
+        self.state: StateManager = state
+        self.controller: GuiController = controller
 
         # UI elements
         self.log_display: QTextEdit | None = None
@@ -179,7 +180,7 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
 
         # File menu
-        file_menu = menubar.addMenu("&File")
+        file_menu: QMenu = menubar.addMenu("&File")
 
         refresh_action = QAction("&Refresh Configuration", self)
         refresh_action.triggered.connect(self.controller.refresh_configuration)
@@ -192,7 +193,7 @@ class MainWindow(QMainWindow):
         file_menu.addAction(exit_action)
 
         # Help menu
-        help_menu = menubar.addMenu("&Help")
+        help_menu: QMenu = menubar.addMenu("&Help")
 
         about_action = QAction("&About", self)
         about_action.triggered.connect(self._show_about)
@@ -203,35 +204,41 @@ class MainWindow(QMainWindow):
         state_snapshot = self.state.state
 
         # Update configuration buttons
-        self._update_button_state(
-            self.load_order_button,
-            state_snapshot.is_load_order_configured,
-            "Load Order ✓" if state_snapshot.is_load_order_configured else "Configure Load Order",
-        )
+        if self.load_order_button:
+            self._update_button_state(
+                self.load_order_button,
+                state_snapshot.is_load_order_configured,
+                "Load Order ✓" if state_snapshot.is_load_order_configured else "Configure Load Order",
+            )
 
-        self._update_button_state(
-            self.mo2_button,
-            state_snapshot.is_mo2_configured,
-            "MO2 ✓" if state_snapshot.is_mo2_configured else "Configure MO2",
-        )
+        if self.mo2_button:
+            self._update_button_state(
+                self.mo2_button,
+                state_snapshot.is_mo2_configured,
+                "MO2 ✓" if state_snapshot.is_mo2_configured else "Configure MO2",
+            )
 
-        self._update_button_state(
-            self.xedit_button,
-            state_snapshot.is_xedit_configured,
-            "xEdit ✓" if state_snapshot.is_xedit_configured else "Configure xEdit",
-        )
+        if self.xedit_button:
+            self._update_button_state(
+                self.xedit_button,
+                state_snapshot.is_xedit_configured,
+                "xEdit ✓" if state_snapshot.is_xedit_configured else "Configure xEdit",
+            )
 
         # Update MO2 mode button
-        self.mo2_mode_button.setChecked(state_snapshot.mo2_mode)
-        self.mo2_mode_button.setText(
-            f"MO2 Mode: {'ON' if state_snapshot.mo2_mode else 'OFF'}"
-        )
+        if self.mo2_mode_button:
+            self.mo2_mode_button.setChecked(state_snapshot.mo2_mode)
+            self.mo2_mode_button.setText(
+                f"MO2 Mode: {'ON' if state_snapshot.mo2_mode else 'OFF'}"
+            )
 
         # Update control buttons
-        self.start_button.setEnabled(
-            state_snapshot.is_fully_configured and not state_snapshot.is_cleaning
-        )
-        self.stop_button.setEnabled(state_snapshot.is_cleaning)
+        if self.start_button:
+            self.start_button.setEnabled(
+                state_snapshot.is_fully_configured and not state_snapshot.is_cleaning
+            )
+        if self.stop_button:
+            self.stop_button.setEnabled(state_snapshot.is_cleaning)
 
     def _update_button_state(
         self, button: QPushButton, configured: bool, text: str
@@ -263,6 +270,8 @@ class MainWindow(QMainWindow):
     @Slot()
     def _toggle_mo2_mode(self) -> None:
         """Toggle MO2 mode."""
+        if self.mo2_mode_button is None:
+            return
         enabled = self.mo2_mode_button.isChecked()
         self.controller.toggle_mo2_mode(enabled)
 
@@ -279,6 +288,8 @@ class MainWindow(QMainWindow):
     @Slot(bool)
     def _on_configuration_changed(self, is_fully_configured: bool) -> None:
         """Handle configuration changes."""
+        if self.start_button is None:
+            return
         self.start_button.setEnabled(
             is_fully_configured and not self.state.get("is_cleaning")
         )
@@ -295,6 +306,8 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_cleaning_started(self) -> None:
         """Handle cleaning start."""
+        if self.start_button is None or self.stop_button is None:
+            return
         self._log("Cleaning started...")
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
@@ -302,6 +315,8 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_cleaning_finished(self) -> None:
         """Handle cleaning completion."""
+        if self.start_button is None or self.stop_button is None:
+            return
         self._log("Cleaning finished!")
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
@@ -344,6 +359,8 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _update_status(self, message: str) -> None:
         """Update the status bar."""
+        if self.status_bar is None:
+            return
         self.status_bar.showMessage(message)
 
     def _log(self, message: str) -> None:
@@ -371,7 +388,11 @@ def create_application() -> tuple[QApplication, MainWindow]:
     controller = GuiController(state, config)
 
     # Create GUI
-    app = QApplication.instance() or QApplication(sys.argv)
+    instance: QCoreApplication | None = QApplication.instance()
+    if instance is None:
+        app = QApplication(sys.argv)
+    else:
+        app: QApplication = instance if isinstance(instance, QApplication) else QApplication(sys.argv)
     app.setApplicationName("XEdit-PACT")
     window = MainWindow(state, controller)
 
@@ -384,7 +405,7 @@ def main() -> None:
         app, window = create_application()
         window.show()
         sys.exit(app.exec())
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError) as e:
         logger.error(f"Fatal error: {e}")
         sys.exit(1)
 
