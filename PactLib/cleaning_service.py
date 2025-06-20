@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from logging import Logger
 from typing import TYPE_CHECKING, Any, Callable
 
-from PactLib.state_manager import AppState
 from PactLib.utils import detect_xedit_game, run_process_with_realtime_output
 
 if TYPE_CHECKING:
@@ -178,8 +177,9 @@ class CleaningService:
 
         return result
 
+    @staticmethod
     def _build_cleaning_command(
-        self, plugin_name: str, state_snapshot: AppState, quickautoclean: bool = False
+            plugin_name: str, state_snapshot: AppState, quickautoclean: bool = False
     ) -> list[str]:
         """Build the command to clean a plugin."""
         command: list[str] = []

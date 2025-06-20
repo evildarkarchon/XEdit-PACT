@@ -394,8 +394,8 @@ def run_process_with_realtime_output(
                         line_list.append(line)
                         if callback:
                             callback(line)
-            except (OSError, ValueError) as e:
-                logger.error(f"Error reading process output: {e}")
+            except (OSError, ValueError) as oe:
+                logger.error(f"Error reading process output: {oe}")
             finally:
                 pipe.close()
 
@@ -444,25 +444,18 @@ def monitor_log_file(
     poll_interval: float = 0.1,
 ) -> None:
     """
-    Monitors a log file for new lines in real-time, invoking a callback function
-    for each new line. The monitoring process terminates when the provided stop
-    event is set. Skips non-existing files until they appear and starts from the
-    end of the file when monitoring begins.
+    Monitors a log file for new lines in real-time and executes a callback function
+    for each new line. If the file does not yet exist, it waits until the file is
+    created. Continuously checks the file until a stop event is set.
 
     Args:
-        log_path: The path to the log file to monitor. Can be either a string or
-            a Path object.
-        line_callback: A callable function that processes a new log file line.
-            The function takes a single string argument representing the new line
+        log_file_path: Path to the log file to be monitored.
+        line_callback: Callback function to handle each new line read
             from the log file.
-        stop_event: A Qt event object used to signal the monitoring process
-            to stop. When the event is set, the monitoring stops gracefully.
-        poll_interval: The interval in seconds to wait between checks for new lines
-            in the log file or for file existence.
-
-    Raises:
-        OSError: If an issue occurs while opening the file or reading from it.
-        ValueError: If an invalid operation is attempted on the file.
+        stop_event: An event object used to signal the function to stop
+            monitoring the file. Can be any object with an `is_set` method.
+        poll_interval: Interval in seconds at which to check for new lines
+            in the log file or the existence of the file. Defaults to 0.1.
     """
     log_path: Path = Path(log_file_path)
 

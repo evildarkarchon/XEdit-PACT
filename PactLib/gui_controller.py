@@ -388,7 +388,8 @@ class GuiController(QObject):
             self.worker.stop()
             self.update_status.emit("Stopping cleaning...")
 
-    def _on_plugin_completed(self, plugin: str, success: bool, message: str) -> None:
+    @staticmethod
+    def _on_plugin_completed(plugin: str, success: bool, message: str) -> None:
         """Handle plugin completion."""
         logger.info(f"Plugin {plugin}: {'Success' if success else 'Failed'} - {message}")
 

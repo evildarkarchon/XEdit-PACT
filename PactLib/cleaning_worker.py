@@ -7,9 +7,6 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QThread, Signal
 
-from PactLib.cleaning_service import CleaningService
-from PactLib.state_manager import StateManager
-
 if TYPE_CHECKING:
     from PactLib.cleaning_service import CleaningService, CleanResult
     from PactLib.state_manager import StateManager
