@@ -6,20 +6,21 @@ from __future__ import annotations
 import logging
 import shutil
 import sys
+from logging import Logger
 from pathlib import Path
 
 from PactLib.config_manager import ConfigManager
 from PactLib.state_manager import StateManager
 from PactLib.utils import yaml_settings
 
-logger = logging.getLogger(__name__)
+logger: Logger = logging.getLogger(__name__)
 
 # Paths
-PACT_SETTINGS_PATH = Path("PACT Settings.yaml")
-BACKUP_PATH = Path("PACT Settings.yaml.backup")
-PACT_DATA_PATH = Path("PACT Data")
-PACT_YAML_PATH = PACT_DATA_PATH / "PACT Main.yaml"
-PACT_CONFIG_PATH = PACT_DATA_PATH / "PACT Config.yaml"  # New config location
+PACT_SETTINGS_PATH: Path = Path("PACT Settings.yaml")
+BACKUP_PATH: Path = Path("PACT Settings.yaml.backup")
+PACT_DATA_PATH: Path = Path("PACT Data")
+PACT_YAML_PATH: Path = PACT_DATA_PATH / "PACT Main.yaml"
+PACT_CONFIG_PATH: Path = PACT_DATA_PATH / "PACT Config.yaml"  # New config location
 
 
 def migrate_configuration() -> bool:
@@ -161,20 +162,54 @@ def verify_imports() -> bool:
     """Verify all required modules can be imported."""
     print("Verifying imports...")
     try:
-        from PactLib import cleaning_service
-        from PactLib import cleaning_worker
-        from PactLib import config_manager
-        from PactLib import gui_controller
-        from PactLib import state_manager
+        import importlib.util  # noqa: PLC0415
+        
+        required_modules = [
+            "PactLib.cleaning_service",
+            "PactLib.cleaning_worker", 
+            "PactLib.config_manager",
+            "PactLib.gui_controller",
+            "PactLib.state_manager"
+        ]
+        
+        for module_name in required_modules:
+            if importlib.util.find_spec(module_name) is None:
+                print(f"✗ Module not found: {module_name}")
+                return False
+            print(f"✓ Found module: {module_name}")
+            
     except ImportError as e:
         print(f"✗ Import error: {e}")
         return False
+    except AttributeError as e:
+        print(f"✗ Attribute error during import verification: {e}")
+        return False
     else:
-        print("✓ All modules imported successfully")
+        print("✓ All modules found successfully")
         return True
 
 
-def main() -> int:
+def handle_migration_error(error: Exception, error_type: str) -> None:
+    """Handle migration errors with appropriate logging and user messages."""
+    logger.error(f"{error_type} during migration: {error}")
+    print(f"\nMigration error: {error_type} - {error}")
+    
+    # Add specific guidance based on error type
+    if error_type == "Permission denied":
+        print("Please ensure you have write permissions to the current directory.")
+    elif error_type == "Invalid configuration value":
+        print("Please check your configuration files for invalid values.")
+    elif error_type == "Missing configuration key":
+        print("Your configuration file may be corrupted or incomplete.")
+    elif error_type == "Unexpected error":
+        print("This is an unexpected error. Please report this issue.")
+    
+    # Always offer backup restoration if available
+    if BACKUP_PATH.exists():
+        print(f"You can restore your configuration from: {BACKUP_PATH}")
+
+
+def main() -> int:  # noqa: PLR0911
     """Run the migration."""
     print("XEdit-PACT Architecture Migration Tool\n")
 
@@ -194,12 +229,24 @@ def main() -> int:
             print("\nMigration successful!")
             return 0
         print("\nMigration failed!")
+        return 1  # noqa: TRY300
+    except FileNotFoundError as e:
+        handle_migration_error(e, "Required file not found")
         return 1
-    except Exception as e:
-        logger.error(f"Migration error: {e}")
-        print(f"\nMigration error: {e}")
-        if BACKUP_PATH.exists():
-            print(f"You can restore your configuration from: {BACKUP_PATH}")
+    except PermissionError as e:
+        handle_migration_error(e, "Permission denied")
+        return 1
+    except OSError as e:
+        handle_migration_error(e, "System error")
+        return 1
+    except ValueError as e:
+        handle_migration_error(e, "Invalid configuration value")
+        return 1
+    except KeyError as e:
+        handle_migration_error(e, "Missing configuration key")
+        return 1
+    except Exception as e:  # noqa: BLE001
+        handle_migration_error(e, "Unexpected error")
         return 1
 
 
