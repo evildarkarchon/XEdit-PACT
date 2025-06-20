@@ -38,15 +38,44 @@ class CleaningService:
         self.log_callback: Callable | None = None
 
     def set_progress_callback(self, callback: Callable | None) -> None:
-        """Set callback for progress updates."""
+        """
+        Sets the progress callback function for tracking progress or status updates. The callback can
+        be used to communicate progress information to other components or users. If no callback
+        is provided, progress updates will be disregarded.
+
+        Args:
+            callback: A callable function to handle progress updates, or None if no progress updates
+                need to be handled.
+        """
         self.progress_callback = callback
 
     def set_log_callback(self, callback: Callable | None) -> None:
-        """Set callback for log line updates."""
+        """
+        Sets the logging callback for the instance, allowing customization of how
+        log messages are handled. The callback can be set to a callable that
+        processes log messages or None to disable the callback.
+
+        Args:
+            callback: The callable to handle log messages or None to disable the
+                log callback. The callable should accept one argument, typically
+                the log message.
+        """
         self.log_callback = callback
 
     def clean_plugin(self, plugin_name: str) -> CleanResult:
-        """Clean a single plugin."""
+        """
+        Cleans the specified plugin by performing necessary operations such as checking
+        skip conditions, applying quick auto-clean if required, or executing normal
+        cleaning procedures. The method also handles errors encountered during the
+        cleaning process and returns detailed results about the operation.
+
+        Args:
+            plugin_name: The name of the plugin to be cleaned.
+
+        Returns:
+            A CleanResult object containing the details of the cleaning operation outcome,
+            including success status, message, operation status, and duration.
+        """
         start_time = time.time()
 
         try:
@@ -295,7 +324,21 @@ class CleaningService:
         return f" ({stats['total_processed']} items processed)"
 
     def validate_environment(self) -> tuple[bool, str]:
-        """Validate the cleaning environment is properly configured."""
+        """
+        Validates the current environment configuration for proper application functioning.
+
+        This method performs a sequence of checks to ensure the environment is correctly
+        set up for further operations. The checks include verifying paths' presence and
+        existence, validating the xEdit executable, detecting game type if not set, and
+        handling MO2 mode-specific requirements. Based on these checks, it returns a
+        status indicating whether the environment is valid and a corresponding message.
+
+        Returns:
+            tuple[bool, str]: A tuple containing a boolean indicating the validation
+            result and a string message describing the validation status or error
+            encountered. Returns `True` with a success message if the environment is
+            valid, and `False` with an error message otherwise.
+        """
         state_snapshot = self.state.state
 
         # Check configuration

@@ -381,7 +381,19 @@ class MainWindow(QMainWindow):
 
 
 def create_application() -> tuple[QApplication, MainWindow]:
-    """Create and configure the application."""
+    """
+    Creates and initializes the main application and its components.
+
+    This function sets up the necessary components for the graphical user interface,
+    including configuration management, state management, and the GUI controller.
+    It also ensures that the application instance is properly created, with appropriate
+    configuration for integration into the Qt application framework. Finally, it prepares
+    and returns the QApplication instance and the main window for further handling or execution.
+
+    Returns:
+        tuple[QApplication, MainWindow]: A tuple containing the QApplication instance and the
+        main window object.
+    """
     # Create instances
     config = ConfigManager(PACT_CONFIG_PATH)
     state = StateManager()

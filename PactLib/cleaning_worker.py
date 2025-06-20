@@ -43,7 +43,18 @@ class CleaningWorker(QThread):
         self._should_stop = False
 
     def run(self) -> None:
-        """Run the cleaning process."""
+        """
+        Handles the execution of the cleaning process for plugins. The method validates
+        the environment, sets up real-time callbacks for progress and log reporting,
+        and manages the cleaning workflow for plugins with status updates and error
+        handling. If the cleaning process is interrupted or encounters errors, the
+        method ensures all necessary cleanup is performed before finishing.
+
+        Raises:
+            OSError: If an OS error occurs during plugin processing.
+            RuntimeError: If an unexpected runtime error occurs during execution.
+            ValueError: If an invalid value is encountered during operations.
+        """
         try:
             # Validate environment first
             valid, message = self.service.validate_environment()
@@ -110,7 +121,18 @@ class CleaningWorker(QThread):
         self.log_output.emit(log_line)
 
     def get_summary(self) -> str:
-        """Get a summary of the cleaning results."""
+        """
+        Constructs and returns a summary of cleaning statistics from the system state.
+
+        This method retrieves the cleaning statistics from the system's state and formats
+        them into a human-readable summary. The returned summary includes information
+        about cleaned, failed, and skipped items, the total count, and entries handled
+        via QuickAutoClean. The statistics are sourced from the `cleaning_stats` data
+        within the system's state.
+
+        Returns:
+            str: A formatted string representing the summary of cleaning statistics.
+        """
         stats = self.state.state.cleaning_stats
         return (
             f"Cleaning complete:\n"

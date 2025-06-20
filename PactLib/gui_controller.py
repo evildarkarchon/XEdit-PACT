@@ -61,7 +61,17 @@ class GuiController(QObject):
         self.state.update(**settings)
 
     def configure_load_order(self, parent_widget: QWidget) -> bool:
-        """Configure load order file."""
+        """
+        Configures the load order by allowing the user to select a file through a file dialog.
+        The selected file must exist, and its path is then updated in the state and configuration.
+        Provides user feedback via signals if the operation succeeds or fails.
+
+        Args:
+            parent_widget: Parent widget to attach the file dialog to.
+
+        Returns:
+            bool: True if the load order was successfully configured, False otherwise.
+        """
         current_path = self.state.get("load_order_path")
         initial_dir: str | None = str(current_path.parent) if current_path else ""
 
@@ -88,7 +98,17 @@ class GuiController(QObject):
         return False
 
     def configure_mo2(self, parent_widget: QWidget) -> bool:
-        """Configure Mod Organizer 2."""
+        """
+        Configures the application to use Mod Organizer 2 by prompting the user to select
+        the ModOrganizer.exe executable file. Validates the selected file and updates the
+        application state and configuration accordingly.
+
+        Args:
+            parent_widget (QWidget): The parent widget that owns the file dialog.
+
+        Returns:
+            bool: True if the configuration was successful, False otherwise.
+        """
         current_path = self.state.get("mo2_exe_path")
         initial_dir: str | None = str(current_path.parent) if current_path else ""
 
@@ -124,7 +144,19 @@ class GuiController(QObject):
         return False
 
     def configure_xedit(self, parent_widget: QWidget) -> bool:
-        """Configure xEdit."""
+        """
+        Configures the xEdit executable by allowing the user to select the appropriate file
+        via a file dialog. Verifies the selected file as a valid xEdit executable, updates
+        the internal state, and saves the configuration settings.
+
+        Args:
+            parent_widget (QWidget): The parent widget used as the parent for the open file
+                dialog.
+
+        Returns:
+            bool: True if the configuration was successfully updated with a valid xEdit
+                executable; False otherwise.
+        """
         current_path = self.state.get("xedit_exe_path")
         initial_dir: str | None = str(current_path.parent) if current_path else ""
 
@@ -169,13 +201,33 @@ class GuiController(QObject):
         return False
 
     def toggle_mo2_mode(self, enabled: bool) -> None:
-        """Toggle MO2 mode."""
+        """
+        Toggle the MO2 mode on or off.
+
+        This method updates the internal state and configuration to enable or disable
+        MO2 mode based on the specified value. It also emits a status update signal
+        indicating the current state of MO2 mode.
+
+        Args:
+            enabled (bool): Indicates whether MO2 mode should be enabled (True) or
+                disabled (False).
+        """
         self.state.update(mo2_mode=enabled)
         self.config.set("PACT_Settings.MO2Mode", enabled)
         self.update_status.emit(f"MO2 Mode {'enabled' if enabled else 'disabled'}")
 
     def get_plugins_to_clean(self) -> list[str]:
-        """Get list of plugins to clean from load order."""
+        """
+        Reads the specified load order file and extracts the list of plugins to be cleaned.
+        This method processes the file by identifying valid plugin entries with specific
+        extensions (.esp, .esm, .esl), ignoring commented or empty lines, and removing any
+        prefix characters such as *, +, or - from the plugin names. If successful, it returns
+        the list of plugins; otherwise, it handles errors and returns an empty list.
+
+        Returns:
+            list[str]: A list of plugin names extracted from the load order file, or an
+            empty list if the file cannot be read or processed.
+        """
         state_snapshot = self.state.state
 
         if not state_snapshot.load_order_path or not state_snapshot.load_order_path.exists():
@@ -203,7 +255,22 @@ class GuiController(QObject):
             return plugins
 
     def start_cleaning(self) -> None:
-        """Start the cleaning process."""
+        """
+        Initiates and manages the cleaning process.
+
+        This method is responsible for initiating a detailed cleaning process by
+        validating configurations, retrieving plugins to clean, resetting the
+        cleaning state, and setting up a worker for executing the cleaning tasks.
+        It also handles signals for updating the cleaning status, signaling progress,
+        and handling errors.
+
+        Raises:
+            Emits signals to present relevant errors during the execution.
+
+        Signals:
+            update_status (Signal): Emits status updates during the cleaning
+                process.
+        """
         if self.state.get("is_cleaning"):
             logger.warning("Cleaning already in progress")
             return
@@ -243,7 +310,17 @@ class GuiController(QObject):
         self.update_status.emit("Starting cleaning process...")
 
     def stop_cleaning(self) -> None:
-        """Stop the cleaning process."""
+        """
+        Stops the ongoing cleaning process if it is currently running.
+
+        The method ensures that the cleaning process is interrupted gracefully by
+        checking the status of the worker. If the worker is running, it stops the
+        process and emits a status update to notify that the cleaning process
+        is being stopped.
+
+        Raises:
+            None
+        """
         if self.worker and self.worker.isRunning():
             logger.info("Stopping cleaning process")
             self.worker.stop()
@@ -262,12 +339,36 @@ class GuiController(QObject):
             self.worker = None
 
     def refresh_configuration(self) -> None:
-        """Refresh configuration from file."""
+        """
+        Refreshes the application's configuration.
+
+        This method is responsible for reloading the application's configuration
+        by invoking a private method `_load_configuration` and subsequently emitting
+        a signal to update the application's status indicating that the configuration
+        has been refreshed.
+
+        Raises:
+            None
+
+        Returns:
+            None
+        """
         self._load_configuration()
         self.update_status.emit("Configuration refreshed")
 
     def get_state_summary(self) -> str:
-        """Get a summary of the current state."""
+        """
+        Generates a detailed configuration status summary based on the current state.
+
+        This method consolidates various aspects of the application's configuration
+        status, such as the status of load order, MO2, xEdit, and other relevant
+        parameters. The summary is formatted as a multi-line string and indicates
+        whether specific configurations have been completed or are pending.
+
+        Returns:
+            str: A formatted string summarizing the state of the application's
+            configuration.
+        """
         state = self.state.state
         return (
             f"Configuration Status:\n"
