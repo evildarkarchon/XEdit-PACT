@@ -808,7 +808,7 @@ folders to the Primary Backup folder, overwrite plugins and then run RESTORE."""
             None
         """
 
-        def validate_load_order(file_path):
+        def validate_load_order(file_path: str) -> bool:
             return "loadorder" in file_path or "plugins" in file_path
 
         self._select_file(
@@ -859,7 +859,7 @@ folders to the Primary Backup folder, overwrite plugins and then run RESTORE."""
             None
         """
 
-        def validate_xedit(file_path):
+        def validate_xedit(file_path: str) -> bool:
             return matches_condition(file_path, info)
 
         self._select_file(

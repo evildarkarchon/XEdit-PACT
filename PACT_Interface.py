@@ -28,9 +28,9 @@ from PactLib.gui_controller import GuiController
 from PactLib.state_manager import StateManager
 
 # Constants  
-PACT_DATA_PATH = Path("PACT Data")
-PACT_YAML_PATH = PACT_DATA_PATH / "PACT Main.yaml"
-PACT_CONFIG_PATH = PACT_DATA_PATH / "PACT Config.yaml"  # New config file
+PACT_DATA_PATH: Path = Path("PACT Data")
+PACT_YAML_PATH: Path = PACT_DATA_PATH / "PACT Main.yaml"
+PACT_CONFIG_PATH: Path = PACT_DATA_PATH / "PACT Config.yaml"  # New config file
 
 # Configure logging
 logging.basicConfig(
@@ -404,7 +404,7 @@ def create_application() -> tuple[QApplication, MainWindow]:
     if instance is None:
         app = QApplication(sys.argv)
     else:
-        app: QApplication = instance if isinstance(instance, QApplication) else QApplication(sys.argv)
+        app = instance if isinstance(instance, QApplication) else QApplication(sys.argv)
     app.setApplicationName("XEdit-PACT")
     window = MainWindow(state, controller)
 

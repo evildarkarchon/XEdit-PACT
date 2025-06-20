@@ -244,15 +244,15 @@ class YamlManager:
 
             return self._cache[yaml_path]
 
-    def _file_lock_context(self, yaml_path: str):
+    def _file_lock_context(self, yaml_path: str) -> Any:
         """Context manager for file-level locking using portalocker."""
 
         class FileLockContext:
-            def __init__(self, file_path: str):
+            def __init__(self, file_path: str) -> None:
                 self.file_path = file_path
-                self.lock_file = None
+                self.lock_file: Any = None
 
-            def __enter__(self):
+            def __enter__(self) -> Any:
                 # Create a lock file for this YAML file
                 lock_path = Path(self.file_path).with_suffix(".lock")
                 self.lock_file = open(lock_path, "w")
@@ -263,7 +263,7 @@ class YamlManager:
                     portalocker.lock(self.lock_file, portalocker.LOCK_EX)
                 return self
 
-            def __exit__(self, exc_type, exc_val, exc_tb):
+            def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
                 if self.lock_file:
                     portalocker.unlock(self.lock_file)
                     self.lock_file.close()
