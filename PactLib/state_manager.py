@@ -90,7 +90,21 @@ class StateManager(QObject):
         self._mutex = QMutex()
 
     def update(self, **kwargs: Any) -> None:
-        """Update state properties and emit appropriate signals."""
+        """
+        Updates the internal state of the object with provided keyword arguments, emitting
+        signals for state changes and handling specific state logic.
+
+        This method locks the internal state during updates to ensure thread safety. It
+        identifies changes to the state attributes and emits appropriate signals to notify
+        listeners about the modifications. Aggregated signals are also emitted when certain
+        related states are altered. A small delay is introduced after state updates to
+        debounce rapid updates.
+
+        Args:
+            **kwargs: Arbitrary keyword arguments representing the state attributes to be
+                updated and their new values. Attribute keys must correspond to existing
+                keys in the object's internal state.
+        """
         with QMutexLocker(self._mutex):
             config_changed = False
             progress_changed = False
@@ -128,7 +142,22 @@ class StateManager(QObject):
             self.progress_changed.emit(self._state.progress, self._state.total_plugins)
 
     def get(self, property_name: str, default: Any = None) -> Any:
-        """Get a state property value safely."""
+        """
+        Retrieves the value of a specified property from the internal state.
+
+        This method fetches the value of a given property from the object's internal state,
+        safely synchronizing access with a mutex lock to ensure thread safety. If the
+        property does not exist, a default value is returned.
+
+        Args:
+            property_name (str): The name of the property whose value is to be retrieved.
+            default (Any, optional): The value to be returned if the property does not
+                exist. Defaults to None.
+
+        Returns:
+            Any: The value of the requested property, or the default value if the
+            property does not exist.
+        """
         with QMutexLocker(self._mutex):
             return getattr(self._state, property_name, default)
 
@@ -139,7 +168,19 @@ class StateManager(QObject):
             return replace(self._state)
 
     def add_result(self, plugin: str, status: str, message: str = "") -> None:
-        """Add a plugin processing result."""
+        """
+        Adds a result associated with a plugin and updates the state. This function records
+        the status of a specified plugin, updates the relevant state set (e.g., cleaned,
+        failed, skipped, etc.), increments the progress count, and emits related signals
+        to notify about the progress and processing status.
+
+        Args:
+            plugin (str): The name of the plugin being processed.
+            status (str): The status of the plugin processing. Possible values are
+                'cleaned', 'failed', 'skipped', or 'quickautoclean'.
+            message (str, optional): A message providing additional context about the
+                plugin processing. Defaults to an empty string.
+        """
         with QMutexLocker(self._mutex):
             if status == "cleaned":
                 self._state.cleaned_plugins.add(plugin)
@@ -155,7 +196,17 @@ class StateManager(QObject):
             self.progress_changed.emit(self._state.progress, self._state.total_plugins)
 
     def reset_cleaning_state(self) -> None:
-        """Reset all cleaning-related state."""
+        """
+        Resets the cleaning state to its initial default values.
+
+        This method is used to clear all data related to the current cleaning
+        operation. It ensures that all relevant attributes in the state are reset
+        to their initial states, effectively preparing the system for a new cleaning
+        process.
+
+        Returns:
+            None
+        """
         with QMutexLocker(self._mutex):
             self._state.is_cleaning = False
             self._state.current_plugin = None
@@ -176,7 +227,24 @@ class StateManager(QObject):
         xedit_exe_path: Path | None = None,
         xedit_install_path: Path | None = None,
     ) -> None:
-        """Update configuration paths and validity flags."""
+        """
+        Updates configuration paths for the specified components and verifies their
+        existence if applicable. The method allows for updating paths related to load
+        order, Mod Organizer 2 (MO2), and xEdit, while avoiding UI blocking checks.
+
+        Args:
+            load_order_path (Path | None): The file path for the load order configuration.
+                If None, the load order path will not be updated.
+            mo2_exe_path (Path | None): The file path for the Mod Organizer 2 executable.
+                If None, the MO2 executable path will not be updated.
+            mo2_install_path (Path | None): The file path for the Mod Organizer 2
+                installation directory. If None, the MO2 installation path will not be
+                updated.
+            xedit_exe_path (Path | None): The file path for the xEdit executable. If None,
+                the xEdit executable path will not be updated.
+            xedit_install_path (Path | None): The file path for the xEdit installation
+                directory. If None, the xEdit installation path will not be updated.
+        """
         updates: dict[str, Any] = {}
 
         if load_order_path is not None:

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from logging import Logger
 from typing import TYPE_CHECKING, Any, Callable
 
+from PactLib.state_manager import AppState
 from PactLib.utils import detect_xedit_game, run_process_with_realtime_output
 
 if TYPE_CHECKING:
@@ -43,48 +44,50 @@ class CleaningService:
 
     def set_progress_callback(self, callback: Callable | None) -> None:
         """
-        Sets the progress callback function for tracking progress or status updates. The callback can
-        be used to communicate progress information to other components or users. If no callback
-        is provided, progress updates will be disregarded.
+        Sets the progress callback to monitor or handle progress updates during an operation.
+        The callback function will be called whenever progress changes.
 
         Args:
-            callback: A callable function to handle progress updates, or None if no progress updates
-                need to be handled.
+            callback (Callable | None): A function to handle progress updates. If provided,
+                the function should take necessary parameters as required for processing the progress
+                information. If None, no progress updates will be processed.
         """
         self.progress_callback = callback
 
     def set_log_callback(self, callback: Callable | None) -> None:
         """
-        Sets the logging callback for the instance, allowing customization of how
-        log messages are handled. The callback can be set to a callable that
-        processes log messages or None to disable the callback.
+        Sets a callback function for logging events.
+
+        This method allows the user to set a callable function that will be used for
+        logging purposes. If no callback is provided or if `None` is passed, the
+        logging callback will be disabled.
 
         Args:
-            callback: The callable to handle log messages or None to disable the
-                log callback. The callable should accept one argument, typically
-                the log message.
+            callback (Callable | None): A callable function to handle logging events,
+                or `None` to disable the logging callback.
         """
         self.log_callback = callback
 
     def clean_plugin(self, plugin_name: str) -> CleanResult:
         """
-        Cleans the specified plugin by performing necessary operations such as checking
-        skip conditions, applying quick auto-clean if required, or executing normal
-        cleaning procedures. The method also handles errors encountered during the
-        cleaning process and returns detailed results about the operation.
+        Cleans a specified plugin by performing either a normal cleaning or a quick auto
+        cleaning based on the current application state. If the plugin is in the skip
+        list, it is skipped. Errors encountered during the cleaning process are logged
+        and appropriately handled.
 
         Args:
             plugin_name: The name of the plugin to be cleaned.
 
         Returns:
-            A CleanResult object containing the details of the cleaning operation outcome,
-            including success status, message, operation status, and duration.
+            CleanResult: An object representing the result of the cleaning operation. It
+            contains the success status, an optional message, the operation status
+            (e.g., "skipped", "failed"), and the time duration of the cleaning process.
         """
-        start_time = time.time()
+        start_time: float = time.time()
 
         try:
             # Get current state
-            state_snapshot = self.state.state
+            state_snapshot: AppState = self.state.state
 
             # Check if plugin should be skipped
             if self._should_skip_plugin(plugin_name, state_snapshot.game_type):
@@ -328,19 +331,20 @@ class CleaningService:
 
     def validate_environment(self) -> tuple[bool, str]:
         """
-        Validates the current environment configuration for proper application functioning.
+        Validates the application environment, ensuring all paths, required executables,
+        and configurations are appropriately set. This function performs the following checks:
 
-        This method performs a sequence of checks to ensure the environment is correctly
-        set up for further operations. The checks include verifying paths' presence and
-        existence, validating the xEdit executable, detecting game type if not set, and
-        handling MO2 mode-specific requirements. Based on these checks, it returns a
-        status indicating whether the environment is valid and a corresponding message.
+        1. Verifies that all required paths are configured.
+        2. Ensures the xEdit executable exists and is properly set.
+        3. Attempts to auto-detect the game type if not already specified.
+        4. Confirms the presence of the MO2 executable if operating in MO2 mode.
+
+        Returns a tuple indicating the validation status and an associated message.
 
         Returns:
-            tuple[bool, str]: A tuple containing a boolean indicating the validation
-            result and a string message describing the validation status or error
-            encountered. Returns `True` with a success message if the environment is
-            valid, and `False` with an error message otherwise.
+            tuple[bool, str]: A tuple where the first element signifies the success
+                (True for valid environment, False otherwise) and the second element
+                contains a detailed message explaining the result of the validation.
         """
         state_snapshot: AppState = self.state.state
 
@@ -354,7 +358,7 @@ class CleaningService:
 
         # Detect game type if not set
         if not state_snapshot.game_type:
-            game_type = detect_xedit_game(str(state_snapshot.xedit_exe_path))
+            game_type: str | None = detect_xedit_game(str(state_snapshot.xedit_exe_path))
             if game_type:
                 self.state.update(game_type=game_type)
             else:
