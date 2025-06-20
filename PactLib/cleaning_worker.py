@@ -21,13 +21,12 @@ class CleaningWorker(QThread):
     """Worker thread for cleaning plugins with clear signals."""
 
     # Signals
-    progress = Signal(int, int)  # current, total
-    plugin_started = Signal(str)  # plugin name
-    plugin_completed = Signal(str, bool, str)  # plugin, success, message
-    plugin_progress = Signal(dict)  # real-time progress info from cleaning
-    log_output = Signal(str)  # real-time log output from xEdit
-    finished = Signal()
-    error = Signal(str)  # error message
+    progress: Signal = Signal(int, int)  # current, total
+    plugin_started: Signal = Signal(str)  # plugin name
+    plugin_completed: Signal = Signal(str, bool, str)  # plugin, success, message
+    plugin_progress: Signal = Signal(dict)  # real-time progress info from cleaning
+    log_output: Signal = Signal(str)  # real-time log output from xEdit
+    error: Signal = Signal(str)  # error message
 
     def __init__(
         self,

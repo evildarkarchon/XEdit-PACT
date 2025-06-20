@@ -11,11 +11,10 @@ from PySide6.QtWidgets import QFileDialog, QWidget
 
 from PactLib.cleaning_service import CleaningService
 from PactLib.cleaning_worker import CleaningWorker
-from PactLib.state_manager import StateManager
 
 if TYPE_CHECKING:
-    from config_manager import ConfigManager
-    from state_manager import StateManager
+    from PactLib.config_manager import ConfigManager
+    from PactLib.state_manager import StateManager
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +77,7 @@ class GuiController(QObject):
         file_path, _ = QFileDialog.getOpenFileName(
             parent_widget,
             "Select Load Order File",
-            initial_dir,
+            initial_dir or "",
             "Text Files (*.txt);;All Files (*.*)",
         )
 
@@ -115,7 +114,7 @@ class GuiController(QObject):
         file_path, _ = QFileDialog.getOpenFileName(
             parent_widget,
             "Select ModOrganizer.exe",
-            initial_dir,
+            initial_dir or "",
             "Executable Files (*.exe);;All Files (*.*)",
         )
 
@@ -163,7 +162,7 @@ class GuiController(QObject):
         file_path, _ = QFileDialog.getOpenFileName(
             parent_widget,
             "Select xEdit Executable",
-            initial_dir,
+            initial_dir or "",
             "Executable Files (*.exe);;All Files (*.*)",
         )
 

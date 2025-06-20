@@ -77,12 +77,12 @@ class StateManager(QObject):
     """Thread-safe state manager with Qt signals."""
 
     # Signals for state changes
-    state_changed = Signal(str, object)  # (property_name, new_value)
-    configuration_changed = Signal(bool)  # is_fully_configured
-    progress_changed = Signal(int, int)  # current, total
-    cleaning_started = Signal()
-    cleaning_finished = Signal()
-    plugin_processed = Signal(str, str, str)  # plugin, status, message
+    state_changed: Signal = Signal(str, object)  # (property_name, new_value)
+    configuration_changed: Signal = Signal(bool)  # is_fully_configured
+    progress_changed: Signal = Signal(int, int)  # current, total
+    cleaning_started: Signal = Signal()
+    cleaning_finished: Signal = Signal()
+    plugin_processed: Signal = Signal(str, str, str)  # plugin, status, message
 
     def __init__(self) -> None:
         """Initialize the state manager."""
@@ -170,7 +170,7 @@ class StateManager(QObject):
         xedit_install_path: Path | None = None,
     ) -> None:
         """Update configuration paths and validity flags."""
-        updates = {}
+        updates: dict[str, Any] = {}
 
         if load_order_path is not None:
             updates["load_order_path"] = load_order_path

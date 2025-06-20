@@ -189,7 +189,7 @@ def verify_imports() -> bool:
         return True
 
 
-def handle_migration_error(error: Exception, error_type: str) -> None:
+def handle_migration_error(error: Exception, error_type: str) -> int:
     """Handle migration errors with appropriate logging and user messages."""
     logger.error(f"{error_type} during migration: {error}")
     print(f"\nMigration error: {error_type} - {error}")
@@ -207,9 +207,11 @@ def handle_migration_error(error: Exception, error_type: str) -> None:
     # Always offer backup restoration if available
     if BACKUP_PATH.exists():
         print(f"You can restore your configuration from: {BACKUP_PATH}")
+    
+    return 1
 
 
-def main() -> int:  # noqa: PLR0911
+def main() -> int:
     """Run the migration."""
     print("XEdit-PACT Architecture Migration Tool\n")
 
@@ -231,23 +233,17 @@ def main() -> int:  # noqa: PLR0911
         print("\nMigration failed!")
         return 1  # noqa: TRY300
     except FileNotFoundError as e:
-        handle_migration_error(e, "Required file not found")
-        return 1
+        return handle_migration_error(e, "Required file not found")
     except PermissionError as e:
-        handle_migration_error(e, "Permission denied")
-        return 1
+        return handle_migration_error(e, "Permission denied")
     except OSError as e:
-        handle_migration_error(e, "System error")
-        return 1
+        return handle_migration_error(e, "System error")
     except ValueError as e:
-        handle_migration_error(e, "Invalid configuration value")
-        return 1
+        return handle_migration_error(e, "Invalid configuration value")
     except KeyError as e:
-        handle_migration_error(e, "Missing configuration key")
-        return 1
+        return handle_migration_error(e, "Missing configuration key")
     except Exception as e:  # noqa: BLE001
-        handle_migration_error(e, "Unexpected error")
-        return 1
+        return handle_migration_error(e, "Unexpected error")
 
 
 if __name__ == "__main__":

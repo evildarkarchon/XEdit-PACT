@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QMainWindow,
     QMenu,
+    QMenuBar,
     QMessageBox,
     QPushButton,
     QStatusBar,
@@ -25,7 +26,7 @@ from PySide6.QtWidgets import (
 
 from PactLib.config_manager import ConfigManager
 from PactLib.gui_controller import GuiController
-from PactLib.state_manager import StateManager
+from PactLib.state_manager import AppState, StateManager
 
 # Constants  
 PACT_DATA_PATH: Path = Path("PACT Data")
@@ -89,21 +90,21 @@ class MainWindow(QMainWindow):
     def _setup_ui(self) -> None:
         """Setup the user interface."""
         self.setWindowTitle("XEdit-PACT - Refactored")
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(650, 450)
 
         # Create central widget
-        central_widget = QWidget()
+        central_widget: QWidget = QWidget()
         self.setCentralWidget(central_widget)
 
         # Main layout
-        main_layout = QVBoxLayout(central_widget)
+        main_layout: QVBoxLayout = QVBoxLayout(central_widget)
 
         # Configuration section
-        config_group = self._create_configuration_group()
+        config_group: QGroupBox = self._create_configuration_group()
         main_layout.addWidget(config_group)
 
         # Control section
-        control_group = self._create_control_group()
+        control_group: QGroupBox = self._create_control_group()
         main_layout.addWidget(control_group)
 
         # Log display
@@ -121,11 +122,11 @@ class MainWindow(QMainWindow):
 
     def _create_configuration_group(self) -> QGroupBox:
         """Create the configuration section."""
-        group = QGroupBox("Configuration")
-        layout = QVBoxLayout()
+        group: QGroupBox = QGroupBox("Configuration")
+        layout: QVBoxLayout = QVBoxLayout()
 
         # Load Order
-        lo_layout = QHBoxLayout()
+        lo_layout: QHBoxLayout = QHBoxLayout()
         self.load_order_button = QPushButton("Configure Load Order")
         self.load_order_button.clicked.connect(self._configure_load_order)
         lo_layout.addWidget(self.load_order_button)
@@ -133,7 +134,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(lo_layout)
 
         # MO2
-        mo2_layout = QHBoxLayout()
+        mo2_layout: QHBoxLayout = QHBoxLayout()
         self.mo2_button = QPushButton("Configure MO2")
         self.mo2_button.clicked.connect(self._configure_mo2)
         mo2_layout.addWidget(self.mo2_button)
@@ -146,7 +147,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(mo2_layout)
 
         # xEdit
-        xedit_layout = QHBoxLayout()
+        xedit_layout: QHBoxLayout = QHBoxLayout()
         self.xedit_button = QPushButton("Configure xEdit")
         self.xedit_button.clicked.connect(self._configure_xedit)
         xedit_layout.addWidget(self.xedit_button)
@@ -158,8 +159,8 @@ class MainWindow(QMainWindow):
 
     def _create_control_group(self) -> QGroupBox:
         """Create the control section."""
-        group = QGroupBox("Controls")
-        layout = QHBoxLayout()
+        group: QGroupBox = QGroupBox("Controls")
+        layout: QHBoxLayout = QHBoxLayout()
 
         self.start_button = QPushButton("Start Cleaning")
         self.start_button.clicked.connect(self._start_cleaning)
@@ -177,31 +178,31 @@ class MainWindow(QMainWindow):
 
     def _create_menu_bar(self) -> None:
         """Create the menu bar."""
-        menubar = self.menuBar()
+        menubar: QMenuBar = self.menuBar()
 
         # File menu
         file_menu: QMenu = menubar.addMenu("&File")
 
-        refresh_action = QAction("&Refresh Configuration", self)
+        refresh_action: QAction = QAction("&Refresh Configuration", self)
         refresh_action.triggered.connect(self.controller.refresh_configuration)
         file_menu.addAction(refresh_action)
 
         file_menu.addSeparator()
 
-        exit_action = QAction("E&xit", self)
+        exit_action: QAction = QAction("E&xit", self)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
         # Help menu
         help_menu: QMenu = menubar.addMenu("&Help")
 
-        about_action = QAction("&About", self)
+        about_action: QAction = QAction("&About", self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
 
     def _update_ui_from_state(self) -> None:
         """Update UI elements based on current state."""
-        state_snapshot = self.state.state
+        state_snapshot: AppState = self.state.state
 
         # Update configuration buttons
         if self.load_order_button:
@@ -272,7 +273,7 @@ class MainWindow(QMainWindow):
         """Toggle MO2 mode."""
         if self.mo2_mode_button is None:
             return
-        enabled = self.mo2_mode_button.isChecked()
+        enabled: bool = self.mo2_mode_button.isChecked()
         self.controller.toggle_mo2_mode(enabled)
 
     @Slot()
@@ -300,7 +301,7 @@ class MainWindow(QMainWindow):
     def _on_progress_changed(self, current: int, total: int) -> None:
         """Handle progress updates."""
         if total > 0:
-            percentage = (current / total) * 100
+            percentage: float = (current / total) * 100
             self._update_status(f"Progress: {current}/{total} ({percentage:.1f}%)")
 
     @Slot()
@@ -324,7 +325,7 @@ class MainWindow(QMainWindow):
     @Slot(str, str, str)
     def _on_plugin_processed(self, plugin: str, status: str, message: str) -> None:
         """Handle plugin processing completion."""
-        icon = {
+        icon: str = {
             "cleaned": "✓",
             "failed": "✗",
             "skipped": "⊘",
@@ -395,18 +396,18 @@ def create_application() -> tuple[QApplication, MainWindow]:
         main window object.
     """
     # Create instances
-    config = ConfigManager(PACT_CONFIG_PATH)
-    state = StateManager()
-    controller = GuiController(state, config)
+    config: ConfigManager = ConfigManager(PACT_CONFIG_PATH)
+    state: StateManager = StateManager()
+    controller: GuiController = GuiController(state, config)
 
     # Create GUI
     instance: QCoreApplication | None = QApplication.instance()
     if instance is None:
-        app = QApplication(sys.argv)
+        app: QApplication = QApplication(sys.argv)
     else:
         app = instance if isinstance(instance, QApplication) else QApplication(sys.argv)
     app.setApplicationName("XEdit-PACT")
-    window = MainWindow(state, controller)
+    window: MainWindow = MainWindow(state, controller)
 
     return app, window
 

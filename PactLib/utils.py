@@ -6,10 +6,16 @@ import contextlib
 import logging
 import threading
 from pathlib import Path
-from typing import Any, Callable
+from threading import RLock, Thread
+from typing import TYPE_CHECKING, Any, Callable
 
 import psutil
 import ruamel.yaml
+
+if TYPE_CHECKING:
+    from subprocess import CompletedProcess
+
+    from ruamel.yaml.main import YAML
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -50,13 +56,13 @@ class YamlManager:
             The value at the specified key path within the YAML file. If the key path
             does not exist or cannot be resolved, returns None.
         """
-        file_lock = self._get_file_lock(yaml_path)
+        file_lock: RLock = self._get_file_lock(yaml_path)
         with file_lock:
             data = self._load_yaml(yaml_path)
-            keys = self._parse_key_path(key_path)
+            keys: list[str] = self._parse_key_path(key_path)
 
             # Traverse the YAML structure
-            value = data
+            value: Any = data
             for key in keys:
                 if isinstance(value, dict) and key in value:
                     value = value[key]
@@ -76,13 +82,13 @@ class YamlManager:
                 string with keys separated by a delimiter, or as a list of individual string keys.
             new_value: The new value to be assigned at the specified key path.
         """
-        file_lock = self._get_file_lock(yaml_path)
+        file_lock: RLock = self._get_file_lock(yaml_path)
         with file_lock:
-            data = self._load_yaml(yaml_path)
-            keys = self._parse_key_path(key_path)
+            data: Any = self._load_yaml(yaml_path)
+            keys: list[str] = self._parse_key_path(key_path)
 
             # Navigate to the parent of the final key
-            current = data
+            current: Any = data
             for key in keys[:-1]:
                 if key not in current:
                     current[key] = {}
@@ -104,7 +110,7 @@ class YamlManager:
         with self._cache_lock:
             if yaml_path not in self._cache:
                 try:
-                    path = Path(yaml_path)
+                    path: Path = Path(yaml_path)
                     if not path.exists():
                         logger.warning(f"YAML file not found: {yaml_path}")
                         self._cache[yaml_path] = {}
@@ -120,8 +126,8 @@ class YamlManager:
     def _save_yaml(self, yaml_path: str, data: Any) -> None:
         """Save data to YAML file with atomic write."""
         try:
-            path = Path(yaml_path)
-            temp_path = path.with_suffix(".tmp")
+            path: Path = Path(yaml_path)
+            temp_path: Path = path.with_suffix(".tmp")
 
             # Ensure parent directory exists
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -187,9 +193,9 @@ def yaml_settings_write(yaml_path: str | Path, new_value: Any, key_path: str | l
     """
     if key_path is None:
         # Write entire file
-        path = Path(yaml_path)
+        path: Path = Path(yaml_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        yaml = ruamel.yaml.YAML()
+        yaml: YAML = ruamel.yaml.YAML()
         yaml.indent(offset=2)
         yaml.width = 300
         with path.open("w", encoding="utf-8") as f:
@@ -240,9 +246,9 @@ def detect_xedit_game(xedit_path: str) -> str | None:
         The game identifier as a string, e.g., "FO3", "FNV", or "SSE", if the
         filename matches a known pattern. Otherwise, returns None.
     """
-    filename = Path(xedit_path).stem.lower()
+    filename: str = Path(xedit_path).stem.lower()
 
-    game_map = {
+    game_map: dict[str, str] = {
         "fo3edit": "FO3",
         "fnvedit": "FNV",
         "fo4edit": "FO4",
@@ -284,7 +290,7 @@ def run_process(command: list[str], timeout: int | None = None) -> tuple[int, st
     import subprocess  # noqa: PLC0415
 
     try:
-        result = subprocess.run(
+        result: CompletedProcess[str] = subprocess.run(
             command,
             capture_output=True,
             text=True,
@@ -343,9 +349,9 @@ def run_process_with_realtime_output(
     import threading  # noqa: PLC0415
     import time  # noqa: PLC0415
     
-    start_time = time.time()
-    stdout_lines = []
-    stderr_lines = []
+    start_time: float = time.time()
+    stdout_lines: list[Any] = []
+    stderr_lines: list[Any] = []
     
     try:
         process = subprocess.Popen(
@@ -375,11 +381,11 @@ def run_process_with_realtime_output(
                 pipe.close()
         
         # Start threads to read stdout and stderr
-        stdout_thread = threading.Thread(
+        stdout_thread: Thread = threading.Thread(
             target=read_output, 
             args=(process.stdout, stdout_lines, output_callback)
         )
-        stderr_thread = threading.Thread(
+        stderr_thread: Thread = threading.Thread(
             target=read_output,
             args=(process.stderr, stderr_lines, None)
         )
@@ -407,9 +413,8 @@ def run_process_with_realtime_output(
     except (OSError, subprocess.SubprocessError, ValueError) as e:
         return -1, "", str(e)
 
-
 def monitor_log_file(
-    log_path: str | Path,
+    log_file_path: str | Path,
     line_callback: Callable[[str], None],
     stop_event: threading.Event,
     poll_interval: float = 0.1
@@ -435,7 +440,7 @@ def monitor_log_file(
         OSError: If an issue occurs while opening the file or reading from it.
         ValueError: If an invalid operation is attempted on the file.
     """
-    log_path = Path(log_path)
+    log_path: Path = Path(log_file_path)
     
     try:
         # Wait for file to exist
@@ -450,7 +455,7 @@ def monitor_log_file(
             f.seek(0, 2)
             
             while not stop_event.is_set():
-                line = f.readline()
+                line: str = f.readline()
                 if line:
                     line_callback(line.rstrip('\n\r'))
                 else:

@@ -7,20 +7,20 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.13"
-PySide6 = "^6.8.0.2"
-psutil = "^6.1.0"
-requests = "^2.32.3"
-tomlkit = "^0.13.2"
-ruamel-yaml = "^0.18.6"
+PySide6 = ">=6.8.0.2"
+psutil = ">=6.1.0"
+requests = ">=2.32.3"
+tomlkit = ">=0.13.2"
+ruamel-yaml = ">=0.18.6"
 
 [tool.poetry.group.dev.dependencies]
-types-psutil = "^6.1.0.20241102"
+types-psutil = ">=6.1.0.20241102"
 ruff = ">=0.8.0"
-mypy = "^1.13.0"
-pyinstaller = "^6.11.1"
-poetry-plugin-up = "^0.7.2"
-virtualenv = "^20.28.0"
-types-requests = "^2.32.0.20241016"
+mypy = ">=1.13.0"
+pyinstaller = ">=6.11.1"
+poetry-plugin-up = ">=0.7.2"
+virtualenv = ">=20.28.0"
+types-requests = ">2.32.0.20241016"
 
 [build-system]
 requires = ["poetry-core"]
@@ -58,6 +58,7 @@ ignore = [
 	"TRY400",  # Use `logging.exception` instead of `logging.error`
 	"PLR2004", # Allow magic values in comparisons
 	"PLW2901", # Allow overwriting loop variables
+	"PLR0911", # too-many-return-statements
 ]
 
 extend-select = [

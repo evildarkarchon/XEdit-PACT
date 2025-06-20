@@ -6,15 +6,19 @@ import logging
 import subprocess
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from logging import Logger
+from typing import TYPE_CHECKING, Any, Callable
 
 from PactLib.utils import detect_xedit_game, run_process_with_realtime_output
 
 if TYPE_CHECKING:
-    from config_manager import ConfigManager
-    from state_manager import AppState, StateManager
+    from re import Pattern
 
-logger = logging.getLogger(__name__)
+    from PactLib.config_manager import ConfigManager
+    from PactLib.state_manager import AppState, StateManager
+    
+
+logger: Logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -112,11 +116,11 @@ class CleaningService:
         if not game_type:
             return False
 
-        game_config = self.config.get_game_config(game_type)
-        skip_list = game_config.get("skip_list", [])
+        game_config: dict[str, Any] = self.config.get_game_config(game_type)
+        skip_list: list[str] = game_config.get("skip_list", [])
 
         # Also check universal skip list
-        universal_skip = self.config.get("PACT_Data.Skip_Lists.Universal", [])
+        universal_skip: list[str] = self.config.get("PACT_Data.Skip_Lists.Universal", [])
 
         return plugin_name.lower() in [p.lower() for p in skip_list + universal_skip]
 
@@ -125,11 +129,11 @@ class CleaningService:
         if not game_type:
             return False
 
-        game_config = self.config.get_game_config(game_type)
-        qac_list = game_config.get("quickautoclean_list", [])
+        game_config: dict[str, Any] = self.config.get_game_config(game_type)
+        qac_list: list[str] = game_config.get("quickautoclean_list", [])
 
         # Also check universal QAC list
-        universal_qac = self.config.get("PACT_Data.QAC_Lists.Universal", [])
+        universal_qac: list[str] = self.config.get("PACT_Data.QAC_Lists.Universal", [])
 
         return plugin_name.lower() in [p.lower() for p in qac_list + universal_qac]
 
@@ -137,13 +141,13 @@ class CleaningService:
         """Run QuickAutoClean on a plugin."""
         logger.info(f"Running QuickAutoClean on {plugin_name}")
 
-        command = self._build_cleaning_command(
+        command: list[str] = self._build_cleaning_command(
             plugin_name,
             state_snapshot,
             quickautoclean=True,
         )
 
-        result = self._execute_cleaning_command(command, plugin_name, state_snapshot.cleaning_timeout)
+        result: CleanResult = self._execute_cleaning_command(command, plugin_name, state_snapshot.cleaning_timeout)
 
         if result.success:
             return CleanResult(
@@ -158,13 +162,13 @@ class CleaningService:
         """Run normal cleaning on a plugin."""
         logger.info(f"Running normal clean on {plugin_name}")
 
-        command = self._build_cleaning_command(
+        command: list[str] = self._build_cleaning_command(
             plugin_name,
             state_snapshot,
             quickautoclean=False,
         )
 
-        result = self._execute_cleaning_command(command, plugin_name, state_snapshot.cleaning_timeout)
+        result: CleanResult = self._execute_cleaning_command(command, plugin_name, state_snapshot.cleaning_timeout)
 
         if result.success:
             result.status = "cleaned"
@@ -173,7 +177,7 @@ class CleaningService:
 
     def _build_cleaning_command(self, plugin_name: str, state_snapshot: AppState, quickautoclean: bool = False) -> list[str]:
         """Build the command to clean a plugin."""
-        command = []
+        command: list[str] = []
 
         # Add MO2 if in MO2 mode
         if state_snapshot.mo2_mode and state_snapshot.mo2_exe_path:
@@ -195,7 +199,7 @@ class CleaningService:
 
     def _execute_cleaning_command(self, command: list[str], plugin_name: str, timeout: int) -> CleanResult:
         """Execute the cleaning command with real-time monitoring."""
-        start_time = time.time()
+        start_time: float = time.time()
 
         try:
             # Prepare progress tracking variables
@@ -219,18 +223,18 @@ class CleaningService:
 
             # Execute command with real-time monitoring
             logger.info(f"Executing command: {' '.join(command)}")
-            exit_code, stdout, stderr = run_process_with_realtime_output(
+            exit_code, _, stderr = run_process_with_realtime_output(
                 command=command,
                 output_callback=on_output_line,
                 timeout=timeout,
                 working_dir=None
             )
 
-            duration = time.time() - start_time
+            duration: float = time.time() - start_time
 
             # Check result
             if exit_code == 0:
-                stats_summary = self._get_cleaning_summary()
+                stats_summary: str = self._get_cleaning_summary()
                 return CleanResult(
                     success=True,
                     message=f"Successfully cleaned {plugin_name}{stats_summary}",
@@ -239,18 +243,18 @@ class CleaningService:
                 )
             if exit_code == -1:
                 # Timeout or other error
-                error_msg = stderr.strip() if stderr else "Process failed or timed out"
+                timeout_error_msg: str = stderr.strip() if stderr else "Process failed or timed out"
                 return CleanResult(
                     success=False,
-                    message=f"Failed to clean {plugin_name}: {error_msg}",
+                    message=f"Failed to clean {plugin_name}: {timeout_error_msg}",
                     status="failed", 
                     duration=duration,
                 )
             # Non-zero exit code
-            error_msg = stderr.strip() if stderr else f"Process exited with code {exit_code}"
+            exit_error_msg: str = stderr.strip() if stderr else f"Process exited with code {exit_code}"
             return CleanResult(
                 success=False,
-                message=f"Failed to clean {plugin_name}: {error_msg}",
+                message=f"Failed to clean {plugin_name}: {exit_error_msg}",
                 status="failed",
                 duration=duration,
             )
@@ -269,7 +273,7 @@ class CleaningService:
         import re  # noqa: PLC0415
 
         # Pattern matching for xEdit cleaning operations
-        patterns = {
+        patterns: dict[str, Pattern[str]] = {
             "undeleted": re.compile(r"Undeleting:\s*(.*)", re.IGNORECASE),
             "removed": re.compile(r"Removing:\s*(.*)", re.IGNORECASE),
             "skipped": re.compile(r"Skipping:\s*(.*)", re.IGNORECASE),
@@ -284,7 +288,7 @@ class CleaningService:
                 
                 # Emit progress update if callback is set
                 if self.progress_callback:
-                    progress_info = {
+                    progress_info: dict[str, Any] = {
                         "plugin": plugin_name,
                         "action": stat_type,
                         "line": line.strip(),
@@ -295,7 +299,7 @@ class CleaningService:
 
         # Check for completion indicators
         if ("Done." in line or "Cleaning completed" in line) and self.progress_callback:
-            completion_info = {
+            completion_info: dict[str, Any] = {
                 "plugin": plugin_name,
                 "action": "completed",
                 "line": line.strip(),
@@ -305,11 +309,11 @@ class CleaningService:
 
     def _get_cleaning_summary(self) -> str:
         """Generate a summary of cleaning statistics."""
-        stats = self._cleaning_stats
+        stats: dict[str, int] = self._cleaning_stats
         if stats["total_processed"] == 0:
             return ""
         
-        summary_parts = []
+        summary_parts: list[Any] = []
         if stats["undeleted"] > 0:
             summary_parts.append(f"{stats['undeleted']} undeleted")
         if stats["removed"] > 0:
@@ -339,7 +343,7 @@ class CleaningService:
             encountered. Returns `True` with a success message if the environment is
             valid, and `False` with an error message otherwise.
         """
-        state_snapshot = self.state.state
+        state_snapshot: AppState = self.state.state
 
         # Check configuration
         if not state_snapshot.is_fully_configured:
