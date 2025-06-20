@@ -14,7 +14,7 @@ from PactLib.cleaning_worker import CleaningWorker
 
 if TYPE_CHECKING:
     from PactLib.config_manager import ConfigManager
-    from PactLib.state_manager import StateManager
+    from PactLib.state_manager import AppState, StateManager
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +23,9 @@ class GuiController(QObject):
     """Mediates between GUI and business logic."""
 
     # Signals for GUI updates
-    show_message = Signal(str, str)  # title, message
-    show_error = Signal(str, str)  # title, message
-    update_status = Signal(str)  # status message
+    show_message: Signal = Signal(str, str)  # title, message
+    show_error: Signal = Signal(str, str)  # title, message
+    update_status: Signal = Signal(str)  # status message
 
     def __init__(
         self,
@@ -46,7 +46,7 @@ class GuiController(QObject):
     def _load_configuration(self) -> None:
         """Load configuration from file into state."""
         # Load paths
-        paths = self.config.get_paths()
+        paths: dict[str, Path | None] = self.config.get_paths()
         self.state.update_configuration_paths(
             load_order_path=paths.get("load_order_file"),
             mo2_exe_path=paths.get("mod_organizer_binary"),
@@ -72,7 +72,7 @@ class GuiController(QObject):
             bool: True if the load order was successfully configured, False otherwise.
         """
         try:
-            current_path = self.state.get("load_order_path")
+            current_path: Path | None = self.state.get("load_order_path")
             initial_dir: str | None = str(current_path.parent) if current_path else ""
 
             # Use non-blocking file dialog options
@@ -81,7 +81,7 @@ class GuiController(QObject):
             )
 
             if file_path:
-                path = Path(file_path)
+                path: Path = Path(file_path)
                 # Defer file existence check to avoid blocking
                 if path.exists():
                     # Update state immediately for responsive UI
@@ -89,7 +89,7 @@ class GuiController(QObject):
 
                     # Save to config asynchronously
                     try:
-                        success = self.config.set("PACT_Settings.Load_Order.File", str(path))
+                        success: bool = self.config.set("PACT_Settings.Load_Order.File", str(path))
                         if not success:
                             logger.error("Failed to save load order path to configuration")
                             self.show_error.emit("Error", "Failed to save configuration")
@@ -124,7 +124,7 @@ class GuiController(QObject):
             bool: True if the configuration was successful, False otherwise.
         """
         try:
-            current_path = self.state.get("mo2_exe_path")
+            current_path: Path | None = self.state.get("mo2_exe_path")
             initial_dir: str | None = str(current_path.parent) if current_path else ""
 
             # Use non-blocking file dialog options
@@ -133,7 +133,7 @@ class GuiController(QObject):
             )
 
             if file_path:
-                path = Path(file_path)
+                path: Path = Path(file_path)
                 # Defer file existence check to avoid blocking
                 if path.exists() and path.name.lower() == "modorganizer.exe":
                     # Update state immediately for responsive UI
@@ -145,7 +145,7 @@ class GuiController(QObject):
 
                     # Save to config asynchronously
                     try:
-                        success = self.config.update_multiple({
+                        success: bool = self.config.update_multiple({
                             "PACT_Settings.Mod_Organizer.Binary": str(path),
                             "PACT_Settings.Mod_Organizer.Install_Path": str(install_path),
                         })
@@ -185,7 +185,7 @@ class GuiController(QObject):
                 executable; False otherwise.
         """
         try:
-            current_path = self.state.get("xedit_exe_path")
+            current_path: Path | None = self.state.get("xedit_exe_path")
             initial_dir: str | None = str(current_path.parent) if current_path else ""
 
             file_path, _ = QFileDialog.getOpenFileName(
@@ -193,7 +193,7 @@ class GuiController(QObject):
             )
 
             if file_path:
-                path = Path(file_path)
+                path: Path = Path(file_path)
                 if path.exists():
                     # Validate it's an xEdit executable
                     valid_names: list[str] = [
@@ -213,7 +213,7 @@ class GuiController(QObject):
                         return False
 
                     # Update state immediately for responsive UI
-                    install_path = path.parent
+                    install_path: Path = path.parent
                     self.state.update_configuration_paths(
                         xedit_exe_path=path,
                         xedit_install_path=install_path,
@@ -221,7 +221,7 @@ class GuiController(QObject):
 
                     # Save to config asynchronously
                     try:
-                        success = self.config.update_multiple({
+                        success: bool = self.config.update_multiple({
                             "PACT_Settings.xEdit.Binary": str(path),
                             "PACT_Settings.xEdit.Install_Path": str(install_path),
                         })
@@ -278,7 +278,7 @@ class GuiController(QObject):
             list[str]: A list of plugin names extracted from the load order file, or an
             empty list if the file cannot be read or processed.
         """
-        state_snapshot = self.state.state
+        state_snapshot: AppState = self.state.state
 
         if not state_snapshot.load_order_path or not state_snapshot.load_order_path.exists():
             logger.error("Load order file not found")
@@ -286,7 +286,7 @@ class GuiController(QObject):
 
         try:
             # Read load order file
-            plugins = []
+            plugins: list[str] = []
             with state_snapshot.load_order_path.open(encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
@@ -379,7 +379,7 @@ class GuiController(QObject):
     def _on_cleaning_finished(self) -> None:
         """Handle cleaning completion."""
         if self.worker is not None:
-            summary = self.worker.get_summary()
+            summary: str = self.worker.get_summary()
             self.show_message.emit("Cleaning Complete", summary)
             self.update_status.emit("Cleaning complete")
             self.worker = None
@@ -419,7 +419,7 @@ class GuiController(QObject):
             str: A formatted string summarizing the state of the application's
             configuration.
         """
-        state = self.state.state
+        state: AppState = self.state.state
         return (
             f"Configuration Status:\n"
             f"  Load Order: {'✓' if state.is_load_order_configured else '✗'}\n"

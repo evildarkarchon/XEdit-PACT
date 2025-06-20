@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import logging
+import platform
+import subprocess
 import sys
 from pathlib import Path
 
@@ -33,12 +35,67 @@ PACT_DATA_PATH: Path = Path("PACT Data")
 PACT_YAML_PATH: Path = PACT_DATA_PATH / "PACT Main.yaml"
 PACT_CONFIG_PATH: Path = PACT_DATA_PATH / "PACT Config.yaml"  # New config file
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+
+# Configure logging to file only (no console output for GUI app)
+def setup_logging() -> None:
+    """Setup logging configuration for the GUI application."""
+    global _current_log_file  # noqa: PLW0603
+
+    # Create logs directory if it doesn't exist
+    logs_dir = Path("logs")
+    logs_dir.mkdir(exist_ok=True)
+
+    # Create log file path with timestamp
+    from datetime import datetime  # noqa: PLC0415
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = logs_dir / f"pact_{timestamp}.log"
+
+    # Store the log file path globally
+    _current_log_file = log_file
+
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    # Remove any existing handlers (including console handlers)
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    # Create file handler
+    from logging.handlers import RotatingFileHandler  # noqa: PLC0415
+
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=5 * 1024 * 1024,  # 5MB
+        backupCount=5,
+        encoding="utf-8",
+    )
+    file_handler.setLevel(logging.INFO)
+
+    # Create formatter
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    file_handler.setFormatter(formatter)
+
+    # Add file handler to root logger
+    root_logger.addHandler(file_handler)
+
+    # Log the log file location
+    logger = logging.getLogger(__name__)
+    logger.info(f"Logging initialized. Log file: {log_file}")
+
+
+# Initialize logging
+setup_logging()
 logger: logging.Logger = logging.getLogger(__name__)
+
+# Global variable to store current log file path
+_current_log_file: Path | None = None
+
+
+def get_current_log_file() -> Path | None:
+    """Get the path to the current log file."""
+    return _current_log_file
 
 
 class MainWindow(QMainWindow):
@@ -191,6 +248,12 @@ class MainWindow(QMainWindow):
         refresh_action: QAction = QAction("&Refresh Configuration", self)
         refresh_action.triggered.connect(self.controller.refresh_configuration)
         file_menu.addAction(refresh_action)
+
+        file_menu.addSeparator()
+
+        open_log_action: QAction = QAction("&Open Log File", self)
+        open_log_action.triggered.connect(self._open_log_file)
+        file_menu.addAction(open_log_action)
 
         file_menu.addSeparator()
 
@@ -404,6 +467,26 @@ class MainWindow(QMainWindow):
             "Version: 2.0.0\n\n"
             "A tool for automating plugin cleaning with xEdit",
         )
+
+    def _open_log_file(self) -> None:
+        """Open the current log file in the default system application."""
+        log_file = get_current_log_file()
+        if log_file and log_file.exists():
+            try:
+                system = platform.system()
+                if system == "Windows":
+                    subprocess.run(["start", str(log_file)], shell=True, check=True)
+                elif system == "Darwin":  # macOS
+                    subprocess.run(["open", str(log_file)], check=True)
+                else:  # Linux
+                    subprocess.run(["xdg-open", str(log_file)], check=True)
+
+                logger.info(f"Opened log file: {log_file}")
+            except (subprocess.CalledProcessError, OSError) as e:
+                logger.error(f"Failed to open log file: {e}")
+                self._show_error("Error", f"Failed to open log file: {e}")
+        else:
+            self._show_error("Error", "Log file not found or not available")
 
 
 def create_application() -> tuple[QApplication, MainWindow]:

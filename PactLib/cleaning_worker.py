@@ -11,7 +11,7 @@ from PactLib.cleaning_service import CleaningService
 from PactLib.state_manager import StateManager
 
 if TYPE_CHECKING:
-    from PactLib.cleaning_service import CleaningService
+    from PactLib.cleaning_service import CleaningService, CleanResult
     from PactLib.state_manager import StateManager
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ class CleaningWorker(QThread):
                 self.plugin_started.emit(plugin)
 
                 # Clean the plugin with real-time monitoring
-                result = self.service.clean_plugin(plugin)
+                result: CleanResult = self.service.clean_plugin(plugin)
 
                 # Update results
                 self.state.add_result(plugin, result.status, result.message)

@@ -170,7 +170,7 @@ class YamlManager:
 
 
 # Create singleton instance
-_yaml_manager = YamlManager()
+_yaml_manager: YamlManager = YamlManager()
 
 
 def yaml_settings(yaml_path: str | Path, key_path: str | list[str]) -> Any:
@@ -242,7 +242,7 @@ def check_process(pid: int, threshold: int = 5) -> bool:
         bool: True if the process exceeds the CPU usage threshold, False otherwise.
     """
     try:
-        process = psutil.Process(pid)
+        process: psutil.Process = psutil.Process(pid)
         cpu_percent: float = process.cpu_percent(interval=1)
     except (psutil.NoSuchProcess, psutil.AccessDenied):
         return False
@@ -374,7 +374,7 @@ def run_process_with_realtime_output(
     stderr_lines: list[Any] = []
 
     try:
-        process = subprocess.Popen(
+        process: subprocess.Popen = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from logging import Logger
 from typing import TYPE_CHECKING, Any, Callable
 
+from PactLib.state_manager import AppState
 from PactLib.utils import detect_xedit_game, run_process_with_realtime_output
 
 if TYPE_CHECKING:
@@ -80,11 +81,11 @@ class CleaningService:
             A CleanResult object containing the details of the cleaning operation outcome,
             including success status, message, operation status, and duration.
         """
-        start_time = time.time()
+        start_time: float = time.time()
 
         try:
             # Get current state
-            state_snapshot = self.state.state
+            state_snapshot: AppState = self.state.state
 
             # Check if plugin should be skipped
             if self._should_skip_plugin(plugin_name, state_snapshot.game_type):
@@ -354,7 +355,7 @@ class CleaningService:
 
         # Detect game type if not set
         if not state_snapshot.game_type:
-            game_type = detect_xedit_game(str(state_snapshot.xedit_exe_path))
+            game_type: str | None = detect_xedit_game(str(state_snapshot.xedit_exe_path))
             if game_type:
                 self.state.update(game_type=game_type)
             else:
