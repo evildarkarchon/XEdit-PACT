@@ -7,19 +7,22 @@ import logging
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication, QTimer, Slot
-from PySide6.QtGui import QAction, QFont
+from PySide6.QtCore import QCoreApplication, Qt, QTimer, Slot
+from PySide6.QtGui import QAction, QCloseEvent, QFont
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
+    QDialogButtonBox,
     QGroupBox,
     QHBoxLayout,
+    QLabel,
     QMainWindow,
     QMenu,
     QMenuBar,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QStatusBar,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -41,6 +44,163 @@ logging.basicConfig(
 logger: logging.Logger = logging.getLogger(__name__)
 
 
+class CleaningProgressDialog(QDialog):
+    """Dialog that shows cleaning progress and statistics."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        """Initialize the cleaning progress dialog."""
+        super().__init__(parent)
+        self.setWindowTitle("Cleaning Progress")
+        self.setMinimumSize(450, 300)
+        self.setModal(False)  # Non-modal so user can interact with main window
+        
+        # Track if cleaning is in progress
+        self._cleaning_in_progress: bool = True
+        
+        # Create UI elements
+        self._setup_ui()
+        
+    def _setup_ui(self) -> None:
+        """Setup the dialog UI."""
+        layout: QVBoxLayout = QVBoxLayout(self)
+        
+        # Progress section
+        progress_group: QGroupBox = QGroupBox("Progress")
+        progress_layout: QVBoxLayout = QVBoxLayout()
+        
+        # Current plugin label
+        self.current_plugin_label: QLabel = QLabel("Waiting to start...")
+        self.current_plugin_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        font: QFont = self.current_plugin_label.font()
+        font.setPointSize(font.pointSize() + 2)
+        self.current_plugin_label.setFont(font)
+        progress_layout.addWidget(self.current_plugin_label)
+        
+        # Progress bar
+        self.progress_bar: QProgressBar = QProgressBar()
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setFormat("%p%")
+        progress_layout.addWidget(self.progress_bar)
+        
+        # Progress text
+        self.progress_label: QLabel = QLabel("0 / 0 plugins")
+        self.progress_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        progress_layout.addWidget(self.progress_label)
+        
+        progress_group.setLayout(progress_layout)
+        layout.addWidget(progress_group)
+        
+        # Statistics section
+        stats_group: QGroupBox = QGroupBox("Statistics")
+        stats_layout: QVBoxLayout = QVBoxLayout()
+        
+        # Create statistics labels
+        self.stats_labels: dict[str, QLabel] = {}
+        stats_items: list[tuple[str, str]] = [
+            ("cleaned", "✓ Cleaned:"),
+            ("failed", "✗ Failed:"),
+            ("skipped", "⊘ Skipped:"),
+            ("quickautoclean", "⚡ QuickAutoClean:"),
+            ("total", "Total:"),
+        ]
+        
+        for key, label_text in stats_items:
+            row_layout: QHBoxLayout = QHBoxLayout()
+            label: QLabel = QLabel(label_text)
+            label.setMinimumWidth(150)
+            row_layout.addWidget(label)
+            
+            value_label: QLabel = QLabel("0")
+            value_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+            self.stats_labels[key] = value_label
+            row_layout.addWidget(value_label)
+            row_layout.addStretch()
+            
+            stats_layout.addLayout(row_layout)
+        
+        stats_group.setLayout(stats_layout)
+        layout.addWidget(stats_group)
+        
+        layout.addStretch()
+        
+        # Button box
+        self.button_box: QDialogButtonBox = QDialogButtonBox()
+        
+        # Stop button (only shown during cleaning)
+        self.stop_button: QPushButton = QPushButton("Stop Cleaning")
+        self.stop_button.setStyleSheet("QPushButton { background-color: #ff4444; color: white; }")
+        self.button_box.addButton(self.stop_button, QDialogButtonBox.ButtonRole.ActionRole)
+        
+        # Close button (only enabled after cleaning)
+        self.close_button: QPushButton = self.button_box.addButton(QDialogButtonBox.StandardButton.Close)
+        self.close_button.setEnabled(False)
+        
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+        
+    def update_progress(self, current: int, total: int) -> None:
+        """Update the progress bar and labels."""
+        if total > 0:
+            percentage: int = int((current / total) * 100)
+            self.progress_bar.setValue(percentage)
+            self.progress_label.setText(f"{current} / {total} plugins")
+            
+            # Update progress bar format to show current plugin and percentage
+            if hasattr(self, '_current_plugin_name') and self._current_plugin_name:
+                self.progress_bar.setFormat(f"{self._current_plugin_name} / {percentage}%")
+            else:
+                self.progress_bar.setFormat("%p%")
+        else:
+            self.progress_bar.setValue(0)
+            self.progress_label.setText("0 / 0 plugins")
+            self.progress_bar.setFormat("%p%")
+            
+    def update_current_plugin(self, plugin_name: str) -> None:
+        """Update the current plugin being processed."""
+        self.current_plugin_label.setText(f"Processing: {plugin_name}")
+        self._current_plugin_name = plugin_name
+        
+        # Update progress bar format
+        if self.progress_bar.value() > 0:
+            self.progress_bar.setFormat(f"{plugin_name} / {self.progress_bar.value()}%")
+        
+    def update_statistics(self, stats: dict[str, int]) -> None:
+        """Update the statistics display."""
+        for key, label in self.stats_labels.items():
+            if key in stats:
+                label.setText(str(stats[key]))
+                
+        
+    def set_cleaning_finished(self) -> None:
+        """Update UI when cleaning is finished."""
+        self._cleaning_in_progress = False
+        self.current_plugin_label.setText("Cleaning completed!")
+        self.stop_button.setVisible(False)
+        self.close_button.setEnabled(True)
+        
+        # Update progress bar format to show completion
+        if self.progress_bar.value() == 100:
+            self.progress_bar.setFormat("Completed - 100%")
+        else:
+            self.progress_bar.setFormat(f"Stopped - {self.progress_bar.value()}%")
+            
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Handle close event."""
+        if self._cleaning_in_progress:
+            reply: QMessageBox.StandardButton = QMessageBox.question(
+                self,
+                "Cleaning in Progress",
+                "Cleaning is still in progress. Are you sure you want to close this dialog?\n\n"
+                "Note: Closing this dialog will not stop the cleaning process.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.No:
+                event.ignore()
+                return
+        event.accept()
+
+
 class MainWindow(QMainWindow):
     """Main application window with refactored state management."""
 
@@ -56,7 +216,7 @@ class MainWindow(QMainWindow):
         self._update_timer.timeout.connect(self._perform_ui_update)
 
         # UI elements
-        self.log_display: QTextEdit | None = None
+        self.progress_dialog: CleaningProgressDialog | None = None
         self.load_order_button: QPushButton | None = None
         self.mo2_button: QPushButton | None = None
         self.xedit_button: QPushButton | None = None
@@ -111,12 +271,6 @@ class MainWindow(QMainWindow):
         # Control section
         control_group: QGroupBox = self._create_control_group()
         main_layout.addWidget(control_group)
-
-        # Log display
-        self.log_display = QTextEdit()
-        self.log_display.setReadOnly(True)
-        self.log_display.setFont(QFont("Consolas", 9))
-        main_layout.addWidget(self.log_display)
 
         # Status bar
         self.status_bar = self.statusBar()
@@ -328,12 +482,30 @@ class MainWindow(QMainWindow):
         if total > 0:
             percentage: float = (current / total) * 100
             self._update_status(f"Progress: {current}/{total} ({percentage:.1f}%)")
+            
+        # Update progress dialog
+        if self.progress_dialog and self.progress_dialog.isVisible():
+            self.progress_dialog.update_progress(current, total)
+            # Update statistics
+            stats: dict[str, int] = self.state.state.cleaning_stats
+            self.progress_dialog.update_statistics(stats)
 
     @Slot()
     def _on_cleaning_started(self) -> None:
         """Handle cleaning start."""
         if self.start_button is None or self.stop_button is None:
             return
+        
+        # Create and show progress dialog
+        self.progress_dialog = CleaningProgressDialog(self)
+        self.progress_dialog.stop_button.clicked.connect(self._stop_cleaning)
+        
+        # Update progress with current state
+        stats: dict[str, int] = self.state.state.cleaning_stats
+        self.progress_dialog.update_statistics(stats)
+        self.progress_dialog.update_progress(self.state.get("progress", 0), self.state.get("total_plugins", 0))
+        
+        self.progress_dialog.show()
         self._log("Cleaning started...")
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
@@ -343,7 +515,16 @@ class MainWindow(QMainWindow):
         """Handle cleaning completion."""
         if self.start_button is None or self.stop_button is None:
             return
+        
         self._log("Cleaning finished!")
+        
+        # Update progress dialog
+        if self.progress_dialog:
+            self.progress_dialog.set_cleaning_finished()
+            # Update final statistics
+            stats: dict[str, int] = self.state.state.cleaning_stats
+            self.progress_dialog.update_statistics(stats)
+        
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
 
@@ -358,9 +539,15 @@ class MainWindow(QMainWindow):
         }.get(status, "?")
 
         self._log(f"{icon} {plugin}: {message}")
+        
+        # Update current plugin in progress dialog
+        if self.progress_dialog and self.progress_dialog.isVisible():
+            current_plugin: str | None = self.state.get("current_plugin")
+            if current_plugin:
+                self.progress_dialog.update_current_plugin(current_plugin)
 
     @Slot(str, object)
-    def _on_state_changed(self, property_name: str, _value: object) -> None:
+    def _on_state_changed(self, property_name: str, value: object) -> None:
         """Handle individual state property changes."""
         # Update specific UI elements based on property
         if property_name in [
@@ -371,6 +558,9 @@ class MainWindow(QMainWindow):
             "is_cleaning",
         ]:
             self._update_ui_from_state()
+        elif property_name == "current_plugin" and self.progress_dialog and self.progress_dialog.isVisible() and isinstance(value, str):
+            # Update current plugin in progress dialog
+            self.progress_dialog.update_current_plugin(value)
 
     @Slot(str, str)
     def _show_message(self, title: str, message: str) -> None:
@@ -391,8 +581,9 @@ class MainWindow(QMainWindow):
 
     def _log(self, message: str) -> None:
         """Add a message to the log display."""
-        if self.log_display:
-            self.log_display.append(message)
+        # Log messages are now only shown in status bar during cleaning
+        if self.state.get("is_cleaning"):
+            self._update_status(message)
 
     def _show_about(self) -> None:
         """Show about dialog."""
