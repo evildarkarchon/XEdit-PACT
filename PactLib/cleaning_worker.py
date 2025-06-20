@@ -43,16 +43,17 @@ class CleaningWorker(QThread):
 
     def run(self) -> None:
         """
-        Handles the execution of the cleaning process for plugins. The method validates
-        the environment, sets up real-time callbacks for progress and log reporting,
-        and manages the cleaning workflow for plugins with status updates and error
-        handling. If the cleaning process is interrupted or encounters errors, the
-        method ensures all necessary cleanup is performed before finishing.
+        Executes the cleaning process for a list of plugins while providing real-time
+        progress and log updates. This method validates the environment, processes
+        each plugin sequentially, and supports stopping based on a user command.
 
         Raises:
-            OSError: If an OS error occurs during plugin processing.
-            RuntimeError: If an unexpected runtime error occurs during execution.
-            ValueError: If an invalid value is encountered during operations.
+            OSError: If an OS-level error occurs during the cleaning process.
+            RuntimeError: If a runtime error is encountered during the execution.
+            ValueError: If the provided values or parameters are invalid.
+
+        Returns:
+            None
         """
         try:
             # Validate environment first
@@ -102,7 +103,16 @@ class CleaningWorker(QThread):
             self.finished.emit()
 
     def stop(self) -> None:
-        """Request the worker to stop."""
+        """
+        Stops the process by setting a flag and requesting interruption.
+
+        This method sets an internal flag to indicate that the process should
+        stop and calls the `requestInterruption` method to ensure an orderly
+        shutdown.
+
+        Returns:
+            None
+        """
         self._should_stop = True
         self.requestInterruption()
 
@@ -118,16 +128,18 @@ class CleaningWorker(QThread):
 
     def get_summary(self) -> str:
         """
-        Constructs and returns a summary of cleaning statistics from the system state.
+        Generates a summary of the cleaning statistics.
 
-        This method retrieves the cleaning statistics from the system's state and formats
-        them into a human-readable summary. The returned summary includes information
-        about cleaned, failed, and skipped items, the total count, and entries handled
-        via QuickAutoClean. The statistics are sourced from the `cleaning_stats` data
-        within the system's state.
+        This method retrieves the cleaning statistics from the current state
+        and formats a detailed summary string, including the number of
+        cleaned, failed, skipped, quick auto-cleaned items, and the total
+        count. It ensures that the cleaning results are presented in a
+        readable, structured format.
 
         Returns:
-            str: A formatted string representing the summary of cleaning statistics.
+            str: A formatted string summarizing the cleaning statistics. The
+            output includes keys `cleaned`, `failed`, `skipped`,
+            `quickautoclean`, and `total` extracted from the current state.
         """
         stats = self.state.state.cleaning_stats
         return (

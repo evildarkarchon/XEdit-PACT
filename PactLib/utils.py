@@ -80,14 +80,16 @@ class YamlManager:
 
     def set_value(self, yaml_path: str, key_path: str | list[str], new_value: Any) -> None:
         """
-        Updates a value in a YAML file at the specified key path. If the key path does not
-        exist, intermediary dictionaries will be created to establish the path.
+        Sets a new value in a YAML file at the specified key path. The method ensures thread-safety using
+        a file-level mutex to serialize access. If the specified key path does not exist, intermediate
+        keys are created as dictionaries to facilitate value assignment.
 
         Args:
-            yaml_path: The file path to the YAML file that will be modified.
-            key_path: The key path where the value will be set. It can be provided as a single
-                string with keys separated by a delimiter, or as a list of individual string keys.
-            new_value: The new value to be assigned at the specified key path.
+            yaml_path (str): Path to the YAML file to be modified.
+            key_path (str | list[str]): The path of the key where the value is to be set. It can be
+                a dot-separated string or a list of keys representing nested paths.
+            new_value (Any): The new value to set at the specified key path.
+
         """
         file_mutex: QMutex = self._get_file_mutex(yaml_path)
 
@@ -175,41 +177,41 @@ _yaml_manager: YamlManager = YamlManager()
 
 def yaml_settings(yaml_path: str | Path, key_path: str | list[str]) -> Any:
     """
-    Retrieve a specific value from a YAML file based on the provided key path.
+    Retrieves a value from a YAML file based on the specified key path using the YAML manager.
 
-    This function utilizes an external YAML management utility to extract
-    a value from a YAML file. The exact value to be retrieved is determined
-    by the provided key_path parameter. The function automatically handles
-    conversions of the yaml_path to a string for compatibility with the
-    YAML management utility.
+    This function uses the `_yaml_manager` to fetch a value from the given YAML file
+    defined by `yaml_path`. The specific value to retrieve is determined by the
+    provided `key_path`, which can either be a string or a list of strings representing
+    the hierarchical path to the desired key within the YAML file.
 
     Args:
-        yaml_path: The file path of the YAML file. Can be provided as a string
-            or as a Path object.
-        key_path: The path to the specific key or keys in the YAML structure.
-            Can be provided as a string for a single key path or as a list of
-            strings for hierarchical key paths.
+        yaml_path: A string or `Path` object that specifies the path to the YAML file.
+        key_path: A string or list of strings used to define the hierarchical
+            path to the target key in the YAML file.
 
     Returns:
-        The value associated with the provided key path in the YAML file. The
-        returned value can vary depending on the structure of the YAML file
-        and the key path provided.
+        The value associated with the specified key path in the YAML file.
+
+    Raises:
+        Any exceptions raised during the loading or retrieval of the YAML data.
     """
     return _yaml_manager.get_value(str(yaml_path), key_path)
 
 
 def yaml_settings_write(yaml_path: str | Path, new_value: Any, key_path: str | list[str] | None = None) -> None:
     """
-    Updates or writes a YAML file with the specified new value. If a key path is
-    provided, the function updates the value at the specified path; otherwise, it
-    overwrites the entire YAML file with the new value.
+    Writes or updates a YAML file with provided values. This function either writes the entire YAML file from scratch with
+    the given content or updates a specific key path with a new value, depending on the `key_path` argument.
 
     Args:
-        yaml_path (str | Path): The file path to the YAML file to be written.
-        new_value (Any): The new value to write or update in the YAML file.
-        key_path (str | list[str] | None, optional): The key path within the YAML
-            file to update. If None, the entire file is replaced with the new
-            value. Defaults to None.
+        yaml_path (str | Path): Path to the YAML file to be written or updated.
+        new_value (Any): The value to be written to the YAML file. If `key_path` is None, this is the entire content of
+            the YAML file. Otherwise, this value is assigned to the specified key path.
+        key_path (str | list[str] | None): The key path to update within the YAML file. If this is None, the entire
+            YAML file is rewritten with `new_value`. Otherwise, the provided key(s) are updated with the value.
+
+    Returns:
+        None
     """
     if key_path is None:
         # Write entire file
@@ -226,20 +228,21 @@ def yaml_settings_write(yaml_path: str | Path, new_value: Any, key_path: str | l
 
 def check_process(pid: int, threshold: int = 5) -> bool:
     """
-    Checks whether a process exceeds a specified CPU usage threshold.
+    Checks if a process's CPU usage exceeds a specified threshold.
 
-    This function retrieves the CPU usage percentage of a process specified
-    by its process ID (PID) and compares it to a given threshold. If the
-    process's CPU usage exceeds the threshold, the function returns True;
-    otherwise, it returns False. If the process does not exist or cannot
-    be accessed, the function returns False.
+    This function monitors the CPU usage of the process identified by its process
+    ID (PID) and compares it against a defined threshold. If the usage surpasses
+    the threshold, it returns True. If the process doesn't exist or access is
+    denied, it safely handles these scenarios and returns False.
 
     Args:
-        pid: The process ID of the target process.
-        threshold: The CPU usage threshold percentage to compare against. Defaults to 5.
+        pid (int): The process ID of the target process.
+        threshold (int): The CPU usage threshold percentage to compare against.
+            Defaults to 5.
 
     Returns:
-        bool: True if the process exceeds the CPU usage threshold, False otherwise.
+        bool: True if the process's CPU usage exceeds the threshold, False
+        otherwise.
     """
     try:
         process: psutil.Process = psutil.Process(pid)
@@ -252,19 +255,16 @@ def check_process(pid: int, threshold: int = 5) -> bool:
 
 def detect_xedit_game(xedit_path: str) -> str | None:
     """
-    Detects the game corresponding to the provided xEdit executable path.
-
-    The function analyzes the filename of the provided xEdit executable path.
-    Based on predefined mappings from xEdit executables to games, it returns
-    the corresponding game's identifier. If no match is found, the function
-    returns None.
+    Detects the game type associated with a given xEdit executable based on its file
+    name. The function identifies the game by checking for specific keywords in the
+    file name and returns the corresponding game abbreviation if a match is found.
 
     Args:
-        xedit_path: The path to the xEdit executable file.
+        xedit_path: The file path to the xEdit executable.
 
     Returns:
-        The game identifier as a string, e.g., "FO3", "FNV", or "SSE", if the
-        filename matches a known pattern. Otherwise, returns None.
+        The abbreviation of the detected game (e.g., "FO3", "FNV", "FO4", "SSE") if a
+        match is found, or None if no match is identified.
     """
     filename: str = Path(xedit_path).stem.lower()
 
@@ -287,25 +287,30 @@ def detect_xedit_game(xedit_path: str) -> str | None:
 
 def run_process(command: list[str], timeout: int | None = None) -> tuple[int, str, str]:
     """
-    Executes an external process using a given command and optionally enforces a timeout
-    for its execution. Captures and returns the process's return code, standard output,
-    and standard error.
+    Executes a subprocess command and captures its output, handling potential errors
+    gracefully. The function allows setting a timeout for the subprocess execution
+    and returns the exit code, standard output, and standard error.
 
     Args:
-        command (list[str]): A list of strings representing the command and arguments to
-            execute.
-        timeout (int | None): The maximum amount of time in seconds to allow the process
-            to run. If None, no timeout is applied.
+        command: The command to execute as a list of strings. Each element should
+            represent a part of the command, such as the executable and its
+            arguments.
+        timeout: The timeout in seconds for the command to complete execution. If
+            the command takes longer than this, it will be forcibly terminated.
+            Defaults to None.
 
     Returns:
-        tuple[int, str, str]: A tuple containing the process's return code, captured
-            standard output, and captured standard error.
+        A tuple containing the exit code of the subprocess, its standard output, and
+        its standard error. If an error occurs, the exit code will be -1, and either
+        or both standard output and error may contain error details.
 
     Raises:
-        subprocess.TimeoutExpired: If the process exceeds the specified timeout duration.
-        OSError: If an OS-related error occurs during execution.
-        subprocess.SubprocessError: If a general subprocess-related error occurs during
-            execution.
+        subprocess.TimeoutExpired: If the timeout is exceeded before the command
+            completes. This is handled internally but may be raised in certain
+            scenarios.
+        OSError: If there is an OS-related error while attempting to execute the
+            subprocess.
+        subprocess.SubprocessError: If a generic subprocess-related error occurs.
     """
     import subprocess  # noqa: PLC0415
 
@@ -334,37 +339,31 @@ def run_process_with_realtime_output(
     working_dir: str | Path | None = None,
 ) -> tuple[int, str, str]:
     """
-    Executes a subprocess command with real-time output handling and optional timeout.
+    Runs a subprocess command with real-time output streaming and optional timeout handling.
 
-    This function starts a subprocess with the specified command and continuously reads
-    its stdout and stderr in real-time. It allows optional callbacks for processing the
-    real-time stdout. A timeout can also be specified to terminate the process if it
-    exceeds the allowed execution time. The subprocess is executed in the specified
-    working directory if provided. The function returns the exit code, stdout, and
-    stderr of the process.
+    This function starts an external process and streams its output, both standard output and
+    standard error, in real-time using threads for reading the output. Callbacks can be used
+    to handle each line of the output dynamically. It also provides support for timeout to
+    terminate processes that exceed the specified duration.
 
     Args:
-        command (list[str]): The command to execute as a list of strings, where the first
-            element is the executable and the remaining elements are its arguments.
-        output_callback (Callable[[str], None] | None, optional): A callback function to
-            handle each line of the standard output in real-time. If None, stdout is
-            collected without processing.
-        timeout (int | None, optional): The maximum allowed time in seconds for the
-            subprocess to run. If the process exceeds this time, it is terminated.
-            Defaults to None, meaning no timeout is applied.
-        working_dir (str | Path | None, optional): The working directory in which the
-            subprocess should execute. If None, the current working directory is used.
-            Defaults to None.
+        command (list[str]): The command to be executed as a list of strings. For example,
+            ["ls", "-la"].
+        output_callback (Callable[[str], None] | None): A callback function to handle each line
+            of the standard output in real time. If None, the lines will only be collected and
+            returned at the end.
+        timeout (int | None): The maximum time in seconds to allow the command to execute.
+            If the timeout expires, the process is forcefully killed. If None, no timeout is
+            applied.
+        working_dir (str | Path | None): The directory in which to execute the command.
+            If None, the current working directory is used.
 
     Returns:
-        tuple[int, str, str]: A tuple containing the exit code (int), the collected
-            standard output as a single string (str), and the collected standard error
-            as a single string (str).
-
-    Raises:
-        OSError: If there is an issue creating or managing the subprocess.
-        subprocess.SubprocessError: If the subprocess encounters an unexpected error.
-        ValueError: If there is an issue with invalid parameters or process handling.
+        tuple[int, str, str]: A tuple containing three elements:
+            - The exit code of the executed process. Returns -1 if an error occurs or a timeout
+              is reached.
+            - A string with all the concatenated lines from the standard output.
+            - A string with all the concatenated lines from the standard error.
     """
     import subprocess  # noqa: PLC0415
     import time  # noqa: PLC0415

@@ -38,7 +38,17 @@ PACT_CONFIG_PATH: Path = PACT_DATA_PATH / "PACT Config.yaml"  # New config file
 
 # Configure logging to file only (no console output for GUI app)
 def setup_logging() -> None:
-    """Setup logging configuration for the GUI application."""
+    """
+    Sets up the logging configuration for the application. This function initializes
+    a logging system that writes log messages to a timestamped log file in the "logs"
+    directory. The directory is created if it doesn't exist. The logging system
+    removes any existing handlers, configures a rotating file handler with a size
+    limit, and applies a specific log format. The global variable `_current_log_file`
+    is updated with the path of the log file used.
+
+    Returns:
+        None
+    """
     global _current_log_file  # noqa: PLW0603
 
     # Create logs directory if it doesn't exist
@@ -54,7 +64,7 @@ def setup_logging() -> None:
     # Store the log file path globally
     _current_log_file = log_file
 
-    # Configure root logger
+    # Configure root setup_logger
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
 
@@ -77,12 +87,12 @@ def setup_logging() -> None:
     formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
     file_handler.setFormatter(formatter)
 
-    # Add file handler to root logger
+    # Add file handler to root setup_logger
     root_logger.addHandler(file_handler)
 
     # Log the log file location
-    logger = logging.getLogger(__name__)
-    logger.info(f"Logging initialized. Log file: {log_file}")
+    setup_logger = logging.getLogger(__name__)
+    setup_logger.info(f"Logging initialized. Log file: {log_file}")
 
 
 # Initialize logging
@@ -521,7 +531,20 @@ def create_application() -> tuple[QApplication, MainWindow]:
 
 
 def main() -> None:
-    """Main entry point."""
+    """
+    Main entry point for the application.
+
+    This function initializes the application by creating the required objects
+    and displaying the main application window. It handles any errors during
+    initialization and ensures that the application terminates gracefully if a
+    fatal error occurs.
+
+    Raises:
+        OSError: If an operating system-related issue occurs during application
+            setup.
+        RuntimeError: If a runtime error occurs during application initialization.
+        ValueError: If invalid input or configuration is encountered during setup.
+    """
     try:
         app, window = create_application()
         window.show()
