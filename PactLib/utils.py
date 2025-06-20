@@ -56,12 +56,12 @@ class YamlManager:
             does not exist or cannot be resolved, returns None.
         """
         file_mutex: QMutex = self._get_file_mutex(yaml_path)
-        
+
         # Use Qt mutex with timeout to prevent deadlocks
         if not file_mutex.tryLock(5000):  # 5 second timeout
             logger.error(f"Timeout acquiring lock for file: {yaml_path}")
             return None
-            
+
         try:
             data = self._load_yaml(yaml_path)
             keys: list[str] = self._parse_key_path(key_path)
@@ -90,12 +90,12 @@ class YamlManager:
             new_value: The new value to be assigned at the specified key path.
         """
         file_mutex: QMutex = self._get_file_mutex(yaml_path)
-        
+
         # Use Qt mutex with timeout to prevent deadlocks
         if not file_mutex.tryLock(5000):  # 5 second timeout
             logger.error(f"Timeout acquiring lock for file: {yaml_path}")
             return
-            
+
         try:
             data: Any = self._load_yaml(yaml_path)
             keys: list[str] = self._parse_key_path(key_path)
@@ -316,7 +316,8 @@ def run_process(command: list[str], timeout: int | None = None) -> tuple[int, st
             text=True,
             encoding="utf-8",
             errors="ignore",
-            timeout=timeout, check=False,
+            timeout=timeout,
+            check=False,
         )
     except subprocess.TimeoutExpired:
         return -1, "", "Process timed out"
@@ -327,10 +328,10 @@ def run_process(command: list[str], timeout: int | None = None) -> tuple[int, st
 
 
 def run_process_with_realtime_output(
-    command: list[str], 
+    command: list[str],
     output_callback: Callable[[str], None] | None = None,
     timeout: int | None = None,
-    working_dir: str | Path | None = None
+    working_dir: str | Path | None = None,
 ) -> tuple[int, str, str]:
     """
     Executes a subprocess command with real-time output handling and optional timeout.
@@ -367,11 +368,11 @@ def run_process_with_realtime_output(
     """
     import subprocess  # noqa: PLC0415
     import time  # noqa: PLC0415
-    
+
     start_time: float = time.time()
     stdout_lines: list[Any] = []
     stderr_lines: list[Any] = []
-    
+
     try:
         process = subprocess.Popen(
             command,
@@ -382,14 +383,14 @@ def run_process_with_realtime_output(
             errors="ignore",
             bufsize=1,  # Line buffered
             universal_newlines=True,
-            cwd=str(working_dir) if working_dir else None
+            cwd=str(working_dir) if working_dir else None,
         )
-        
+
         def read_output(pipe: Any, line_list: list[str], callback: Callable[[str], None] | None) -> None:
             """Read output from pipe and call callback for each line."""
             try:
-                for line in iter(pipe.readline, ''):
-                    line = line.rstrip('\n\r')
+                for line in iter(pipe.readline, ""):
+                    line = line.rstrip("\n\r")
                     if line:
                         line_list.append(line)
                         if callback:
@@ -398,24 +399,24 @@ def run_process_with_realtime_output(
                 logger.error(f"Error reading process output: {e}")
             finally:
                 pipe.close()
-        
+
         class OutputReaderThread(QThread):
             def __init__(self, pipe: Any, line_list: list[str], callback: Callable[[str], None] | None) -> None:
                 super().__init__()
                 self.pipe = pipe
                 self.line_list = line_list
                 self.callback = callback
-            
+
             def run(self) -> None:
                 read_output(self.pipe, self.line_list, self.callback)
-        
+
         # Start threads to read stdout and stderr
         stdout_thread: OutputReaderThread = OutputReaderThread(process.stdout, stdout_lines, output_callback)
         stderr_thread: OutputReaderThread = OutputReaderThread(process.stderr, stderr_lines, None)
-        
+
         stdout_thread.start()
         stderr_thread.start()
-        
+
         # Monitor for timeout
         while process.poll() is None:
             if timeout and (time.time() - start_time) > timeout:
@@ -423,24 +424,25 @@ def run_process_with_realtime_output(
                 process.wait(timeout=5)  # Give it 5 seconds to terminate gracefully
                 if process.poll() is None:
                     process.kill()  # Force kill if still running
-                return -1, '\n'.join(stdout_lines), "Process timed out"
-            
+                return -1, "\n".join(stdout_lines), "Process timed out"
+
             time.sleep(0.1)
-        
+
         # Wait for threads to finish reading all output
         stdout_thread.wait(5000)  # 5 second timeout
         stderr_thread.wait(5000)  # 5 second timeout
-        
-        return process.returncode, '\n'.join(stdout_lines), '\n'.join(stderr_lines)
-        
+
+        return process.returncode, "\n".join(stdout_lines), "\n".join(stderr_lines)
+
     except (OSError, subprocess.SubprocessError, ValueError) as e:
         return -1, "", str(e)
+
 
 def monitor_log_file(
     log_file_path: str | Path,
     line_callback: Callable[[str], None],
     stop_event: Any,  # Changed from threading.Event to Any for Qt compatibility
-    poll_interval: float = 0.1
+    poll_interval: float = 0.1,
 ) -> None:
     """
     Monitors a log file for new lines in real-time, invoking a callback function
@@ -464,25 +466,25 @@ def monitor_log_file(
         ValueError: If an invalid operation is attempted on the file.
     """
     log_path: Path = Path(log_file_path)
-    
+
     try:
         # Wait for file to exist
         while not log_path.exists() and not stop_event.is_set():
             QThread.msleep(int(poll_interval * 1000))
-        
+
         if stop_event.is_set():
             return
-            
-        with log_path.open('r', encoding='utf-8', errors='ignore') as f:
+
+        with log_path.open("r", encoding="utf-8", errors="ignore") as f:
             # Start from end of existing file
             f.seek(0, 2)
-            
+
             while not stop_event.is_set():
                 line: str = f.readline()
                 if line:
-                    line_callback(line.rstrip('\n\r'))
+                    line_callback(line.rstrip("\n\r"))
                 else:
                     QThread.msleep(int(poll_interval * 1000))
-                    
+
     except (OSError, ValueError) as e:
         logger.error(f"Error monitoring log file '{log_path}': {e}")

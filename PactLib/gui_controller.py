@@ -77,10 +77,7 @@ class GuiController(QObject):
 
             # Use non-blocking file dialog options
             file_path, _ = QFileDialog.getOpenFileName(
-                parent_widget,
-                "Select Load Order File",
-                initial_dir or "",
-                "Text Files (*.txt);;All Files (*.*)"
+                parent_widget, "Select Load Order File", initial_dir or "", "Text Files (*.txt);;All Files (*.*)"
             )
 
             if file_path:
@@ -104,7 +101,7 @@ class GuiController(QObject):
 
                     self.update_status.emit(f"Load order configured: {path.name}")
                     return True
-                else:
+                else:  # noqa: RET505
                     self.show_error.emit("Error", "Selected file does not exist")
                     return False
         except (OSError, ValueError, TypeError) as e:
@@ -132,10 +129,7 @@ class GuiController(QObject):
 
             # Use non-blocking file dialog options
             file_path, _ = QFileDialog.getOpenFileName(
-                parent_widget,
-                "Select ModOrganizer.exe",
-                initial_dir or "",
-                "Executable Files (*.exe);;All Files (*.*)" # Use Qt dialog instead of native
+                parent_widget, "Select ModOrganizer.exe", initial_dir or "", "Executable Files (*.exe);;All Files (*.*)"
             )
 
             if file_path:
@@ -151,12 +145,10 @@ class GuiController(QObject):
 
                     # Save to config asynchronously
                     try:
-                        success = self.config.update_multiple(
-                            {
-                                "PACT_Settings.Mod_Organizer.Binary": str(path),
-                                "PACT_Settings.Mod_Organizer.Install_Path": str(install_path),
-                            }
-                        )
+                        success = self.config.update_multiple({
+                            "PACT_Settings.Mod_Organizer.Binary": str(path),
+                            "PACT_Settings.Mod_Organizer.Install_Path": str(install_path),
+                        })
                         if not success:
                             logger.error("Failed to save MO2 configuration")
                             self.show_error.emit("Error", "Failed to save configuration")
@@ -168,7 +160,7 @@ class GuiController(QObject):
 
                     self.update_status.emit("Mod Organizer 2 configured")
                     return True
-                else:
+                else:  # noqa: RET505
                     self.show_error.emit("Error", "Please select ModOrganizer.exe")
                     return False
         except (OSError, ValueError, TypeError) as e:
@@ -197,17 +189,22 @@ class GuiController(QObject):
             initial_dir: str | None = str(current_path.parent) if current_path else ""
 
             file_path, _ = QFileDialog.getOpenFileName(
-                parent_widget,
-                "Select xEdit Executable",
-                initial_dir or "",
-                "Executable Files (*.exe);;All Files (*.*)"  # Use Qt dialog instead of native
+                parent_widget, "Select xEdit Executable", initial_dir or "", "Executable Files (*.exe);;All Files (*.*)"
             )
 
             if file_path:
                 path = Path(file_path)
                 if path.exists():
                     # Validate it's an xEdit executable
-                    valid_names: list[str] = ["fo3edit", "fnvedit", "fo4edit", "sseedit", "tes5edit", "xedit", "xedit64"]
+                    valid_names: list[str] = [
+                        "fo3edit",
+                        "fnvedit",
+                        "fo4edit",
+                        "sseedit",
+                        "tes5edit",
+                        "xedit",
+                        "xedit64",
+                    ]
                     if not any(name in path.name.lower() for name in valid_names):
                         self.show_error.emit(
                             "Error",
@@ -224,12 +221,10 @@ class GuiController(QObject):
 
                     # Save to config asynchronously
                     try:
-                        success = self.config.update_multiple(
-                            {
-                                "PACT_Settings.xEdit.Binary": str(path),
-                                "PACT_Settings.xEdit.Install_Path": str(install_path),
-                            }
-                        )
+                        success = self.config.update_multiple({
+                            "PACT_Settings.xEdit.Binary": str(path),
+                            "PACT_Settings.xEdit.Install_Path": str(install_path),
+                        })
                         if not success:
                             logger.error("Failed to save xEdit configuration")
                             self.show_error.emit("Error", "Failed to save configuration")
@@ -241,7 +236,7 @@ class GuiController(QObject):
 
                     self.update_status.emit(f"xEdit configured: {path.name}")
                     return True
-                else:
+                else:  # noqa: RET505
                     self.show_error.emit("Error", "Selected file does not exist")
                     return False
         except (OSError, ValueError, TypeError) as e:
@@ -351,14 +346,10 @@ class GuiController(QObject):
         self.worker = CleaningWorker(self.service, self.state, plugins)
 
         # Connect signals
-        self.worker.plugin_started.connect(
-            lambda p: self.update_status.emit(f"Cleaning: {p}")
-        )
+        self.worker.plugin_started.connect(lambda p: self.update_status.emit(f"Cleaning: {p}"))
         self.worker.plugin_completed.connect(self._on_plugin_completed)
         self.worker.finished.connect(self._on_cleaning_finished)
-        self.worker.error.connect(
-            lambda e: self.show_error.emit("Cleaning Error", e)
-        )
+        self.worker.error.connect(lambda e: self.show_error.emit("Cleaning Error", e))
 
         # Start cleaning
         self.worker.start()

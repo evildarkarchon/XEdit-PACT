@@ -91,10 +91,7 @@ class CleaningWorker(QThread):
                 self.plugin_completed.emit(plugin, result.success, result.message)
                 self.progress.emit(i + 1, len(self.plugins))
 
-                logger.info(
-                    f"Processed {plugin}: {result.status} "
-                    f"({result.duration:.1f}s) - {result.message}"
-                )
+                logger.info(f"Processed {plugin}: {result.status} ({result.duration:.1f}s) - {result.message}")
 
         except (OSError, RuntimeError, ValueError) as e:
             logger.error(f"Error in cleaning worker: {e}")

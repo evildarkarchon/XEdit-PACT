@@ -36,7 +36,7 @@ def migrate_configuration() -> bool:
         shutil.copy2(PACT_YAML_PATH, PACT_DATA_PATH / "PACT Main.yaml.backup")
         print(f"Created backup of old config: {PACT_DATA_PATH / 'PACT Main.yaml.backup'}")
 
-    # Initialize new components  
+    # Initialize new components
     config = ConfigManager(PACT_CONFIG_PATH)
     state = StateManager()
 
@@ -46,10 +46,10 @@ def migrate_configuration() -> bool:
     # Migrate paths from PACT Settings.yaml
     settings_paths_mapping = {
         "PACT_Settings.LoadOrder TXT": "load_order_path",
-        "PACT_Settings.MO2 EXE": "mo2_exe_path", 
+        "PACT_Settings.MO2 EXE": "mo2_exe_path",
         "PACT_Settings.XEDIT EXE": "xedit_exe_path",
     }
-    
+
     # Also check old PACT Main.yaml format for fallback
     yaml_paths_mapping = {
         "PACT_Settings.Load_Order.File": "load_order_path",
@@ -68,7 +68,7 @@ def migrate_configuration() -> bool:
                 print(f"  Migrating {yaml_key}: {value}")
                 path = Path(value)
                 settings_found = True
-                
+
                 # Update state and save to new config format
                 if state_key == "load_order_path":
                     state.update_configuration_paths(load_order_path=path)
@@ -89,7 +89,7 @@ def migrate_configuration() -> bool:
                     config.set("PACT_Settings.xEdit.Binary", str(path))
                     if path.exists():
                         config.set("PACT_Settings.xEdit.Install_Path", str(path.parent))
-    
+
     # Fallback to old PACT Main.yaml format if settings file had no paths
     if not settings_found and PACT_YAML_PATH.exists():
         print("  No paths found in PACT Settings.yaml, checking PACT Main.yaml...")
@@ -127,10 +127,10 @@ def migrate_configuration() -> bool:
                 print(f"  Migrating {yaml_key}: {value}")
                 state.update(**{state_key: value})
                 config.set(f"PACT_Settings.{state_key.replace('_', ' ').title()}", value)
-    
+
     # Also check for old format settings
     old_settings_mapping = {
-        "PACT_Settings.Journal_Expiration": "journal_expiration", 
+        "PACT_Settings.Journal_Expiration": "journal_expiration",
         "PACT_Settings.Cleaning_Timeout": "cleaning_timeout",
         "PACT_Settings.CPU_Threshold": "cpu_threshold",
         "PACT_Settings.MO2Mode": "mo2_mode",
@@ -163,21 +163,21 @@ def verify_imports() -> bool:
     print("Verifying imports...")
     try:
         import importlib.util  # noqa: PLC0415
-        
+
         required_modules = [
             "PactLib.cleaning_service",
-            "PactLib.cleaning_worker", 
+            "PactLib.cleaning_worker",
             "PactLib.config_manager",
             "PactLib.gui_controller",
-            "PactLib.state_manager"
+            "PactLib.state_manager",
         ]
-        
+
         for module_name in required_modules:
             if importlib.util.find_spec(module_name) is None:
                 print(f"✗ Module not found: {module_name}")
                 return False
             print(f"✓ Found module: {module_name}")
-            
+
     except ImportError as e:
         print(f"✗ Import error: {e}")
         return False
@@ -193,7 +193,7 @@ def handle_migration_error(error: Exception, error_type: str) -> int:
     """Handle migration errors with appropriate logging and user messages."""
     logger.error(f"{error_type} during migration: {error}")
     print(f"\nMigration error: {error_type} - {error}")
-    
+
     # Add specific guidance based on error type
     if error_type == "Permission denied":
         print("Please ensure you have write permissions to the current directory.")
@@ -203,11 +203,11 @@ def handle_migration_error(error: Exception, error_type: str) -> int:
         print("Your configuration file may be corrupted or incomplete.")
     elif error_type == "Unexpected error":
         print("This is an unexpected error. Please report this issue.")
-    
+
     # Always offer backup restoration if available
     if BACKUP_PATH.exists():
         print(f"You can restore your configuration from: {BACKUP_PATH}")
-    
+
     return 1
 
 

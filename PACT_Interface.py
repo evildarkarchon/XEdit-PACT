@@ -28,7 +28,7 @@ from PactLib.config_manager import ConfigManager
 from PactLib.gui_controller import GuiController
 from PactLib.state_manager import AppState, StateManager
 
-# Constants  
+# Constants
 PACT_DATA_PATH: Path = Path("PACT Data")
 PACT_YAML_PATH: Path = PACT_DATA_PATH / "PACT Main.yaml"
 PACT_CONFIG_PATH: Path = PACT_DATA_PATH / "PACT Config.yaml"  # New config file
@@ -216,7 +216,7 @@ class MainWindow(QMainWindow):
         """Perform the actual UI update with debouncing."""
         if self._updating_ui:
             return  # Prevent recursive updates
-            
+
         self._updating_ui = True
         try:
             state_snapshot: AppState = self.state.state
@@ -254,7 +254,7 @@ class MainWindow(QMainWindow):
                 new_checked = state_snapshot.mo2_mode
                 if self.mo2_mode_button.isChecked() != new_checked:
                     self.mo2_mode_button.setChecked(new_checked)
-                
+
                 new_text = f"MO2 Mode: {'ON' if state_snapshot.mo2_mode else 'OFF'}"
                 if self.mo2_mode_button.text() != new_text:
                     self.mo2_mode_button.setText(new_text)
@@ -264,7 +264,7 @@ class MainWindow(QMainWindow):
                 new_enabled = state_snapshot.is_fully_configured and not state_snapshot.is_cleaning
                 if self.start_button.isEnabled() != new_enabled:
                     self.start_button.setEnabled(new_enabled)
-                    
+
             if self.stop_button:
                 new_enabled = state_snapshot.is_cleaning
                 if self.stop_button.isEnabled() != new_enabled:
@@ -272,15 +272,11 @@ class MainWindow(QMainWindow):
         finally:
             self._updating_ui = False
 
-    def _update_button_state(
-        self, button: QPushButton, configured: bool, text: str
-    ) -> None:
+    def _update_button_state(self, button: QPushButton, configured: bool, text: str) -> None:
         """Update button appearance based on configuration state."""
         button.setText(text)
         if configured:
-            button.setStyleSheet(
-                "QPushButton { background-color: #4CAF50; color: white; }"
-            )
+            button.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; }")
         else:
             button.setStyleSheet("")
 
@@ -322,9 +318,7 @@ class MainWindow(QMainWindow):
         """Handle configuration changes."""
         if self.start_button is None:
             return
-        self.start_button.setEnabled(
-            is_fully_configured and not self.state.get("is_cleaning")
-        )
+        self.start_button.setEnabled(is_fully_configured and not self.state.get("is_cleaning"))
         if is_fully_configured:
             self._log("All paths configured ✓")
 

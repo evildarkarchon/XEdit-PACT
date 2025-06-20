@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
-import time
 
 from PySide6.QtCore import QMutex, QMutexLocker, QObject, Signal
 
@@ -54,13 +54,11 @@ class AppState:
     @property
     def is_fully_configured(self) -> bool:
         """Check if all required configuration is present."""
-        return all(
-            [
-                self.is_load_order_configured,
-                self.is_mo2_configured,
-                self.is_xedit_configured,
-            ]
-        )
+        return all([
+            self.is_load_order_configured,
+            self.is_mo2_configured,
+            self.is_xedit_configured,
+        ])
 
     @property
     def cleaning_stats(self) -> dict[str, int]:

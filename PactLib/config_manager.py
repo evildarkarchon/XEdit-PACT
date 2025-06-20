@@ -64,12 +64,13 @@ class ConfigManager:
             retrieved and exists; otherwise, the provided default value.
         """
         try:
-            value = yaml_settings(str(self._path), key)  
+            value = yaml_settings(str(self._path), key)
         except (yaml.YAMLError, FileNotFoundError, PermissionError) as e:
             logger.error(f"Error reading config key '{key}': {e}")
             return default
         else:
             return value if value is not None else default
+
     def set(self, key: str, value: Any) -> bool:
         """
         Writes a given key-value pair to a YAML configuration file. Any errors encountered
@@ -243,7 +244,4 @@ class ConfigManager:
             (True) or does not exist (False).
         """
         paths: dict[str, Path | None] = self.get_paths()
-        return {
-            name: path.exists() if path else False
-            for name, path in paths.items()
-        }
+        return {name: path.exists() if path else False for name, path in paths.items()}

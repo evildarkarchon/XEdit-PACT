@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
     from PactLib.config_manager import ConfigManager
     from PactLib.state_manager import AppState, StateManager
-    
+
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -175,7 +175,9 @@ class CleaningService:
 
         return result
 
-    def _build_cleaning_command(self, plugin_name: str, state_snapshot: AppState, quickautoclean: bool = False) -> list[str]:
+    def _build_cleaning_command(
+        self, plugin_name: str, state_snapshot: AppState, quickautoclean: bool = False
+    ) -> list[str]:
         """Build the command to clean a plugin."""
         command: list[str] = []
 
@@ -209,7 +211,7 @@ class CleaningService:
                 "removed": 0,
                 "skipped": 0,
                 "partial_forms": 0,
-                "total_processed": 0
+                "total_processed": 0,
             }
 
             # Create output callback for real-time monitoring
@@ -217,17 +219,14 @@ class CleaningService:
                 """Handle real-time output from xEdit process."""
                 if self.log_callback:
                     self.log_callback(line)
-                
+
                 # Parse line for cleaning statistics and progress
                 self._parse_cleaning_output(line, plugin_name)
 
             # Execute command with real-time monitoring
             logger.info(f"Executing command: {' '.join(command)}")
             exit_code, _, stderr = run_process_with_realtime_output(
-                command=command,
-                output_callback=on_output_line,
-                timeout=timeout,
-                working_dir=None
+                command=command, output_callback=on_output_line, timeout=timeout, working_dir=None
             )
 
             duration: float = time.time() - start_time
@@ -247,7 +246,7 @@ class CleaningService:
                 return CleanResult(
                     success=False,
                     message=f"Failed to clean {plugin_name}: {timeout_error_msg}",
-                    status="failed", 
+                    status="failed",
                     duration=duration,
                 )
             # Non-zero exit code
@@ -285,14 +284,14 @@ class CleaningService:
             if pattern.search(line):
                 self._cleaning_stats[stat_type] += 1
                 self._cleaning_stats["total_processed"] += 1
-                
+
                 # Emit progress update if callback is set
                 if self.progress_callback:
                     progress_info: dict[str, Any] = {
                         "plugin": plugin_name,
                         "action": stat_type,
                         "line": line.strip(),
-                        "stats": self._cleaning_stats.copy()
+                        "stats": self._cleaning_stats.copy(),
                     }
                     self.progress_callback(progress_info)
                 break
@@ -303,7 +302,7 @@ class CleaningService:
                 "plugin": plugin_name,
                 "action": "completed",
                 "line": line.strip(),
-                "stats": self._cleaning_stats.copy()
+                "stats": self._cleaning_stats.copy(),
             }
             self.progress_callback(completion_info)
 
@@ -312,7 +311,7 @@ class CleaningService:
         stats: dict[str, int] = self._cleaning_stats
         if stats["total_processed"] == 0:
             return ""
-        
+
         summary_parts: list[Any] = []
         if stats["undeleted"] > 0:
             summary_parts.append(f"{stats['undeleted']} undeleted")
@@ -322,7 +321,7 @@ class CleaningService:
             summary_parts.append(f"{stats['skipped']} skipped")
         if stats["partial_forms"] > 0:
             summary_parts.append(f"{stats['partial_forms']} partial forms")
-        
+
         if summary_parts:
             return f" ({', '.join(summary_parts)})"
         return f" ({stats['total_processed']} items processed)"
@@ -359,10 +358,12 @@ class CleaningService:
             if game_type:
                 self.state.update(game_type=game_type)
             else:
-                # For generic xEdit executables (xEdit.exe, xEdit64.exe), 
+                # For generic xEdit executables (xEdit.exe, xEdit64.exe),
                 # we can't auto-detect game type, but we can still proceed
-                logger.warning("Could not auto-detect game type from xEdit executable. "
-                             "For generic xEdit executables, game type may need to be set manually.")
+                logger.warning(
+                    "Could not auto-detect game type from xEdit executable. "
+                    "For generic xEdit executables, game type may need to be set manually."
+                )
 
         # Check MO2 if in MO2 mode
         if state_snapshot.mo2_mode and (not state_snapshot.mo2_exe_path or not state_snapshot.mo2_exe_path.exists()):
