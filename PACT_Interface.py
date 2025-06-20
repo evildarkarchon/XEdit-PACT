@@ -7,7 +7,7 @@ import logging
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication, Slot
+from PySide6.QtCore import QCoreApplication, QTimer, Slot
 from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import (
     QApplication,
@@ -49,6 +49,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.state: StateManager = state
         self.controller: GuiController = controller
+        self._updating_ui: bool = False  # Flag to prevent recursive updates
+        self._update_timer: QTimer = QTimer()  # Timer for debouncing UI updates
+        self._update_timer.setSingleShot(True)
+        self._update_timer.setInterval(50)  # 50ms delay
+        self._update_timer.timeout.connect(self._perform_ui_update)
 
         # UI elements
         self.log_display: QTextEdit | None = None
@@ -202,44 +207,70 @@ class MainWindow(QMainWindow):
 
     def _update_ui_from_state(self) -> None:
         """Update UI elements based on current state."""
-        state_snapshot: AppState = self.state.state
+        # Use timer to debounce rapid updates
+        if self._update_timer.isActive():
+            self._update_timer.stop()
+        self._update_timer.start()
 
-        # Update configuration buttons
-        if self.load_order_button:
-            self._update_button_state(
-                self.load_order_button,
-                state_snapshot.is_load_order_configured,
-                "Load Order ✓" if state_snapshot.is_load_order_configured else "Configure Load Order",
-            )
+    def _perform_ui_update(self) -> None:
+        """Perform the actual UI update with debouncing."""
+        if self._updating_ui:
+            return  # Prevent recursive updates
+            
+        self._updating_ui = True
+        try:
+            state_snapshot: AppState = self.state.state
 
-        if self.mo2_button:
-            self._update_button_state(
-                self.mo2_button,
-                state_snapshot.is_mo2_configured,
-                "MO2 ✓" if state_snapshot.is_mo2_configured else "Configure MO2",
-            )
+            # Update configuration buttons efficiently
+            if self.load_order_button:
+                new_text = "Load Order ✓" if state_snapshot.is_load_order_configured else "Configure Load Order"
+                if self.load_order_button.text() != new_text:
+                    self._update_button_state(
+                        self.load_order_button,
+                        state_snapshot.is_load_order_configured,
+                        new_text,
+                    )
 
-        if self.xedit_button:
-            self._update_button_state(
-                self.xedit_button,
-                state_snapshot.is_xedit_configured,
-                "xEdit ✓" if state_snapshot.is_xedit_configured else "Configure xEdit",
-            )
+            if self.mo2_button:
+                new_text = "MO2 ✓" if state_snapshot.is_mo2_configured else "Configure MO2"
+                if self.mo2_button.text() != new_text:
+                    self._update_button_state(
+                        self.mo2_button,
+                        state_snapshot.is_mo2_configured,
+                        new_text,
+                    )
 
-        # Update MO2 mode button
-        if self.mo2_mode_button:
-            self.mo2_mode_button.setChecked(state_snapshot.mo2_mode)
-            self.mo2_mode_button.setText(
-                f"MO2 Mode: {'ON' if state_snapshot.mo2_mode else 'OFF'}"
-            )
+            if self.xedit_button:
+                new_text = "xEdit ✓" if state_snapshot.is_xedit_configured else "Configure xEdit"
+                if self.xedit_button.text() != new_text:
+                    self._update_button_state(
+                        self.xedit_button,
+                        state_snapshot.is_xedit_configured,
+                        new_text,
+                    )
 
-        # Update control buttons
-        if self.start_button:
-            self.start_button.setEnabled(
-                state_snapshot.is_fully_configured and not state_snapshot.is_cleaning
-            )
-        if self.stop_button:
-            self.stop_button.setEnabled(state_snapshot.is_cleaning)
+            # Update MO2 mode button efficiently
+            if self.mo2_mode_button:
+                new_checked = state_snapshot.mo2_mode
+                if self.mo2_mode_button.isChecked() != new_checked:
+                    self.mo2_mode_button.setChecked(new_checked)
+                
+                new_text = f"MO2 Mode: {'ON' if state_snapshot.mo2_mode else 'OFF'}"
+                if self.mo2_mode_button.text() != new_text:
+                    self.mo2_mode_button.setText(new_text)
+
+            # Update control buttons efficiently
+            if self.start_button:
+                new_enabled = state_snapshot.is_fully_configured and not state_snapshot.is_cleaning
+                if self.start_button.isEnabled() != new_enabled:
+                    self.start_button.setEnabled(new_enabled)
+                    
+            if self.stop_button:
+                new_enabled = state_snapshot.is_cleaning
+                if self.stop_button.isEnabled() != new_enabled:
+                    self.stop_button.setEnabled(new_enabled)
+        finally:
+            self._updating_ui = False
 
     def _update_button_state(
         self, button: QPushButton, configured: bool, text: str

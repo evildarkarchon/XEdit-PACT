@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
+import time
 
 from PySide6.QtCore import QMutex, QMutexLocker, QObject, Signal
 
@@ -95,13 +96,14 @@ class StateManager(QObject):
         with QMutexLocker(self._mutex):
             config_changed = False
             progress_changed = False
+            state_changes: list[tuple[str, object]] = []
 
             for key, value in kwargs.items():
                 if hasattr(self._state, key):
                     old_value = getattr(self._state, key)
                     if old_value != value:
                         setattr(self._state, key, value)
-                        self.state_changed.emit(key, value)
+                        state_changes.append((key, value))
 
                         # Check for specific state changes
                         if key in ["is_load_order_configured", "is_mo2_configured", "is_xedit_configured"]:
@@ -114,11 +116,18 @@ class StateManager(QObject):
                             else:
                                 self.cleaning_finished.emit()
 
-            # Emit aggregate signals
-            if config_changed:
-                self.configuration_changed.emit(self._state.is_fully_configured)
-            if progress_changed:
-                self.progress_changed.emit(self._state.progress, self._state.total_plugins)
+        # Small delay to prevent rapid successive updates
+        time.sleep(0.01)
+
+        # Emit state changes outside of mutex lock to prevent deadlocks
+        for key, value in state_changes:
+            self.state_changed.emit(key, value)
+
+        # Emit aggregate signals
+        if config_changed:
+            self.configuration_changed.emit(self._state.is_fully_configured)
+        if progress_changed:
+            self.progress_changed.emit(self._state.progress, self._state.total_plugins)
 
     def get(self, property_name: str, default: Any = None) -> Any:
         """Get a state property value safely."""
@@ -174,17 +183,29 @@ class StateManager(QObject):
 
         if load_order_path is not None:
             updates["load_order_path"] = load_order_path
-            updates["is_load_order_configured"] = load_order_path.exists()
+            # Defer file existence check to avoid blocking UI
+            try:
+                updates["is_load_order_configured"] = load_order_path.exists()
+            except (OSError, PermissionError):
+                updates["is_load_order_configured"] = False
 
         if mo2_exe_path is not None:
             updates["mo2_exe_path"] = mo2_exe_path
-            updates["is_mo2_configured"] = mo2_exe_path.exists()
+            # Defer file existence check to avoid blocking UI
+            try:
+                updates["is_mo2_configured"] = mo2_exe_path.exists()
+            except (OSError, PermissionError):
+                updates["is_mo2_configured"] = False
             if mo2_install_path:
                 updates["mo2_install_path"] = mo2_install_path
 
         if xedit_exe_path is not None:
             updates["xedit_exe_path"] = xedit_exe_path
-            updates["is_xedit_configured"] = xedit_exe_path.exists()
+            # Defer file existence check to avoid blocking UI
+            try:
+                updates["is_xedit_configured"] = xedit_exe_path.exists()
+            except (OSError, PermissionError):
+                updates["is_xedit_configured"] = False
             if xedit_install_path:
                 updates["xedit_install_path"] = xedit_install_path
 

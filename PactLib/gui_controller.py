@@ -71,30 +71,48 @@ class GuiController(QObject):
         Returns:
             bool: True if the load order was successfully configured, False otherwise.
         """
-        current_path = self.state.get("load_order_path")
-        initial_dir: str | None = str(current_path.parent) if current_path else ""
+        try:
+            current_path = self.state.get("load_order_path")
+            initial_dir: str | None = str(current_path.parent) if current_path else ""
 
-        file_path, _ = QFileDialog.getOpenFileName(
-            parent_widget,
-            "Select Load Order File",
-            initial_dir or "",
-            "Text Files (*.txt);;All Files (*.*)",
-        )
+            # Use non-blocking file dialog options
+            file_path, _ = QFileDialog.getOpenFileName(
+                parent_widget,
+                "Select Load Order File",
+                initial_dir or "",
+                "Text Files (*.txt);;All Files (*.*)"
+            )
 
-        if file_path:
-            path = Path(file_path)
-            if path.exists():
-                # Update state
-                self.state.update_configuration_paths(load_order_path=path)
+            if file_path:
+                path = Path(file_path)
+                # Defer file existence check to avoid blocking
+                if path.exists():
+                    # Update state immediately for responsive UI
+                    self.state.update_configuration_paths(load_order_path=path)
 
-                # Save to config
-                self.config.set("PACT_Settings.Load_Order.File", str(path))
+                    # Save to config asynchronously
+                    try:
+                        success = self.config.set("PACT_Settings.Load_Order.File", str(path))
+                        if not success:
+                            logger.error("Failed to save load order path to configuration")
+                            self.show_error.emit("Error", "Failed to save configuration")
+                            return False
+                    except (OSError, ValueError, TypeError) as e:
+                        logger.error(f"Error saving configuration: {e}")
+                        self.show_error.emit("Error", f"Configuration error: {e}")
+                        return False
 
-                self.update_status.emit(f"Load order configured: {path.name}")
-                return True
-            self.show_error.emit("Error", "Selected file does not exist")
+                    self.update_status.emit(f"Load order configured: {path.name}")
+                    return True
+                else:
+                    self.show_error.emit("Error", "Selected file does not exist")
+                    return False
+        except (OSError, ValueError, TypeError) as e:
+            logger.error(f"Error in configure_load_order: {e}")
+            self.show_error.emit("Error", f"Unexpected error: {e}")
             return False
-        return False
+        else:
+            return False
 
     def configure_mo2(self, parent_widget: QWidget) -> bool:
         """
@@ -108,39 +126,57 @@ class GuiController(QObject):
         Returns:
             bool: True if the configuration was successful, False otherwise.
         """
-        current_path = self.state.get("mo2_exe_path")
-        initial_dir: str | None = str(current_path.parent) if current_path else ""
+        try:
+            current_path = self.state.get("mo2_exe_path")
+            initial_dir: str | None = str(current_path.parent) if current_path else ""
 
-        file_path, _ = QFileDialog.getOpenFileName(
-            parent_widget,
-            "Select ModOrganizer.exe",
-            initial_dir or "",
-            "Executable Files (*.exe);;All Files (*.*)",
-        )
+            # Use non-blocking file dialog options
+            file_path, _ = QFileDialog.getOpenFileName(
+                parent_widget,
+                "Select ModOrganizer.exe",
+                initial_dir or "",
+                "Executable Files (*.exe);;All Files (*.*)" # Use Qt dialog instead of native
+            )
 
-        if file_path:
-            path = Path(file_path)
-            if path.exists() and path.name.lower() == "modorganizer.exe":
-                # Update state
-                install_path: Path = path.parent
-                self.state.update_configuration_paths(
-                    mo2_exe_path=path,
-                    mo2_install_path=install_path,
-                )
+            if file_path:
+                path = Path(file_path)
+                # Defer file existence check to avoid blocking
+                if path.exists() and path.name.lower() == "modorganizer.exe":
+                    # Update state immediately for responsive UI
+                    install_path: Path = path.parent
+                    self.state.update_configuration_paths(
+                        mo2_exe_path=path,
+                        mo2_install_path=install_path,
+                    )
 
-                # Save to config
-                self.config.update_multiple(
-                    {
-                        "PACT_Settings.Mod_Organizer.Binary": str(path),
-                        "PACT_Settings.Mod_Organizer.Install_Path": str(install_path),
-                    }
-                )
+                    # Save to config asynchronously
+                    try:
+                        success = self.config.update_multiple(
+                            {
+                                "PACT_Settings.Mod_Organizer.Binary": str(path),
+                                "PACT_Settings.Mod_Organizer.Install_Path": str(install_path),
+                            }
+                        )
+                        if not success:
+                            logger.error("Failed to save MO2 configuration")
+                            self.show_error.emit("Error", "Failed to save configuration")
+                            return False
+                    except (OSError, ValueError, TypeError) as e:
+                        logger.error(f"Error saving MO2 configuration: {e}")
+                        self.show_error.emit("Error", f"Configuration error: {e}")
+                        return False
 
-                self.update_status.emit("Mod Organizer 2 configured")
-                return True
-            self.show_error.emit("Error", "Please select ModOrganizer.exe")
+                    self.update_status.emit("Mod Organizer 2 configured")
+                    return True
+                else:
+                    self.show_error.emit("Error", "Please select ModOrganizer.exe")
+                    return False
+        except (OSError, ValueError, TypeError) as e:
+            logger.error(f"Error in configure_mo2: {e}")
+            self.show_error.emit("Error", f"Unexpected error: {e}")
             return False
-        return False
+        else:
+            return False
 
     def configure_xedit(self, parent_widget: QWidget) -> bool:
         """
@@ -156,48 +192,64 @@ class GuiController(QObject):
             bool: True if the configuration was successfully updated with a valid xEdit
                 executable; False otherwise.
         """
-        current_path = self.state.get("xedit_exe_path")
-        initial_dir: str | None = str(current_path.parent) if current_path else ""
+        try:
+            current_path = self.state.get("xedit_exe_path")
+            initial_dir: str | None = str(current_path.parent) if current_path else ""
 
-        file_path, _ = QFileDialog.getOpenFileName(
-            parent_widget,
-            "Select xEdit Executable",
-            initial_dir or "",
-            "Executable Files (*.exe);;All Files (*.*)",
-        )
+            file_path, _ = QFileDialog.getOpenFileName(
+                parent_widget,
+                "Select xEdit Executable",
+                initial_dir or "",
+                "Executable Files (*.exe);;All Files (*.*)"  # Use Qt dialog instead of native
+            )
 
-        if file_path:
-            path = Path(file_path)
-            if path.exists():
-                # Validate it's an xEdit executable
-                valid_names: list[str] = ["fo3edit", "fnvedit", "fo4edit", "sseedit", "tes5edit"]
-                if not any(name in path.name.lower() for name in valid_names):
-                    self.show_error.emit(
-                        "Error",
-                        "Selected file does not appear to be an xEdit executable",
+            if file_path:
+                path = Path(file_path)
+                if path.exists():
+                    # Validate it's an xEdit executable
+                    valid_names: list[str] = ["fo3edit", "fnvedit", "fo4edit", "sseedit", "tes5edit", "xedit", "xedit64"]
+                    if not any(name in path.name.lower() for name in valid_names):
+                        self.show_error.emit(
+                            "Error",
+                            "Selected file does not appear to be an xEdit executable",
+                        )
+                        return False
+
+                    # Update state immediately for responsive UI
+                    install_path = path.parent
+                    self.state.update_configuration_paths(
+                        xedit_exe_path=path,
+                        xedit_install_path=install_path,
                     )
+
+                    # Save to config asynchronously
+                    try:
+                        success = self.config.update_multiple(
+                            {
+                                "PACT_Settings.xEdit.Binary": str(path),
+                                "PACT_Settings.xEdit.Install_Path": str(install_path),
+                            }
+                        )
+                        if not success:
+                            logger.error("Failed to save xEdit configuration")
+                            self.show_error.emit("Error", "Failed to save configuration")
+                            return False
+                    except (OSError, ValueError, TypeError) as e:
+                        logger.error(f"Error saving xEdit configuration: {e}")
+                        self.show_error.emit("Error", f"Configuration error: {e}")
+                        return False
+
+                    self.update_status.emit(f"xEdit configured: {path.name}")
+                    return True
+                else:
+                    self.show_error.emit("Error", "Selected file does not exist")
                     return False
-
-                # Update state
-                install_path = path.parent
-                self.state.update_configuration_paths(
-                    xedit_exe_path=path,
-                    xedit_install_path=install_path,
-                )
-
-                # Save to config
-                self.config.update_multiple(
-                    {
-                        "PACT_Settings.xEdit.Binary": str(path),
-                        "PACT_Settings.xEdit.Install_Path": str(install_path),
-                    }
-                )
-
-                self.update_status.emit(f"xEdit configured: {path.name}")
-                return True
-            self.show_error.emit("Error", "Selected file does not exist")
+        except (OSError, ValueError, TypeError) as e:
+            logger.error(f"Error in configure_xedit: {e}")
+            self.show_error.emit("Error", f"Unexpected error: {e}")
             return False
-        return False
+        else:
+            return False
 
     def toggle_mo2_mode(self, enabled: bool) -> None:
         """
@@ -211,9 +263,13 @@ class GuiController(QObject):
             enabled (bool): Indicates whether MO2 mode should be enabled (True) or
                 disabled (False).
         """
-        self.state.update(mo2_mode=enabled)
-        self.config.set("PACT_Settings.MO2Mode", enabled)
-        self.update_status.emit(f"MO2 Mode {'enabled' if enabled else 'disabled'}")
+        try:
+            self.state.update(mo2_mode=enabled)
+            self.config.set("PACT_Settings.MO2Mode", enabled)
+            self.update_status.emit(f"MO2 Mode {'enabled' if enabled else 'disabled'}")
+        except (OSError, ValueError, TypeError) as e:
+            logger.error(f"Error toggling MO2 mode: {e}")
+            self.show_error.emit("Error", f"Failed to update MO2 mode: {e}")
 
     def get_plugins_to_clean(self) -> list[str]:
         """
@@ -331,7 +387,7 @@ class GuiController(QObject):
 
     def _on_cleaning_finished(self) -> None:
         """Handle cleaning completion."""
-        if self.worker:
+        if self.worker is not None:
             summary = self.worker.get_summary()
             self.show_message.emit("Cleaning Complete", summary)
             self.update_status.emit("Cleaning complete")
@@ -352,8 +408,12 @@ class GuiController(QObject):
         Returns:
             None
         """
-        self._load_configuration()
-        self.update_status.emit("Configuration refreshed")
+        try:
+            self._load_configuration()
+            self.update_status.emit("Configuration refreshed")
+        except (OSError, ValueError, TypeError) as e:
+            logger.error(f"Error refreshing configuration: {e}")
+            self.show_error.emit("Error", f"Failed to refresh configuration: {e}")
 
     def get_state_summary(self) -> str:
         """

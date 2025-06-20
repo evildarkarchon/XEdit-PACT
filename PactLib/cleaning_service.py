@@ -356,9 +356,13 @@ class CleaningService:
         # Detect game type if not set
         if not state_snapshot.game_type:
             game_type = detect_xedit_game(str(state_snapshot.xedit_exe_path))
-            if not game_type:
-                return False, "Could not detect game type from xEdit executable"
-            self.state.update(game_type=game_type)
+            if game_type:
+                self.state.update(game_type=game_type)
+            else:
+                # For generic xEdit executables (xEdit.exe, xEdit64.exe), 
+                # we can't auto-detect game type, but we can still proceed
+                logger.warning("Could not auto-detect game type from xEdit executable. "
+                             "For generic xEdit executables, game type may need to be set manually.")
 
         # Check MO2 if in MO2 mode
         if state_snapshot.mo2_mode and (not state_snapshot.mo2_exe_path or not state_snapshot.mo2_exe_path.exists()):

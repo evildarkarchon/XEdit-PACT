@@ -28,6 +28,20 @@ class ConfigManager:
             logger.info(f"Creating configuration file: {self._path}")
             self._path.touch()
             yaml_settings_write(str(self._path), {})
+        else:
+            # Check if file is empty and initialize it
+            try:
+                with self._path.open(encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if not content:
+                        logger.info(f"Initializing empty configuration file: {self._path}")
+                        yaml_settings_write(str(self._path), {})
+            except (FileNotFoundError, PermissionError, OSError, UnicodeDecodeError) as e:
+                logger.error(f"Error checking configuration file: {e}")
+                # Recreate the file if there's an issue
+                self._path.unlink(missing_ok=True)
+                self._path.touch()
+                yaml_settings_write(str(self._path), {})
 
     def get(self, key: str, default: Any = None) -> Any:
         """
@@ -70,6 +84,7 @@ class ConfigManager:
             bool: True if the key-value pair was successfully written, False otherwise.
         """
         try:
+            # Use the thread-safe YAML manager directly instead of creating a separate thread
             yaml_settings_write(str(self._path), value, key)
         except (yaml.YAMLError, FileNotFoundError, PermissionError, OSError) as e:
             logger.error(f"Error writing config key '{key}': {e}")
@@ -112,11 +127,17 @@ class ConfigManager:
         Returns:
             bool: True if all updates were successfully applied, False otherwise.
         """
-        success = True
-        for key, value in updates.items():
-            if not self.set(key, value):
-                success = False
-        return success
+        try:
+            success = True
+            for key, value in updates.items():
+                if not self.set(key, value):
+                    success = False
+                    logger.error(f"Failed to update config key: {key}")
+        except (yaml.YAMLError, FileNotFoundError, PermissionError, OSError, ValueError) as e:
+            logger.error(f"Error in update_multiple: {e}")
+            return False
+        else:
+            return success
 
     def get_game_config(self, game_type: str) -> dict[str, Any]:
         """

@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import threading
 from pathlib import Path
-from threading import RLock, Thread
 from typing import TYPE_CHECKING, Any, Callable
 
 import psutil
 import ruamel.yaml
+from PySide6.QtCore import QMutex, QMutexLocker, QThread
 
 if TYPE_CHECKING:
     from subprocess import CompletedProcess
@@ -21,23 +20,23 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class YamlManager:
-    """Thread-safe YAML file manager with caching capabilities."""
+    """Thread-safe YAML file manager with caching capabilities using Qt threading."""
 
     def __init__(self) -> None:
         self._cache: dict[str, Any] = {}
-        self._cache_lock = threading.RLock()
-        self._file_locks: dict[str, threading.RLock] = {}
-        self._file_locks_lock = threading.Lock()
+        self._cache_mutex = QMutex()
+        self._file_mutexes: dict[str, QMutex] = {}
+        self._file_mutexes_mutex = QMutex()
         self._yaml = ruamel.yaml.YAML()
         self._yaml.indent(offset=2)
         self._yaml.width = 300
 
-    def _get_file_lock(self, yaml_path: str) -> threading.RLock:
-        """Get or create a lock for the specified file path."""
-        with self._file_locks_lock:
-            if yaml_path not in self._file_locks:
-                self._file_locks[yaml_path] = threading.RLock()
-            return self._file_locks[yaml_path]
+    def _get_file_mutex(self, yaml_path: str) -> QMutex:
+        """Get or create a mutex for the specified file path."""
+        with QMutexLocker(self._file_mutexes_mutex):
+            if yaml_path not in self._file_mutexes:
+                self._file_mutexes[yaml_path] = QMutex()
+            return self._file_mutexes[yaml_path]
 
     def get_value(self, yaml_path: str, key_path: str | list[str]) -> Any:
         """
@@ -56,8 +55,14 @@ class YamlManager:
             The value at the specified key path within the YAML file. If the key path
             does not exist or cannot be resolved, returns None.
         """
-        file_lock: RLock = self._get_file_lock(yaml_path)
-        with file_lock:
+        file_mutex: QMutex = self._get_file_mutex(yaml_path)
+        
+        # Use Qt mutex with timeout to prevent deadlocks
+        if not file_mutex.tryLock(5000):  # 5 second timeout
+            logger.error(f"Timeout acquiring lock for file: {yaml_path}")
+            return None
+            
+        try:
             data = self._load_yaml(yaml_path)
             keys: list[str] = self._parse_key_path(key_path)
 
@@ -70,6 +75,8 @@ class YamlManager:
                     return None
 
             return value
+        finally:
+            file_mutex.unlock()
 
     def set_value(self, yaml_path: str, key_path: str | list[str], new_value: Any) -> None:
         """
@@ -82,8 +89,14 @@ class YamlManager:
                 string with keys separated by a delimiter, or as a list of individual string keys.
             new_value: The new value to be assigned at the specified key path.
         """
-        file_lock: RLock = self._get_file_lock(yaml_path)
-        with file_lock:
+        file_mutex: QMutex = self._get_file_mutex(yaml_path)
+        
+        # Use Qt mutex with timeout to prevent deadlocks
+        if not file_mutex.tryLock(5000):  # 5 second timeout
+            logger.error(f"Timeout acquiring lock for file: {yaml_path}")
+            return
+            
+        try:
             data: Any = self._load_yaml(yaml_path)
             keys: list[str] = self._parse_key_path(key_path)
 
@@ -99,6 +112,8 @@ class YamlManager:
 
             # Save changes back to file
             self._save_yaml(yaml_path, data)
+        finally:
+            file_mutex.unlock()
 
     @staticmethod
     def _parse_key_path(key_path: str | list[str]) -> list[str]:
@@ -107,7 +122,7 @@ class YamlManager:
 
     def _load_yaml(self, yaml_path: str) -> Any:
         """Load YAML file, using cache if available."""
-        with self._cache_lock:
+        with QMutexLocker(self._cache_mutex):
             if yaml_path not in self._cache:
                 try:
                     path: Path = Path(yaml_path)
@@ -116,7 +131,12 @@ class YamlManager:
                         self._cache[yaml_path] = {}
                     else:
                         with path.open(encoding="utf-8") as yaml_file:
-                            self._cache[yaml_path] = self._yaml.load(yaml_file) or {}
+                            content = yaml_file.read().strip()
+                            if not content:
+                                # Handle empty file
+                                self._cache[yaml_path] = {}
+                            else:
+                                self._cache[yaml_path] = self._yaml.load(content) or {}
                 except (OSError, ruamel.yaml.YAMLError, ValueError) as e:
                     logger.error(f"Failed to load YAML file '{yaml_path}': {e}")
                     self._cache[yaml_path] = {}
@@ -140,7 +160,7 @@ class YamlManager:
             temp_path.replace(path)
 
             # Update cache
-            with self._cache_lock:
+            with QMutexLocker(self._cache_mutex):
                 self._cache[yaml_path] = data
         except (OSError, ruamel.yaml.YAMLError, ValueError) as e:
             logger.error(f"Failed to save YAML file '{yaml_path}': {e}")
@@ -346,7 +366,6 @@ def run_process_with_realtime_output(
         ValueError: If there is an issue with invalid parameters or process handling.
     """
     import subprocess  # noqa: PLC0415
-    import threading  # noqa: PLC0415
     import time  # noqa: PLC0415
     
     start_time: float = time.time()
@@ -380,15 +399,19 @@ def run_process_with_realtime_output(
             finally:
                 pipe.close()
         
+        class OutputReaderThread(QThread):
+            def __init__(self, pipe: Any, line_list: list[str], callback: Callable[[str], None] | None) -> None:
+                super().__init__()
+                self.pipe = pipe
+                self.line_list = line_list
+                self.callback = callback
+            
+            def run(self) -> None:
+                read_output(self.pipe, self.line_list, self.callback)
+        
         # Start threads to read stdout and stderr
-        stdout_thread: Thread = threading.Thread(
-            target=read_output, 
-            args=(process.stdout, stdout_lines, output_callback)
-        )
-        stderr_thread: Thread = threading.Thread(
-            target=read_output,
-            args=(process.stderr, stderr_lines, None)
-        )
+        stdout_thread: OutputReaderThread = OutputReaderThread(process.stdout, stdout_lines, output_callback)
+        stderr_thread: OutputReaderThread = OutputReaderThread(process.stderr, stderr_lines, None)
         
         stdout_thread.start()
         stderr_thread.start()
@@ -405,8 +428,8 @@ def run_process_with_realtime_output(
             time.sleep(0.1)
         
         # Wait for threads to finish reading all output
-        stdout_thread.join(timeout=5)
-        stderr_thread.join(timeout=5)
+        stdout_thread.wait(5000)  # 5 second timeout
+        stderr_thread.wait(5000)  # 5 second timeout
         
         return process.returncode, '\n'.join(stdout_lines), '\n'.join(stderr_lines)
         
@@ -416,7 +439,7 @@ def run_process_with_realtime_output(
 def monitor_log_file(
     log_file_path: str | Path,
     line_callback: Callable[[str], None],
-    stop_event: threading.Event,
+    stop_event: Any,  # Changed from threading.Event to Any for Qt compatibility
     poll_interval: float = 0.1
 ) -> None:
     """
@@ -431,7 +454,7 @@ def monitor_log_file(
         line_callback: A callable function that processes a new log file line.
             The function takes a single string argument representing the new line
             from the log file.
-        stop_event: A threading.Event object used to signal the monitoring process
+        stop_event: A Qt event object used to signal the monitoring process
             to stop. When the event is set, the monitoring stops gracefully.
         poll_interval: The interval in seconds to wait between checks for new lines
             in the log file or for file existence.
@@ -445,7 +468,7 @@ def monitor_log_file(
     try:
         # Wait for file to exist
         while not log_path.exists() and not stop_event.is_set():
-            threading.Event().wait(poll_interval)
+            QThread.msleep(int(poll_interval * 1000))
         
         if stop_event.is_set():
             return
@@ -459,7 +482,7 @@ def monitor_log_file(
                 if line:
                     line_callback(line.rstrip('\n\r'))
                 else:
-                    threading.Event().wait(poll_interval)
+                    QThread.msleep(int(poll_interval * 1000))
                     
     except (OSError, ValueError) as e:
         logger.error(f"Error monitoring log file '{log_path}': {e}")
