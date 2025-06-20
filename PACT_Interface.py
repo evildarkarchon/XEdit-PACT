@@ -4,8 +4,6 @@
 from __future__ import annotations
 
 import logging
-import platform
-import subprocess
 import sys
 from pathlib import Path
 
@@ -38,77 +36,12 @@ PACT_DATA_PATH: Path = Path("PACT Data")
 PACT_YAML_PATH: Path = PACT_DATA_PATH / "PACT Main.yaml"
 PACT_CONFIG_PATH: Path = PACT_DATA_PATH / "PACT Config.yaml"  # New config file
 
-
-# Configure logging to file only (no console output for GUI app)
-def setup_logging() -> None:
-    """
-    Sets up the logging configuration for the application. This function initializes
-    a logging system that writes log messages to a timestamped log file in the "logs"
-    directory. The directory is created if it doesn't exist. The logging system
-    removes any existing handlers, configures a rotating file handler with a size
-    limit, and applies a specific log format. The global variable `_current_log_file`
-    is updated with the path of the log file used.
-
-    Returns:
-        None
-    """
-    global _current_log_file  # noqa: PLW0603
-
-    # Create logs directory if it doesn't exist
-    logs_dir = Path("logs")
-    logs_dir.mkdir(exist_ok=True)
-
-    # Create log file path with timestamp
-    from datetime import datetime  # noqa: PLC0415
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = logs_dir / f"pact_{timestamp}.log"
-
-    # Store the log file path globally
-    _current_log_file = log_file
-
-    # Configure root setup_logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
-
-    # Remove any existing handlers (including console handlers)
-    for handler in root_logger.handlers[:]:
-        root_logger.removeHandler(handler)
-
-    # Create file handler
-    from logging.handlers import RotatingFileHandler  # noqa: PLC0415
-
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=5 * 1024 * 1024,  # 5MB
-        backupCount=5,
-        encoding="utf-8",
-    )
-    file_handler.setLevel(logging.INFO)
-
-    # Create formatter
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-    file_handler.setFormatter(formatter)
-
-    # Add file handler to root setup_logger
-    root_logger.addHandler(file_handler)
-
-    # Log the log file location
-    setup_logger = logging.getLogger(__name__)
-    setup_logger.info(f"Logging initialized. Log file: {log_file}")
-
-
-# Initialize logging
-setup_logging()
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 logger: logging.Logger = logging.getLogger(__name__)
-
-# Global variable to store current log file path
-_current_log_file: Path | None = None
-
-
-def get_current_log_file() -> Path | None:
-    """Get the path to the current log file."""
-    return _current_log_file
 
 
 class CleaningProgressDialog(QDialog):
@@ -117,6 +50,7 @@ class CleaningProgressDialog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         """Initialize the cleaning progress dialog."""
         super().__init__(parent)
+        self._current_plugin_name = None
         self.setWindowTitle("Cleaning Progress")
         self.setMinimumSize(450, 300)
         self.setModal(False)  # Non-modal so user can interact with main window
@@ -206,7 +140,18 @@ class CleaningProgressDialog(QDialog):
         layout.addWidget(self.button_box)
         
     def update_progress(self, current: int, total: int) -> None:
-        """Update the progress bar and labels."""
+        """
+        Updates the progress of a progress bar and its associated label based on the current and total values.
+
+        This method calculates the progress percentage, updates the progress bar's value, and sets the text of
+        the progress label to indicate the current and total progress. If a `_current_plugin_name` attribute
+        is present and non-empty, it incorporates the plugin name into the progress bar's displayed format.
+        If the total is zero, it resets the progress bar and label to their initial states.
+
+        Args:
+            current (int): The current progress count of the operation.
+            total (int): The total progress count for the operation.
+        """
         if total > 0:
             percentage: int = int((current / total) * 100)
             self.progress_bar.setValue(percentage)
@@ -223,7 +168,16 @@ class CleaningProgressDialog(QDialog):
             self.progress_bar.setFormat("%p%")
             
     def update_current_plugin(self, plugin_name: str) -> None:
-        """Update the current plugin being processed."""
+        """
+        Updates the current plugin label and manages the progress bar display.
+
+        This function sets the label text to reflect the name of the currently processing
+        plugin. It additionally formats and updates the progress bar display if a progress
+        value greater than zero is present.
+
+        Args:
+            plugin_name: The name of the plugin to be set as the current processing plugin.
+        """
         self.current_plugin_label.setText(f"Processing: {plugin_name}")
         self._current_plugin_name = plugin_name
         
@@ -232,14 +186,35 @@ class CleaningProgressDialog(QDialog):
             self.progress_bar.setFormat(f"{plugin_name} / {self.progress_bar.value()}%")
         
     def update_statistics(self, stats: dict[str, int]) -> None:
-        """Update the statistics display."""
+        """
+        Updates the statistics display for the user interface.
+
+        This method iterates through the provided statistics dictionary and updates the
+        associated labels in the user interface with the corresponding values. The keys
+        in the given `stats` dictionary must match the keys defined in `self.stats_labels`
+        for the display to be updated.
+
+        Args:
+            stats: A dictionary where the keys are strings representing statistical
+                categories, and the values are integers representing the statistics
+                to be displayed.
+        """
         for key, label in self.stats_labels.items():
             if key in stats:
                 label.setText(str(stats[key]))
                 
         
     def set_cleaning_finished(self) -> None:
-        """Update UI when cleaning is finished."""
+        """
+        Marks the completion of the cleaning process and updates the UI components accordingly.
+
+        This method ensures the cleaning process is visually finalized by changing the UI elements.
+        It updates the text displayed on a label, hides the stop button, enables the close button,
+        and adjusts the progress bar format depending on the state of completion.
+
+        Returns:
+            None
+        """
         self._cleaning_in_progress = False
         self.current_plugin_label.setText("Cleaning completed!")
         self.stop_button.setVisible(False)
@@ -415,12 +390,6 @@ class MainWindow(QMainWindow):
 
         file_menu.addSeparator()
 
-        open_log_action: QAction = QAction("&Open Log File", self)
-        open_log_action.triggered.connect(self._open_log_file)
-        file_menu.addAction(open_log_action)
-
-        file_menu.addSeparator()
-
         exit_action: QAction = QAction("E&xit", self)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
@@ -499,7 +468,8 @@ class MainWindow(QMainWindow):
         finally:
             self._updating_ui = False
 
-    def _update_button_state(self, button: QPushButton, configured: bool, text: str) -> None:
+    @staticmethod
+    def _update_button_state(button: QPushButton, configured: bool, text: str) -> None:
         """Update button appearance based on configuration state."""
         button.setText(text)
         if configured:
@@ -669,26 +639,6 @@ class MainWindow(QMainWindow):
             "A tool for automating plugin cleaning with xEdit",
         )
 
-    def _open_log_file(self) -> None:
-        """Open the current log file in the default system application."""
-        log_file = get_current_log_file()
-        if log_file and log_file.exists():
-            try:
-                system = platform.system()
-                if system == "Windows":
-                    subprocess.run(["start", str(log_file)], shell=True, check=True)
-                elif system == "Darwin":  # macOS
-                    subprocess.run(["open", str(log_file)], check=True)
-                else:  # Linux
-                    subprocess.run(["xdg-open", str(log_file)], check=True)
-
-                logger.info(f"Opened log file: {log_file}")
-            except (subprocess.CalledProcessError, OSError) as e:
-                logger.error(f"Failed to open log file: {e}")
-                self._show_error("Error", f"Failed to open log file: {e}")
-        else:
-            self._show_error("Error", "Log file not found or not available")
-
 
 def create_application() -> tuple[QApplication, MainWindow]:
     """
@@ -725,16 +675,17 @@ def main() -> None:
     """
     Main entry point for the application.
 
-    This function initializes the application by creating the required objects
-    and displaying the main application window. It handles any errors during
-    initialization and ensures that the application terminates gracefully if a
-    fatal error occurs.
+    This function initializes the application, displays the main window, and handles any
+    fatal errors that may occur during execution. If an error is encountered, it logs the
+    error details and terminates the application with a non-zero exit code.
 
     Raises:
-        OSError: If an operating system-related issue occurs during application
-            setup.
-        RuntimeError: If a runtime error occurs during application initialization.
-        ValueError: If invalid input or configuration is encountered during setup.
+        OSError: If an operating system-related error is encountered.
+        RuntimeError: If a runtime error occurs during application execution.
+        ValueError: If an invalid value is encountered, causing the application to fail.
+
+    Returns:
+        None
     """
     try:
         app, window = create_application()
