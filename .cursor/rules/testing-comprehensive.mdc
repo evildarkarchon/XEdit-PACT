@@ -1,7 +1,7 @@
 ---
-description:
-globs:
-alwaysApply: false
+description: 
+globs: 
+alwaysApply: true
 ---
 # Testing Comprehensive Rules
 
@@ -561,3 +561,4 @@ These testing rules are **MANDATORY** for all code changes. No code should be me
 4. Following quality standards
 
 Tests are the first line of defense against bugs and regressions. They must be treated with the same importance as the code they test.
+

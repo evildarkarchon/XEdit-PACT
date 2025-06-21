@@ -1,7 +1,7 @@
 ---
-description:
-globs:
-alwaysApply: false
+description: 
+globs: 
+alwaysApply: true
 ---
 # Thread Safety Comprehensive Rules
 
@@ -334,3 +334,4 @@ def __del__(self):
 
 ## Enforcement
 These thread safety rules are **MANDATORY** for all code. Thread safety is not optional - it's a fundamental requirement for reliable, maintainable code. Any code that violates these patterns will be rejected.
+
