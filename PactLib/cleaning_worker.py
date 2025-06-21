@@ -93,7 +93,7 @@ class CleaningWorker(QThread):
 
                     logger.info(f"Processed {plugin}: {result.status} ({result.duration:.1f}s) - {result.message}")
 
-                except Exception as e:
+                except (OSError, RuntimeError, ValueError) as e:
                     logger.error(f"Error processing plugin {plugin}: {e}")
                     # Mark plugin as failed
                     self.state.add_result(plugin, "failed", f"Error: {e}")
@@ -106,7 +106,7 @@ class CleaningWorker(QThread):
         except KeyboardInterrupt:
             logger.info("Cleaning worker interrupted by user")
             self.error.emit("Cleaning process was interrupted by user")
-        except Exception as e:
+        except (TypeError, AttributeError) as e:
             logger.error(f"Unexpected error in cleaning worker: {e}")
             self.error.emit(f"Unexpected error: {e}")
         finally:

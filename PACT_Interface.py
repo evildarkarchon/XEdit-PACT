@@ -540,7 +540,7 @@ class MainWindow(QMainWindow):
         try:
             logger.info("Starting cleaning process...")
             self.controller.start_cleaning()
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             logger.error(f"Error starting cleaning: {e}")
             self._show_error("Error", f"Failed to start cleaning: {e}")
 
@@ -768,7 +768,7 @@ def main() -> None:
     except (OSError, RuntimeError, ValueError) as e:
         logger.error(f"Fatal error: {e}")
         sys.exit(1)
-    except Exception as e:
+    except (TypeError, AttributeError, ImportError) as e:
         logger.error(f"Unexpected error: {e}")
         sys.exit(1)
 

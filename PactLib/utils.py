@@ -296,7 +296,7 @@ def detect_game_from_load_order(load_order_path: Path) -> str | None:
     except FileNotFoundError:
         logger.error(f"Load order file not found: {load_order_path}")
         raise
-    except Exception as e:
+    except (OSError, ValueError, UnicodeDecodeError) as e:
         logger.error(f"Error reading load order file: {load_order_path}, error: {e!s}")
         raise
 
@@ -465,10 +465,8 @@ def run_process_with_realtime_output(
             except (OSError, ValueError) as oe:
                 logger.error(f"Error reading process output: {oe}")
             finally:
-                try:
+                with contextlib.suppress(OSError, ValueError):
                     pipe.close()
-                except (OSError, ValueError):
-                    pass  # Ignore errors when closing pipe
 
         class OutputReaderThread(QThread):
             def __init__(self, pipe: Any, line_list: list[str], callback: Callable[[str], None] | None) -> None:
@@ -481,7 +479,7 @@ def run_process_with_realtime_output(
             def run(self) -> None:
                 try:
                     read_output(self.pipe, self.line_list, self.callback)
-                except Exception as e:
+                except (OSError, ValueError) as e:
                     logger.error(f"Error in output reader thread: {e}")
 
             def stop(self) -> None:

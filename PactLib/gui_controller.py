@@ -351,10 +351,7 @@ class GuiController(QObject):
                     original_line = line.strip()
                     if original_line and not original_line.startswith("#"):
                         # Remove any prefix characters (*, +, etc.)
-                        if original_line[0] in ["*", "+", "-"]:
-                            line = original_line[1:].strip()
-                        else:
-                            line = original_line
+                        line = original_line[1:].strip() if original_line[0] in ["*", "+", "-"] else original_line
 
                         # Check if line ends with a valid plugin extension
                         if line.lower().endswith((".esp", ".esm", ".esl")):
@@ -401,9 +398,8 @@ class GuiController(QObject):
                     )
 
                     return plugin_name
-                else:
-                    # Extension is at the end - valid
-                    return line
+                # Extension is at the end - valid
+                return line
 
         # No valid extension found
         return None
@@ -463,7 +459,7 @@ class GuiController(QObject):
             self.worker.start()
             self.update_status.emit("Starting cleaning process...")
 
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             logger.error(f"Error in start_cleaning: {e}")
             self.show_error.emit("Error", f"Failed to start cleaning: {e}")
 
