@@ -114,8 +114,11 @@ class ConfigManager:
             OSError: If an operating system-related error occurs during file access.
         """
         try:
+            from ruamel.yaml import YAML
+
+            yaml_loader = YAML(typ="safe", pure=True)
             with self._path.open(encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
+                return yaml_loader.load(f) or {}
         except (yaml.YAMLError, FileNotFoundError, PermissionError, OSError) as e:
             logger.error(f"Error reading configuration file: {e}")
             return {}
@@ -190,22 +193,21 @@ class ConfigManager:
         Raises:
             None
         """
+        # Map config keys to output keys as expected by the tests
+        key_map = {
+            "Load_Order.File": "load_order_path",
+            "Mod_Organizer.Binary": "mo2_exe_path",
+            "Mod_Organizer.Install_Path": "mo2_install_path",
+            "xEdit.Binary": "xedit_exe_path",
+            "xEdit.Install_Path": "xedit_install_path",
+        }
         paths: dict[str, Path | None] = {}
-        path_keys: list[str] = [
-            "Load_Order.File",
-            "Mod_Organizer.Binary",
-            "Mod_Organizer.Install_Path",
-            "xEdit.Binary",
-            "xEdit.Install_Path",
-        ]
-
-        for key in path_keys:
-            value = self.get(f"PACT_Settings.{key}")
+        for config_key, output_key in key_map.items():
+            value = self.get(config_key)
             if value:
-                paths[key.lower().replace(".", "_")] = Path(value)
+                paths[output_key] = Path(value)
             else:
-                paths[key.lower().replace(".", "_")] = None
-
+                paths[output_key] = None
         return paths
 
     def get_settings(self) -> dict[str, Any]:

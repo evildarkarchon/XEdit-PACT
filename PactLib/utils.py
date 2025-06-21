@@ -222,6 +222,10 @@ def yaml_settings_write(yaml_path: str | Path, new_value: Any, key_path: str | l
         yaml.width = 300
         with path.open("w", encoding="utf-8") as f:
             yaml.dump(new_value, f)
+
+        # Thread-safe cache update after full file write
+        with QMutexLocker(_yaml_manager._cache_mutex):
+            _yaml_manager._cache[str(yaml_path)] = new_value
     else:
         _yaml_manager.set_value(str(yaml_path), key_path, new_value)
 
