@@ -2,91 +2,101 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## Overview
 
-XEdit-PACT (Plugin Auto Cleaning Tool) is a Python desktop application that automates the process of cleaning game plugins for Bethesda games using xEdit tools. It provides a GUI interface built with PySide6 (Qt6) and supports Fallout 3, Fallout New Vegas, Fallout 4, and Skyrim Special Edition.
+XEdit-PACT is a PySide6 (Qt) application for batch cleaning Bethesda game plugins using xEdit's quickautoclean. The codebase follows strict architectural patterns with centralized state management and clear separation of concerns.
 
-## Development Commands
+## Essential Commands
 
 ```bash
 # Install dependencies
-poetry install
-
-# Run the application
-poetry run python PACT_Interface.py
+poetry install --with dev
 
 # Run linting
 poetry run ruff check .
-poetry run ruff format .  # Auto-format code
+poetry run ruff format .
 
 # Run type checking
-poetry run mypy .
-poetry run pyright
+poetry run mypy PACT_Interface.py state_manager.py config_manager.py
 
-# Build executable (Windows)
-poetry run pyinstaller PACT.spec
+# Run tests
+pytest                                    # All tests
+pytest --cov=PactLib --cov=PACT_Interface --cov-report=html  # With coverage
+pytest -m unit                           # Unit tests only
+pytest -m integration                    # Integration tests only
+python run_tests.py                      # Custom test runner
 ```
 
-## Architecture Overview
+## Architecture
 
-### Two-Layer Architecture
-1. **GUI Layer** (`PACT_Interface.py`): Handles all UI interactions using PySide6
-2. **Business Logic Layer** (`PACT_Start.py`): Contains core cleaning logic and process management
+### Core Design Principles
 
-### Key Components
+1. **Centralized State Management**: All application state lives in `StateManager` with the `AppState` dataclass. Thread-safe access via QMutex with Qt signals for state changes.
 
-- **UiPACTMainWin** (PACT_Interface.py): Main window class managing the entire UI state
-- **PactThread** (PACT_Interface.py): QThread subclass that runs cleaning operations in background
-- **ProgressEmitter** (PACT_Interface.py): Custom QObject for thread-safe progress signals
-- **YamlManager** (PACT_Start.py): Singleton managing YAML configuration with atomic writes
-- **Info** (PACT_Start.py): Central dataclass holding all runtime configuration and state
+2. **Layer Separation**:
+   - `state_manager.py`: Pure state management (no business logic)
+   - `config_manager.py`: Configuration file handling only
+   - `cleaning_service.py`: Business logic (no Qt dependencies)
+   - `gui_controller.py`: Mediator between GUI and business logic
+   - `cleaning_worker.py`: Thread management for background operations
 
-### Threading Model
-- Main GUI thread handles user interactions
-- Background QThread (`PactThread`) executes cleaning operations
-- Communication via Qt signals/slots pattern
-- Progress updates emitted from background thread to GUI
+3. **Dependency Injection**: Components receive dependencies through constructors. No direct coupling between layers.
 
-### Configuration Management
-- Main configuration stored in `PACT Data/PACT Main.yaml`
-- User-specific settings override defaults
-- Game-specific plugin lists and skip lists
-- Settings persistence between sessions
+### Critical Threading Rules
 
-### Process Management
-- Spawns and monitors external xEdit processes
-- CPU usage monitoring with configurable thresholds
-- Timeout handling for stuck processes
-- Detailed logging of subprocess output
+**MUST use PySide6 threading only**:
+- Use: `QThread`, `QThreadPool`, `QMutex`, `QReadWriteLock`, `QWaitCondition`
+- NEVER use: Python's `threading`, `asyncio`, or `concurrent.futures`
+- All inter-thread communication through Qt signals/slots only
+- All shared data access must be synchronized
 
-## Critical Development Notes
+### Test Coverage Requirements
 
-1. **Unicode Handling**: Always use UTF-8 encoding with error ignoring when dealing with file I/O and subprocess output
-2. **Reserved Comments**: Comments marked "RESERVED" are placeholders for future updates - do not modify
-3. **Thread Safety**: All GUI updates from background threads must use Qt signals
-4. **Path Handling**: Support both forward and backward slashes for cross-platform compatibility
-5. **Error Recovery**: Extensive try-except blocks around file operations and subprocess calls
-6. **Game Detection**: Automatic detection of installed games and their mod managers (MO2/Vortex)
+- **Unit Tests**: Minimum 90% line coverage
+- **Integration Tests**: Minimum 80% line coverage
+- **Critical Paths**: 100% coverage (error handling, thread safety, file I/O)
+- All new functionality MUST have tests
+- All bug fixes MUST include regression tests
 
-## Environment Specifics
+### Key Technical Constraints
 
-- **Poetry vs Virtual Environment**:
-  * On Windows: Use `poetry` for dependency management and running commands
-  * On Linux: Use the virtual environment located in the `.virtualenv` directory instead of poetry
+1. **File Operations**: UTF-8 encoding always
+2. **Logging**: Use rotating file logs in `logs/` directory, not console output
+3. **Type Annotations**: Required for all new code (Python 3.12+)
+4. **Line Length**: 120 characters maximum
+5. **State Updates**: Only through `StateManager`, never direct manipulation
 
-## Testing Approach
+### Common Development Tasks
 
-When testing changes:
-1. Test with different game configurations (FO3, FNV, FO4, SSE)
-2. Test with both MO2 and Vortex mod managers
-3. Verify threading doesn't cause UI freezes
-4. Check logging output in journal files
-5. Test error cases (missing files, invalid paths, process failures)
+```bash
+# Check what needs linting/formatting
+poetry run ruff check . --diff
 
-## Code Style
+# Auto-fix linting issues
+poetry run ruff check . --fix
 
-- Type hints are mandatory (enforced by ruff)
-- Use modern Python features (3.12+)
-- Follow PEP 8 with ruff's extended ruleset
-- Prefer pathlib over os.path for file operations
-- Use dataclasses for structured data
+# Run a single test file
+pytest tests/test_state_manager.py
+
+# Run tests with verbose output
+pytest -v
+
+# Generate HTML coverage report
+pytest --cov=PactLib --cov-report=html
+# Open htmlcov/index.html to view
+```
+
+### Configuration Files
+
+- **Main Config** (`PACT Main.yaml`): Game configurations, skip lists
+- **User Config** (`PACT Config.yaml`): User settings, paths
+- Both handled by `ConfigManager` with thread-safe operations
+
+### Workflow Overview
+
+1. User configures paths → saved to YAML configs
+2. GuiController validates environment
+3. CleaningWorker (QThread) processes plugins sequentially
+4. For each plugin: check skip list → build command → execute → parse output
+5. Progress updates via Qt signals → UI updates
+6. Final summary displayed on completion
