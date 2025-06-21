@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QCoreApplication, Qt, QTimer, Slot
 from PySide6.QtGui import QAction, QCloseEvent, QFont
@@ -31,6 +32,9 @@ from PactLib.gui_controller import GuiController
 from PactLib.logging_config import get_logger, log_startup_info, setup_logging
 from PactLib.state_manager import AppState, StateManager
 
+if TYPE_CHECKING:
+    from logging import Logger
+
 # Constants
 PACT_DATA_PATH: Path = Path("PACT Data")
 PACT_YAML_PATH: Path = PACT_DATA_PATH / "PACT Main.yaml"
@@ -38,7 +42,7 @@ PACT_CONFIG_PATH: Path = PACT_DATA_PATH / "PACT Config.yaml"  # New config file
 
 # Setup logging
 setup_logging()
-logger = get_logger(__name__)
+logger: Logger = get_logger(__name__)
 log_startup_info(logger)
 
 
@@ -527,7 +531,7 @@ class MainWindow(QMainWindow):
             # Show warning dialog if enabling
             from PACT_Interface import show_partial_forms_warning  # noqa: PLC0415
 
-            confirmed = show_partial_forms_warning(self)
+            confirmed: bool = show_partial_forms_warning(self)
             if not confirmed:
                 # User cancelled or closed dialog, revert button
                 self.partial_forms_button.setChecked(False)
