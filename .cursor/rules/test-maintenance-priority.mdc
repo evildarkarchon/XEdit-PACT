@@ -1,0 +1,206 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Test Maintenance Priority Rule
+
+## Overview
+Keeping tests up-to-date is a **CRITICAL PRIORITY** for maintaining code quality and reliability. All code changes must be accompanied by corresponding test updates to ensure the codebase remains robust and maintainable.
+
+## Core Requirements
+
+### Test Coverage Requirements
+- **ALL** new functionality **MUST** have corresponding tests
+- **ALL** bug fixes **MUST** include regression tests
+- **ALL** refactoring **MUST** maintain or improve test coverage
+- **ALL** API changes **MUST** update existing tests
+
+### Test Quality Standards
+- Tests should be **readable** and **maintainable**
+- Tests should be **independent** and **repeatable**
+- Tests should have **clear assertions** and **meaningful names**
+- Tests should **fail fast** and provide **useful error messages**
+
+## Test Update Patterns
+
+### New Feature Development
+```python
+# ✅ CORRECT: Write tests alongside new features
+class TestNewFeature:
+    def test_new_feature_basic_functionality(self):
+        """Test basic functionality of new feature."""
+        feature = NewFeature()
+        result = feature.process_data("test_input")
+        assert result == "expected_output"
+    
+    def test_new_feature_edge_cases(self):
+        """Test edge cases and error conditions."""
+        feature = NewFeature()
+        with pytest.raises(ValueError):
+            feature.process_data("")
+    
+    def test_new_feature_integration(self):
+        """Test integration with existing components."""
+        # Test how new feature works with existing code
+        pass
+```
+
+### Bug Fix Testing
+```python
+# ✅ CORRECT: Include regression tests for bug fixes
+class TestBugFix:
+    def test_regression_bug_123(self):
+        """Regression test for bug #123 - ensure it doesn't happen again."""
+        # Reproduce the original bug scenario
+        buggy_input = "specific_input_that_caused_bug"
+        
+        # Test that the fix works
+        result = fixed_function(buggy_input)
+        assert result is not None
+        assert result.status == "success"
+    
+    def test_related_edge_cases(self):
+        """Test related edge cases that might have similar issues."""
+        # Test variations of the bug scenario
+        pass
+```
+
+### Refactoring Test Maintenance
+```python
+# ✅ CORRECT: Update tests when refactoring
+class TestRefactoredComponent:
+    def test_public_interface_unchanged(self):
+        """Ensure public interface remains the same after refactoring."""
+        # Test that external API hasn't changed
+        component = RefactoredComponent()
+        result = component.public_method("input")
+        assert result == "expected_output"
+    
+    def test_internal_behavior_improved(self):
+        """Test that internal behavior is improved or at least maintained."""
+        # Test performance, error handling, etc.
+        pass
+```
+
+## Test Maintenance Checklist
+
+### Before Making Code Changes
+- [ ] Identify existing tests that will be affected
+- [ ] Plan new tests for new functionality
+- [ ] Consider edge cases and error conditions
+- [ ] Think about integration points
+
+### During Code Changes
+- [ ] Update existing tests to match new behavior
+- [ ] Add new tests for new functionality
+- [ ] Ensure all tests pass
+- [ ] Verify test coverage is maintained or improved
+
+### After Code Changes
+- [ ] Run the full test suite
+- [ ] Check test coverage reports
+- [ ] Review test names and documentation
+- [ ] Ensure tests are still meaningful and useful
+
+## Anti-Patterns to Avoid
+
+### ❌ WRONG: Ignoring failing tests
+```python
+# Don't ignore or comment out failing tests
+# @pytest.mark.skip(reason="FIXME: This test is broken")
+def test_broken_functionality():
+    # This test is failing but we're ignoring it
+    pass
+```
+
+### ❌ WRONG: Tests that don't test anything
+```python
+# Don't write tests that don't actually test functionality
+def test_function_does_something():
+    result = function()
+    assert result is not None  # This doesn't test anything meaningful
+    # Should test specific behavior instead
+```
+
+### ❌ WRONG: Tests that are too brittle
+```python
+# Don't write tests that break with any minor change
+def test_internal_implementation():
+    # This test depends on internal implementation details
+    assert function._internal_state == "specific_value"
+    # Should test public behavior instead
+```
+
+### ❌ WRONG: Missing test updates
+```python
+# Don't change code without updating tests
+def old_function():
+    return "old_behavior"
+
+# Code changed but test wasn't updated
+def test_old_function():
+    result = old_function()
+    assert result == "old_behavior"  # This will fail now
+```
+
+## Key Files to Reference
+- [tests/test_cleaning_worker.py](mdc:tests/test_cleaning_worker.py) - Example of comprehensive worker thread testing
+- [tests/test_state_manager.py](mdc:tests/test_state_manager.py) - Thread safety testing patterns
+- [tests/test_utils.py](mdc:tests/test_utils.py) - Utility function testing with edge cases
+- [run_tests.py](mdc:run_tests.py) - Test execution and coverage reporting
+
+## Test Categories
+
+### Unit Tests
+- Test individual functions and methods
+- Mock external dependencies
+- Focus on specific behavior
+- Should be fast and isolated
+
+### Integration Tests
+- Test interactions between components
+- Test real dependencies when possible
+- Focus on data flow and interfaces
+- May be slower than unit tests
+
+### Thread Safety Tests
+- Test concurrent access to shared resources
+- Test race conditions and deadlocks
+- Use multiple threads to stress test
+- Verify thread-safe behavior
+
+### Performance Tests
+- Test performance characteristics
+- Benchmark critical operations
+- Detect performance regressions
+- Set performance baselines
+
+## Test Maintenance Best Practices
+
+### Test Organization
+- Group related tests in classes
+- Use descriptive test names
+- Add docstrings explaining test purpose
+- Keep tests focused and single-purpose
+
+### Test Data Management
+- Use fixtures for common test data
+- Create helper functions for test setup
+- Use factories for complex object creation
+- Keep test data minimal and relevant
+
+### Test Documentation
+- Document test purpose and scope
+- Explain complex test scenarios
+- Document test data requirements
+- Keep documentation up-to-date
+
+### Continuous Integration
+- Run tests on every code change
+- Maintain test coverage thresholds
+- Monitor test execution time
+- Alert on test failures
+
+## Enforcement
+Test maintenance is **MANDATORY** for all code changes. No code should be merged without corresponding test updates. Tests are the first line of defense against bugs and regressions.

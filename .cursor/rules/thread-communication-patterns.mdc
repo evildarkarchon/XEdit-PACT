@@ -1,0 +1,195 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Thread Communication Patterns Rule
+
+## Inter-Thread Communication Requirements
+
+### Qt Signals and Slots Only
+- **ONLY** use Qt signals and slots for inter-thread communication
+- **NEVER** use global variables for thread communication
+- **NEVER** directly call methods across thread boundaries
+
+## Signal/Slot Communication Patterns
+
+### Worker Thread with Signals
+```python
+# ✅ CORRECT: Define signals in worker thread
+class CleaningWorker(QThread):
+    # Progress signals
+    progress = Signal(int, int)  # current, total
+    plugin_started = Signal(str)  # plugin name
+    plugin_completed = Signal(str, bool, str)  # plugin, success, message
+    
+    # Status signals
+    log_output = Signal(str)  # real-time log output
+    error_occurred = Signal(str)  # error message
+    finished = Signal()  # completion signal
+
+    def run(self):
+        try:
+            for i, plugin in enumerate(self.plugins):
+                self.plugin_started.emit(plugin)
+                
+                # Do work
+                result = self.process_plugin(plugin)
+                
+                self.plugin_completed.emit(plugin, result.success, result.message)
+                self.progress.emit(i + 1, len(self.plugins))
+                
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+        finally:
+            self.finished.emit()
+```
+
+### Main Thread Slot Connections
+```python
+# ✅ CORRECT: Connect signals to slots in main thread
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.worker = CleaningWorker()
+        
+        # Connect signals to slots
+        self.worker.progress.connect(self.update_progress_bar)
+        self.worker.plugin_started.connect(self.on_plugin_started)
+        self.worker.plugin_completed.connect(self.on_plugin_completed)
+        self.worker.log_output.connect(self.append_log)
+        self.worker.error_occurred.connect(self.show_error)
+        self.worker.finished.connect(self.on_cleaning_finished)
+
+    def start_cleaning(self):
+        self.worker.start()  # Start in separate thread
+
+    def update_progress_bar(self, current, total):
+        # This runs in the main thread
+        self.progress_bar.setValue(current)
+        self.progress_bar.setMaximum(total)
+
+    def on_plugin_started(self, plugin_name):
+        # This runs in the main thread
+        self.status_label.setText(f"Processing: {plugin_name}")
+
+    def on_plugin_completed(self, plugin, success, message):
+        # This runs in the main thread
+        if success:
+            self.log_widget.append(f"✅ {plugin}: {message}")
+        else:
+            self.log_widget.append(f"❌ {plugin}: {message}")
+
+    def show_error(self, error_message):
+        # This runs in the main thread
+        QMessageBox.critical(self, "Error", error_message)
+
+    def on_cleaning_finished(self):
+        # This runs in the main thread
+        self.start_button.setEnabled(True)
+        self.status_label.setText("Cleaning completed")
+```
+
+## Data Passing Patterns
+
+### Safe Data Passing
+```python
+# ✅ CORRECT: Pass data through constructor or signals
+class WorkerThread(QThread):
+    result_ready = Signal(dict)
+
+    def __init__(self, data_list):
+        super().__init__()
+        self.data_list = data_list.copy()  # Copy to avoid sharing
+
+    def run(self):
+        result = self.process_data(self.data_list)
+        self.result_ready.emit(result.copy())  # Copy result before emitting
+```
+
+### State Management with Signals
+```python
+# ✅ CORRECT: Use StateManager with signals
+class StateManager(QObject):
+    state_changed = Signal(str, object)  # property_name, new_value
+    configuration_changed = Signal(bool)  # is_fully_configured
+    progress_changed = Signal(int, int)  # current, total
+
+    def update(self, **kwargs):
+        with QMutexLocker(self._mutex):
+            # Update state
+            for key, value in kwargs.items():
+                if hasattr(self._state, key):
+                    setattr(self._state, key, value)
+        
+        # Emit signals outside of mutex lock
+        for key, value in kwargs.items():
+            self.state_changed.emit(key, value)
+```
+
+## Anti-Patterns to Avoid
+
+### ❌ WRONG: Global variables for communication
+```python
+# Global variables are not thread-safe
+global_data = {}  # Don't use globals
+
+def worker_function():
+    global_data['result'] = compute_result()  # Race condition!
+
+def main_thread_function():
+    result = global_data.get('result')  # Race condition!
+```
+
+### ❌ WRONG: Direct cross-thread method calls
+```python
+# Don't call methods directly across threads
+class BadPattern:
+    def start_worker(self):
+        self.worker = WorkerThread()
+        self.worker.start()
+    
+    def update_ui(self):
+        # This is called from worker thread - WRONG!
+        self.ui_element.setText("Updated")
+        self.progress_bar.setValue(50)
+```
+
+### ❌ WRONG: Shared mutable objects
+```python
+# Don't share mutable objects between threads
+class BadPattern:
+    def __init__(self):
+        self.shared_list = []  # Mutable object
+
+    def worker_thread(self):
+        self.shared_list.append("item")  # Race condition!
+
+    def main_thread(self):
+        item = self.shared_list.pop()  # Race condition!
+```
+
+## Key Files to Reference
+- [PactLib/cleaning_worker.py](mdc:PactLib/cleaning_worker.py) - Signal definitions and emission
+- [PactLib/state_manager.py](mdc:PactLib/state_manager.py) - State management with signals
+- [PACT_Interface.py](mdc:PACT_Interface.py) - Signal/slot connections in main interface
+
+## Best Practices
+
+### Signal Design
+- Use descriptive signal names
+- Pass immutable data or copies of mutable data
+- Include error signals for exception handling
+- Use typed signals when possible
+
+### Slot Design
+- Keep slots simple and fast
+- Avoid blocking operations in slots
+- Use slots for UI updates only
+- Handle errors gracefully
+
+### Thread Boundaries
+- Never call UI methods from worker threads
+- Always use signals for cross-thread communication
+- Assume all shared data needs protection
+- Design for thread safety from the beginning

@@ -1,0 +1,257 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Test Coverage Standards Rule
+
+## Overview
+Maintaining high test coverage is essential for code quality and reliability. This rule establishes coverage standards and requirements for all code changes.
+
+## Coverage Requirements
+
+### Minimum Coverage Thresholds
+- **Unit Tests**: Minimum 90% line coverage
+- **Integration Tests**: Minimum 80% line coverage
+- **Critical Paths**: 100% coverage required
+- **Error Handling**: 100% coverage required
+- **Thread Safety**: 100% coverage required
+
+### Coverage Categories
+
+#### Critical Code Paths (100% Required)
+- Error handling and exception paths
+- Thread safety mechanisms
+- Configuration validation
+- File I/O operations
+- Network communication
+- Security-sensitive code
+
+#### Business Logic (90% Required)
+- Core application functionality
+- Data processing algorithms
+- State management
+- User interface logic
+- Data validation
+
+#### Utility Functions (85% Required)
+- Helper functions and utilities
+- Data transformation functions
+- Formatting and parsing functions
+- Mathematical operations
+
+## Coverage Measurement
+
+### Line Coverage
+```python
+# ✅ CORRECT: Ensure all code paths are tested
+def complex_function(input_data):
+    if input_data is None:
+        return None  # This line must be tested
+    
+    if len(input_data) == 0:
+        return []  # This line must be tested
+    
+    result = []
+    for item in input_data:
+        if item > 0:
+            result.append(item * 2)  # This line must be tested
+        else:
+            result.append(0)  # This line must be tested
+    
+    return result  # This line must be tested
+
+# Test all branches
+def test_complex_function():
+    assert complex_function(None) is None  # Test None case
+    assert complex_function([]) == []  # Test empty list
+    assert complex_function([1, -1, 2]) == [2, 0, 4]  # Test normal case
+```
+
+### Branch Coverage
+```python
+# ✅ CORRECT: Test all conditional branches
+def test_all_branches():
+    # Test positive branch
+    result = process_condition(True)
+    assert result == "positive"
+    
+    # Test negative branch
+    result = process_condition(False)
+    assert result == "negative"
+    
+    # Test edge case
+    result = process_condition(None)
+    assert result == "unknown"
+```
+
+### Exception Coverage
+```python
+# ✅ CORRECT: Test all exception paths
+def test_exception_handling():
+    # Test normal operation
+    result = risky_operation("valid_input")
+    assert result == "success"
+    
+    # Test exception case
+    with pytest.raises(ValueError):
+        risky_operation("invalid_input")
+    
+    # Test specific exception message
+    with pytest.raises(ValueError, match="Invalid input"):
+        risky_operation("")
+```
+
+## Coverage Reporting
+
+### Running Coverage
+```bash
+# Run tests with coverage
+python -m pytest --cov=PactLib --cov=PACT_Interface --cov-report=term-missing --cov-report=html
+
+# Generate coverage report
+coverage run -m pytest
+coverage report
+coverage html
+```
+
+### Coverage Configuration
+```ini
+# .coveragerc
+[run]
+source = PactLib, PACT_Interface
+omit = 
+    */tests/*
+    */test_*
+    */__pycache__/*
+    */venv/*
+    */env/*
+    */.venv/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if self.debug:
+    if settings.DEBUG
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if __name__ == .__main__.:
+    class .*\bProtocol\):
+    @(abc\.)?abstractmethod
+```
+
+## Coverage Improvement Strategies
+
+### Identify Uncovered Code
+```python
+# Use coverage to find uncovered lines
+def find_uncovered_code():
+    # Run coverage analysis
+    coverage_data = coverage.Coverage()
+    coverage_data.start()
+    
+    # Run your code
+    your_function()
+    
+    coverage_data.stop()
+    coverage_data.save()
+    
+    # Analyze results
+    missing_lines = coverage_data.get_missing()
+    return missing_lines
+```
+
+### Add Missing Tests
+```python
+# ✅ CORRECT: Add tests for uncovered code
+def test_missing_edge_case():
+    """Test edge case that was previously uncovered."""
+    # Test the specific scenario that wasn't covered
+    edge_case_input = "specific_edge_case"
+    result = function_under_test(edge_case_input)
+    assert result is not None
+```
+
+### Refactor for Testability
+```python
+# ✅ CORRECT: Refactor code to make it more testable
+class TestableComponent:
+    def __init__(self, dependency=None):
+        self.dependency = dependency or DefaultDependency()
+    
+    def process(self, data):
+        # Make dependencies injectable for testing
+        return self.dependency.process(data)
+
+# Now we can test with mocked dependencies
+def test_with_mocked_dependency():
+    mock_dep = Mock()
+    mock_dep.process.return_value = "mocked_result"
+    
+    component = TestableComponent(mock_dep)
+    result = component.process("test_data")
+    
+    assert result == "mocked_result"
+    mock_dep.process.assert_called_once_with("test_data")
+```
+
+## Coverage Monitoring
+
+### Continuous Integration
+```yaml
+# .github/workflows/test.yml
+- name: Run tests with coverage
+  run: |
+    python -m pytest --cov=PactLib --cov=PACT_Interface --cov-report=xml
+    coverage report --fail-under=90
+
+- name: Upload coverage to Codecov
+  uses: codecov/codecov-action@v3
+  with:
+    file: ./coverage.xml
+    fail_ci_if_error: true
+```
+
+### Coverage Alerts
+```python
+# Set up coverage alerts
+def check_coverage_threshold():
+    coverage_data = coverage.Coverage()
+    coverage_data.load()
+    
+    total_coverage = coverage_data.report()
+    
+    if total_coverage < 90:
+        raise Exception(f"Coverage {total_coverage}% is below 90% threshold")
+```
+
+## Key Files to Reference
+- [run_tests.py](mdc:run_tests.py) - Test execution with coverage reporting
+- [tests/conftest.py](mdc:tests/conftest.py) - Test configuration and fixtures
+- [pyproject.toml](mdc:pyproject.toml) - Coverage configuration in pytest settings
+- [coverage.xml](mdc:coverage.xml) - Coverage report output
+
+## Coverage Best Practices
+
+### Test Organization
+- Group tests by functionality
+- Use descriptive test names
+- Keep tests focused and single-purpose
+- Use fixtures for common setup
+
+### Coverage Analysis
+- Review coverage reports regularly
+- Focus on critical code paths first
+- Don't chase 100% coverage blindly
+- Ensure meaningful coverage, not just line count
+
+### Maintenance
+- Update tests when code changes
+- Remove obsolete tests
+- Refactor tests for better maintainability
+- Keep test data and fixtures up-to-date
+
+## Enforcement
+Coverage standards are **MANDATORY** for all code changes. Coverage reports must be generated and reviewed before merging any code. Coverage thresholds must be maintained or improved with each change.
