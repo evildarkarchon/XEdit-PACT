@@ -1,6 +1,5 @@
 """Pytest configuration and common fixtures for XEdit-PACT tests."""
 
-import logging
 import tempfile
 from pathlib import Path
 from typing import Generator
@@ -9,6 +8,7 @@ import pytest
 from PySide6.QtCore import QCoreApplication
 
 from PactLib.config_manager import ConfigManager
+from PactLib.logging_config import setup_test_logging
 from PactLib.state_manager import StateManager
 
 
@@ -80,5 +80,5 @@ def sample_plugin_list() -> list[str]:
 # Configure logging for tests
 @pytest.fixture(autouse=True)
 def setup_logging() -> None:
-    """Setup logging for tests."""
-    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    """Setup logging for tests with file output."""
+    setup_test_logging()

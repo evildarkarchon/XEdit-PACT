@@ -27,7 +27,6 @@ class TestAppState:
         assert state.cleaned_plugins == set()
         assert state.failed_plugins == set()
         assert state.skipped_plugins == set()
-        assert state.quickautoclean_plugins == set()
 
     def test_is_fully_configured_property(self) -> None:
         """Test the is_fully_configured property."""
@@ -53,13 +52,11 @@ class TestAppState:
         state.cleaned_plugins = {"plugin1.esp", "plugin2.esp"}
         state.failed_plugins = {"plugin3.esp"}
         state.skipped_plugins = {"plugin4.esp"}
-        state.quickautoclean_plugins = {"plugin5.esp"}
 
         stats = state.cleaning_stats
         assert stats["cleaned"] == 2
         assert stats["failed"] == 1
         assert stats["skipped"] == 1
-        assert stats["quickautoclean"] == 1
         assert stats["total"] == 10
 
     def test_state_immutability(self) -> None:
@@ -190,7 +187,6 @@ class TestStateManager:
         state_manager.add_result("plugin1.esp", "cleaned", "Successfully cleaned")
         state_manager.add_result("plugin2.esp", "failed", "Failed to clean")
         state_manager.add_result("plugin3.esp", "skipped", "Skipped")
-        state_manager.add_result("plugin4.esp", "quickautoclean", "Quick auto-clean")
 
         qt_app.processEvents()
 
@@ -199,11 +195,10 @@ class TestStateManager:
         assert "plugin1.esp" in state.cleaned_plugins
         assert "plugin2.esp" in state.failed_plugins
         assert "plugin3.esp" in state.skipped_plugins
-        assert "plugin4.esp" in state.quickautoclean_plugins
-        assert state.progress == 4
+        assert state.progress == 3
 
         # Check signals
-        assert len(plugin_results) == 4
+        assert len(plugin_results) == 3
         assert ("plugin1.esp", "cleaned", "Successfully cleaned") in plugin_results
         assert ("plugin2.esp", "failed", "Failed to clean") in plugin_results
 
@@ -232,7 +227,6 @@ class TestStateManager:
         assert state.cleaned_plugins == set()
         assert state.failed_plugins == set()
         assert state.skipped_plugins == set()
-        assert state.quickautoclean_plugins == set()
 
     def test_update_configuration_paths(self, state_manager: StateManager) -> None:
         """Test updating configuration paths."""

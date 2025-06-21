@@ -105,16 +105,13 @@ class TestConfigManager:
         # Set up game-specific config
         config_manager.set("PACT_Data.XEdit_Lists.Skyrim", ["Skyrim.esm", "Update.esm"])
         config_manager.set("PACT_Data.Skip_Lists.Skyrim", ["Dawnguard.esm"])
-        config_manager.set("PACT_Data.QAC_Lists.Skyrim", ["Unofficial Skyrim Patch.esp"])
 
         game_config = config_manager.get_game_config("Skyrim")
 
         assert "xedit_list" in game_config
         assert "skip_list" in game_config
-        assert "quickautoclean_list" in game_config
         assert game_config["xedit_list"] == ["Skyrim.esm", "Update.esm"]
         assert game_config["skip_list"] == ["Dawnguard.esm"]
-        assert game_config["quickautoclean_list"] == ["Unofficial Skyrim Patch.esp"]
 
     def test_get_paths_method(self, config_manager: ConfigManager) -> None:
         """Test the get_paths method."""

@@ -59,12 +59,15 @@ class TestComponentIntegration:
     def test_gui_controller_state_manager_integration(self, mock_exists) -> None:
         """Test integration between GUI controller and state manager."""
         with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
-            config_path = Path(f.name)
+            main_config_path = Path(f.name)
+        with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
+            user_config_path = Path(f.name)
 
         try:
-            config_manager = ConfigManager(config_path)
+            main_config_manager = ConfigManager(main_config_path)
+            user_config_manager = ConfigManager(user_config_path)
             state_manager = StateManager()
-            controller = GuiController(state_manager, config_manager)
+            controller = GuiController(state_manager, main_config_manager, user_config_manager)
 
             # Set up state
             state_manager.update(
@@ -73,50 +76,54 @@ class TestComponentIntegration:
                 xedit_exe_path=Path("/path/to/xEdit.exe"),
             )
 
-            # Manually save state to config (refresh_configuration only loads from config)
-            config_manager.set("Load_Order.File", "/path/to/loadorder.txt")
-            config_manager.set("Mod_Organizer.Binary", "/path/to/ModOrganizer.exe")
-            config_manager.set("xEdit.Binary", "/path/to/xEdit.exe")
+            # Manually save state to user config (refresh_configuration only loads from config)
+            user_config_manager.set("Load_Order.File", "/path/to/loadorder.txt")
+            user_config_manager.set("Mod_Organizer.Binary", "/path/to/ModOrganizer.exe")
+            user_config_manager.set("xEdit.Binary", "/path/to/xEdit.exe")
 
             # Refresh configuration to load from config
             controller.refresh_configuration()
 
             # Verify both state and config are updated
             assert state_manager.get("load_order_path") == Path("/path/to/loadorder.txt")
-            load_order_file = config_manager.get("Load_Order.File")
+            load_order_file = user_config_manager.get("Load_Order.File")
             assert load_order_file is not None
             assert Path(load_order_file) == Path("/path/to/loadorder.txt")
 
             # Test MO2 mode toggle
             controller.toggle_mo2_mode(True)
             assert state_manager.get("mo2_mode") is True
-            assert config_manager.get("Settings.MO2_Mode") is True
+            assert user_config_manager.get("Settings.MO2_Mode") is True
         finally:
-            config_path.unlink(missing_ok=True)
+            main_config_path.unlink(missing_ok=True)
+            user_config_path.unlink(missing_ok=True)
 
     @patch.object(Path, "exists", return_value=True)
     def test_full_configuration_workflow(self, mock_exists) -> None:
         """Test the complete configuration workflow."""
         with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
-            config_path = Path(f.name)
+            main_config_path = Path(f.name)
+        with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
+            user_config_path = Path(f.name)
 
         try:
-            config_manager = ConfigManager(config_path)
+            main_config_manager = ConfigManager(main_config_path)
+            user_config_manager = ConfigManager(user_config_path)
             state_manager = StateManager()
-            controller = GuiController(state_manager, config_manager)
+            controller = GuiController(state_manager, main_config_manager, user_config_manager)
 
             # Simulate user configuring all components
             # 1. Configure load order
             state_manager.update(load_order_path=Path("/path/to/loadorder.txt"), is_load_order_configured=True)
-            config_manager.set("Load_Order.File", "/path/to/loadorder.txt")
+            user_config_manager.set("Load_Order.File", "/path/to/loadorder.txt")
 
             # 2. Configure MO2
             state_manager.update(mo2_exe_path=Path("/path/to/ModOrganizer.exe"), is_mo2_configured=True)
-            config_manager.set("Mod_Organizer.Binary", "/path/to/ModOrganizer.exe")
+            user_config_manager.set("Mod_Organizer.Binary", "/path/to/ModOrganizer.exe")
 
             # 3. Configure xEdit
             state_manager.update(xedit_exe_path=Path("/path/to/xEdit.exe"), is_xedit_configured=True)
-            config_manager.set("xEdit.Binary", "/path/to/xEdit.exe")
+            user_config_manager.set("xEdit.Binary", "/path/to/xEdit.exe")
 
             # 4. Toggle MO2 mode
             controller.toggle_mo2_mode(True)
@@ -126,33 +133,37 @@ class TestComponentIntegration:
             assert state_manager.get("mo2_mode") is True
 
             # Verify configuration persistence
-            new_config_manager = ConfigManager(config_path)
-            load_order_file = new_config_manager.get("Load_Order.File")
+            new_user_config_manager = ConfigManager(user_config_path)
+            load_order_file = new_user_config_manager.get("Load_Order.File")
             assert load_order_file is not None
             assert Path(load_order_file) == Path("/path/to/loadorder.txt")
 
-            mo2_binary = new_config_manager.get("Mod_Organizer.Binary")
+            mo2_binary = new_user_config_manager.get("Mod_Organizer.Binary")
             assert mo2_binary is not None
             assert Path(mo2_binary) == Path("/path/to/ModOrganizer.exe")
 
-            xedit_binary = new_config_manager.get("xEdit.Binary")
+            xedit_binary = new_user_config_manager.get("xEdit.Binary")
             assert xedit_binary is not None
             assert Path(xedit_binary) == Path("/path/to/xEdit.exe")
 
-            assert new_config_manager.get("Settings.MO2_Mode") is True
+            assert new_user_config_manager.get("Settings.MO2_Mode") is True
         finally:
-            config_path.unlink(missing_ok=True)
+            main_config_path.unlink(missing_ok=True)
+            user_config_path.unlink(missing_ok=True)
 
     @patch.object(Path, "exists", return_value=True)
     def test_cleaning_workflow_integration(self, mock_exists) -> None:
         """Test integration of cleaning workflow components."""
         with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
-            config_path = Path(f.name)
+            main_config_path = Path(f.name)
+        with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
+            user_config_path = Path(f.name)
 
         try:
-            config_manager = ConfigManager(config_path)
+            main_config_manager = ConfigManager(main_config_path)
+            user_config_manager = ConfigManager(user_config_path)
             state_manager = StateManager()
-            controller = GuiController(state_manager, config_manager)
+            controller = GuiController(state_manager, main_config_manager, user_config_manager)
 
             # Set up complete configuration
             state_manager.update(
@@ -213,17 +224,21 @@ class TestComponentIntegration:
 
                 assert state_manager.get("is_cleaning") is False
         finally:
-            config_path.unlink(missing_ok=True)
+            main_config_path.unlink(missing_ok=True)
+            user_config_path.unlink(missing_ok=True)
 
     def test_signal_propagation_integration(self) -> None:
         """Test signal propagation between components."""
         with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
-            config_path = Path(f.name)
+            main_config_path = Path(f.name)
+        with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
+            user_config_path = Path(f.name)
 
         try:
-            config_manager = ConfigManager(config_path)
+            main_config_manager = ConfigManager(main_config_path)
+            user_config_manager = ConfigManager(user_config_path)
             state_manager = StateManager()
-            controller = GuiController(state_manager, config_manager)
+            controller = GuiController(state_manager, main_config_manager, user_config_manager)
 
             # Track signals
             state_changes = []
@@ -274,21 +289,25 @@ class TestComponentIntegration:
             assert "finished" in cleaning_events
             assert len(plugin_events) > 0
         finally:
-            config_path.unlink(missing_ok=True)
+            main_config_path.unlink(missing_ok=True)
+            user_config_path.unlink(missing_ok=True)
 
     def test_error_handling_integration(self) -> None:
         """Test error handling across components."""
         with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
-            config_path = Path(f.name)
+            main_config_path = Path(f.name)
+        with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
+            user_config_path = Path(f.name)
 
         try:
-            config_manager = ConfigManager(config_path)
+            main_config_manager = ConfigManager(main_config_path)
+            user_config_manager = ConfigManager(user_config_path)
             state_manager = StateManager()
-            controller = GuiController(state_manager, config_manager)
+            controller = GuiController(state_manager, main_config_manager, user_config_manager)
 
             # Test invalid configuration handling
-            config_manager.set("Load_Order.File", "/non/existent/path.txt")
-            config_manager.set("Mod_Organizer.Binary", "/non/existent/path.exe")
+            user_config_manager.set("Load_Order.File", "/non/existent/path.txt")
+            user_config_manager.set("Mod_Organizer.Binary", "/non/existent/path.exe")
 
             # Refresh configuration
             controller.refresh_configuration()
@@ -302,19 +321,23 @@ class TestComponentIntegration:
             controller.start_cleaning()
             assert state_manager.get("is_cleaning") is False
         finally:
-            config_path.unlink(missing_ok=True)
+            main_config_path.unlink(missing_ok=True)
+            user_config_path.unlink(missing_ok=True)
 
     @patch.object(Path, "exists", return_value=True)
     def test_configuration_persistence_integration(self, mock_exists) -> None:
         """Test configuration persistence across component restarts."""
         with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
-            config_path = Path(f.name)
+            main_config_path = Path(f.name)
+        with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
+            user_config_path = Path(f.name)
 
         try:
             # Initial setup
-            config_manager1 = ConfigManager(config_path)
+            main_config_manager1 = ConfigManager(main_config_path)
+            user_config_manager1 = ConfigManager(user_config_path)
             state_manager1 = StateManager()
-            controller1 = GuiController(state_manager1, config_manager1)
+            controller1 = GuiController(state_manager1, main_config_manager1, user_config_manager1)
 
             # Configure everything
             state_manager1.update(
@@ -327,18 +350,19 @@ class TestComponentIntegration:
             )
             controller1.toggle_mo2_mode(True)
 
-            # Manually save state to config (refresh_configuration only loads from config)
-            config_manager1.set("Load_Order.File", "/path/to/loadorder.txt")
-            config_manager1.set("Mod_Organizer.Binary", "/path/to/ModOrganizer.exe")
-            config_manager1.set("xEdit.Binary", "/path/to/xEdit.exe")
-            config_manager1.set("PACT_Settings.MO2Mode", True)
+            # Manually save state to user config (refresh_configuration only loads from config)
+            user_config_manager1.set("Load_Order.File", "/path/to/loadorder.txt")
+            user_config_manager1.set("Mod_Organizer.Binary", "/path/to/ModOrganizer.exe")
+            user_config_manager1.set("xEdit.Binary", "/path/to/xEdit.exe")
+            user_config_manager1.set("Settings.MO2_Mode", True)
 
             controller1.refresh_configuration()
 
             # Create new instances (simulating application restart)
-            config_manager2 = ConfigManager(config_path)
+            main_config_manager2 = ConfigManager(main_config_path)
+            user_config_manager2 = ConfigManager(user_config_path)
             state_manager2 = StateManager()
-            controller2 = GuiController(state_manager2, config_manager2)
+            controller2 = GuiController(state_manager2, main_config_manager2, user_config_manager2)
 
             # Refresh configuration to load saved settings
             controller2.refresh_configuration()
@@ -349,4 +373,5 @@ class TestComponentIntegration:
             assert state_manager2.get("xedit_exe_path") == Path("/path/to/xEdit.exe")
             assert state_manager2.get("mo2_mode") is True
         finally:
-            config_path.unlink(missing_ok=True)
+            main_config_path.unlink(missing_ok=True)
+            user_config_path.unlink(missing_ok=True)

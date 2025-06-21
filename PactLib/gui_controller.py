@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -11,12 +10,14 @@ from PySide6.QtWidgets import QFileDialog, QWidget
 
 from PactLib.cleaning_service import CleaningService
 from PactLib.cleaning_worker import CleaningWorker
+from PactLib.logging_config import get_logger
+from PactLib.utils import detect_xedit_game
 
 if TYPE_CHECKING:
     from PactLib.config_manager import ConfigManager
     from PactLib.state_manager import AppState, StateManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GuiController(QObject):
@@ -30,23 +31,27 @@ class GuiController(QObject):
     def __init__(
         self,
         state: StateManager,
-        config: ConfigManager,
+        main_config: ConfigManager,
+        user_config: ConfigManager,
         parent: QWidget | None = None,
     ) -> None:
         """Initialize the GUI controller."""
         super().__init__(parent)
         self.state: StateManager = state
-        self.config: ConfigManager = config
-        self.service: CleaningService = CleaningService(config, state)
+        self.main_config: ConfigManager = main_config  # For skip lists and game configs
+        self.user_config: ConfigManager = user_config  # For user settings
         self.worker: CleaningWorker | None = None
+
+        # Create cleaning service with both config managers
+        self.service: CleaningService = CleaningService(main_config, user_config, state)
 
         # Load initial configuration
         self._load_configuration()
 
     def _load_configuration(self) -> None:
         """Load configuration from file into state."""
-        # Load paths
-        paths: dict[str, Path | None] = self.config.get_paths()
+        # Load paths from user config
+        paths: dict[str, Path | None] = self.user_config.get_paths()
         self.state.update_configuration_paths(
             load_order_path=paths.get("load_order_path"),
             mo2_exe_path=paths.get("mo2_exe_path"),
@@ -55,8 +60,13 @@ class GuiController(QObject):
             xedit_install_path=paths.get("xedit_install_path"),
         )
 
-        # Load settings
-        settings: dict[str, Any] = self.config.get_settings()
+        # Load settings from user config
+        settings: dict[str, Any] = self.user_config.get_settings()
+
+        # Load Partial Forms setting specifically
+        partial_forms_enabled = self.user_config.get("Settings.Partial_Forms", False)
+        settings["partial_forms_enabled"] = partial_forms_enabled
+
         self.state.update(**settings)
 
     def configure_load_order(self, parent_widget: QWidget) -> bool:
@@ -94,13 +104,13 @@ class GuiController(QObject):
 
                     # Save to config asynchronously
                     try:
-                        success: bool = self.config.set("Load_Order.File", str(path))
+                        success: bool = self.user_config.set("Load_Order.File", str(path))
                         if not success:
                             logger.error("Failed to save load order path to configuration")
                             self.show_error.emit("Error", "Failed to save configuration")
                             return False
                     except (OSError, ValueError, TypeError) as e:
-                        logger.error(f"Error saving configuration: {e}")
+                        logger.error(f"Error saving load order configuration: {e}")
                         self.show_error.emit("Error", f"Configuration error: {e}")
                         return False
 
@@ -151,7 +161,7 @@ class GuiController(QObject):
 
                     # Save to config asynchronously
                     try:
-                        success: bool = self.config.update_multiple({
+                        success: bool = self.user_config.update_multiple({
                             "Mod_Organizer.Binary": str(path),
                             "Mod_Organizer.Install_Path": str(install_path),
                         })
@@ -230,9 +240,15 @@ class GuiController(QObject):
                         xedit_install_path=install_path,
                     )
 
+                    # Detect game type from xEdit executable
+                    game_type: str | None = detect_xedit_game(str(path), self.state.get("load_order_path"))
+                    if game_type:
+                        self.state.update(game_type=game_type)
+                        logger.info(f"Detected game type: {game_type}")
+
                     # Save to config asynchronously
                     try:
-                        success: bool = self.config.update_multiple({
+                        success: bool = self.user_config.update_multiple({
                             "xEdit.Binary": str(path),
                             "xEdit.Install_Path": str(install_path),
                         })
@@ -271,11 +287,27 @@ class GuiController(QObject):
         """
         try:
             self.state.update(mo2_mode=enabled)
-            self.config.set("Settings.MO2_Mode", enabled)
+            self.user_config.set("Settings.MO2_Mode", enabled)
             self.update_status.emit(f"MO2 Mode {'enabled' if enabled else 'disabled'}")
         except (OSError, ValueError, TypeError) as e:
             logger.error(f"Error toggling MO2 mode: {e}")
             self.show_error.emit("Error", f"Failed to update MO2 mode: {e}")
+
+    def toggle_partial_forms(self, enabled: bool) -> None:
+        """
+        Toggles the Partial Forms feature. The UI is responsible for confirmation and warning.
+
+        Args:
+            enabled (bool): Specifies whether to enable or disable Partial Forms.
+        """
+        try:
+            # Update state and configuration
+            self.state.update(partial_forms_enabled=enabled)
+            self.user_config.set("Settings.Partial_Forms", enabled)
+            self.update_status.emit(f"Partial Forms {'enabled' if enabled else 'disabled'}")
+        except (OSError, ValueError, TypeError) as e:
+            logger.error(f"Error toggling Partial Forms: {e}")
+            self.show_error.emit("Error", f"Failed to update Partial Forms setting: {e}")
 
     def get_plugins_to_clean(self) -> list[str]:
         """
@@ -286,6 +318,9 @@ class GuiController(QObject):
         comments or do not represent valid plugin files with specific file extensions. The function
         also accounts for prefixes in the load order entries and removes them before adding the
         plugin filenames to the result.
+
+        The function validates that plugin extensions (.esp, .esm, .esl) are at the end of the line.
+        If content is found after the extension, it separates the plugin name and logs a warning.
 
         Returns:
             list[str]: A list of plugin filenames extracted from the load order file. If the load
@@ -312,14 +347,21 @@ class GuiController(QObject):
             # Read load order file
             plugins: list[str] = []
             with state_snapshot.load_order_path.open(encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#"):
+                for line_num, line in enumerate(f, 1):
+                    original_line = line.strip()
+                    if original_line and not original_line.startswith("#"):
                         # Remove any prefix characters (*, +, etc.)
-                        if line[0] in ["*", "+", "-"]:
-                            line = line[1:].strip()
+                        if original_line[0] in ["*", "+", "-"]:
+                            line = original_line[1:].strip()
+                        else:
+                            line = original_line
+
+                        # Check if line ends with a valid plugin extension
                         if line.lower().endswith((".esp", ".esm", ".esl")):
-                            plugins.append(line)
+                            # Validate that extension is at the end of the line
+                            plugin_name = self._validate_plugin_line(line, line_num, original_line)
+                            if plugin_name:
+                                plugins.append(plugin_name)
 
             logger.info(f"Found {len(plugins)} plugins in load order")
         except (OSError, UnicodeDecodeError) as e:
@@ -327,6 +369,44 @@ class GuiController(QObject):
             return []
         else:
             return plugins
+
+    def _validate_plugin_line(self, line: str, line_num: int, original_line: str) -> str | None:
+        """
+        Validates a plugin line to ensure the extension is at the end.
+
+        Args:
+            line: The processed line (with prefix removed)
+            line_num: The line number in the file
+            original_line: The original line from the file
+
+        Returns:
+            str | None: The validated plugin name, or None if invalid
+        """
+        # Check for valid plugin extensions
+        valid_extensions = (".esp", ".esm", ".esl")
+
+        for ext in valid_extensions:
+            if line.lower().endswith(ext):
+                # Check if there's content after the extension
+                ext_pos = line.lower().rfind(ext)
+                if ext_pos + len(ext) < len(line):
+                    # There's content after the extension - separate it
+                    plugin_name = line[: ext_pos + len(ext)]
+                    remaining_content = line[ext_pos + len(ext) :].strip()
+
+                    logger.warning(
+                        f"Line {line_num}: Plugin extension not at end of line. "
+                        f"Original: '{original_line}' -> Using: '{plugin_name}' "
+                        f"(ignored: '{remaining_content}')"
+                    )
+
+                    return plugin_name
+                else:
+                    # Extension is at the end - valid
+                    return line
+
+        # No valid extension found
+        return None
 
     def start_cleaning(self) -> None:
         """
@@ -346,39 +426,46 @@ class GuiController(QObject):
         Raises:
             None
         """
-        if self.state.get("is_cleaning"):
-            logger.warning("Cleaning already in progress")
-            return
+        try:
+            if self.state.get("is_cleaning"):
+                logger.warning("Cleaning already in progress")
+                return
 
-        # Validate configuration
-        if not self.state.state.is_fully_configured:
-            self.show_error.emit(
-                "Configuration Required",
-                "Please configure all paths before starting",
-            )
-            return
+            # Validate configuration
+            if not self.state.state.is_fully_configured:
+                self.show_error.emit(
+                    "Configuration Required",
+                    "Please configure all paths before starting",
+                )
+                return
 
-        # Get plugins to clean
-        plugins: list[str] | None = self.get_plugins_to_clean()
-        if not plugins:
-            self.show_error.emit("No Plugins", "No plugins found in load order")
-            return
+            # Get plugins to clean
+            plugins: list[str] | None = self.get_plugins_to_clean()
+            if not plugins:
+                self.show_error.emit("No Plugins", "No plugins found in load order")
+                return
 
-        # Reset previous results
-        self.state.reset_cleaning_state()
+            logger.info(f"Starting cleaning process for {len(plugins)} plugins")
 
-        # Create and start worker
-        self.worker = CleaningWorker(self.service, self.state, plugins)
+            # Reset previous results
+            self.state.reset_cleaning_state()
 
-        # Connect signals
-        self.worker.plugin_started.connect(lambda p: self.update_status.emit(f"Cleaning: {p}"))
-        self.worker.plugin_completed.connect(self._on_plugin_completed)
-        self.worker.finished.connect(self._on_cleaning_finished)
-        self.worker.error.connect(lambda e: self.show_error.emit("Cleaning Error", e))
+            # Create and start worker
+            self.worker = CleaningWorker(self.service, self.state, plugins)
 
-        # Start cleaning
-        self.worker.start()
-        self.update_status.emit("Starting cleaning process...")
+            # Connect signals
+            self.worker.plugin_started.connect(lambda p: self.update_status.emit(f"Cleaning: {p}"))
+            self.worker.plugin_completed.connect(self._on_plugin_completed)
+            self.worker.finished.connect(self._on_cleaning_finished)
+            self.worker.error.connect(lambda e: self.show_error.emit("Cleaning Error", e))
+
+            # Start cleaning
+            self.worker.start()
+            self.update_status.emit("Starting cleaning process...")
+
+        except Exception as e:
+            logger.error(f"Error in start_cleaning: {e}")
+            self.show_error.emit("Error", f"Failed to start cleaning: {e}")
 
     def stop_cleaning(self) -> None:
         """
@@ -443,5 +530,6 @@ class GuiController(QObject):
             f"  MO2: {'✓' if state.is_mo2_configured else '✗'}\n"
             f"  xEdit: {'✓' if state.is_xedit_configured else '✗'}\n"
             f"  MO2 Mode: {'Enabled' if state.mo2_mode else 'Disabled'}\n"
+            f"  Partial Forms: {'Enabled' if state.partial_forms_enabled else 'Disabled'}\n"
             f"  Game Type: {state.game_type or 'Not detected'}"
         )

@@ -56,15 +56,14 @@ class TestCleaningProgressDialog:
         """Test update_statistics method."""
         dialog = CleaningProgressDialog()
 
-        stats = {"cleaned": 5, "failed": 2, "skipped": 1, "quickautoclean": 3, "total": 11}
+        stats = {"cleaned": 5, "failed": 2, "skipped": 1, "total": 8}
 
         dialog.update_statistics(stats)
 
         assert dialog.stats_labels["cleaned"].text() == "5"
         assert dialog.stats_labels["failed"].text() == "2"
         assert dialog.stats_labels["skipped"].text() == "1"
-        assert dialog.stats_labels["quickautoclean"].text() == "3"
-        assert dialog.stats_labels["total"].text() == "11"
+        assert dialog.stats_labels["total"].text() == "8"
 
     def test_set_cleaning_finished(self) -> None:
         """Test set_cleaning_finished method."""

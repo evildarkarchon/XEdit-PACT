@@ -106,7 +106,7 @@ PACT_Data:
 
   Skip_Lists:
     FO3:
-      - ''
+      - ""
       - Fallout3.esm
       - Anchorage.esm
       - ThePitt.esm
@@ -115,34 +115,33 @@ PACT_Data:
       - Zeta.esm
       - Unofficial Fallout 3 Patch.esm
     FNV:
-      - ''
+      - ""
       - FalloutNV.esm
       - DeadMoney.esm
-      - HonestHearts.esm
       - OldWorldBlues.esm
+      - HonestHearts.esm
       - LonesomeRoad.esm
-      - GunRunnersArsenal.esm
       - TribalPack.esm
       - MercenaryPack.esm
       - ClassicPack.esm
       - CaravanPack.esm
-      - YUP - Base Game + All DLC.esm
+      - GunRunnersArsenal.esm
       - Unofficial Patch NVSE Plus.esp
-      - "TaleOfTwoWastelands.esm"
-      - "TTWInteriors_Core.esm"
-      - "TTWInteriorsProject_Combo.esm"
-      - "TTWInteriorsProject_ComboHotfix.esm"
-      - "TTWInteriorsProject_Merged.esm"
-      - "TTWInteriors_Core_Hotfix.esm"
+      - TaleOfTwoWastelands.esm
+      - TTWInteriors_Core.esm
+      - TTWInteriorsProject_Combo.esm
+      - TTWInteriorsProject_ComboHotfix.esm
+      - TTWInteriorsProject_Merged.esm
+      - TTWInteriors_Core_Hotfix.esm
     FO4:
-      - ''
+      - ""
       - Fallout4.esm
+      - DLCCoast.esm
+      - DLCNukaWorld.esm
       - DLCRobot.esm
       - DLCworkshop01.esm
-      - DLCCoast.esm
       - DLCworkshop02.esm
       - DLCworkshop03.esm
-      - DLCNukaWorld.esm
       - Unofficial Fallout 4 Patch.esp
       - PPF.esm
       - PRP.esp
@@ -152,11 +151,11 @@ PACT_Data:
       - SS2_XPAC_Chapter3.esm
       - SS2Extended.esp
     SSE:
-      - ''
+      - ""
       - Skyrim.esm
       - Update.esm
-      - Dawnguard.esm
       - HearthFires.esm
       - Dragonborn.esm
+      - Dawnguard.esm
       - Unofficial Skyrim Special Edition Patch.esp
       - _ResourcePack.esl

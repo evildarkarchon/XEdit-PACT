@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 import subprocess
 import time
 from dataclasses import dataclass
-from logging import Logger
 from typing import TYPE_CHECKING, Any, Callable
 
+from PactLib.logging_config import get_logger
 from PactLib.utils import detect_xedit_game, run_process_with_realtime_output
 
 if TYPE_CHECKING:
@@ -18,7 +17,7 @@ if TYPE_CHECKING:
     from PactLib.state_manager import AppState, StateManager
 
 
-logger: Logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -27,16 +26,17 @@ class CleanResult:
 
     success: bool
     message: str
-    status: str  # "cleaned", "failed", "skipped", "quickautoclean"
+    status: str  # "cleaned", "failed", "skipped"
     duration: float = 0.0
 
 
 class CleaningService:
     """Pure business logic for plugin cleaning - no Qt dependencies."""
 
-    def __init__(self, config: ConfigManager, state: StateManager) -> None:
+    def __init__(self, main_config: ConfigManager, user_config: ConfigManager, state: StateManager) -> None:
         """Initialize the cleaning service."""
-        self.config = config
+        self.main_config = main_config  # For skip lists and game configs
+        self.user_config = user_config  # For user settings
         self.state = state
         self.progress_callback: Callable | None = None
         self.log_callback: Callable | None = None
@@ -69,18 +69,11 @@ class CleaningService:
 
     def clean_plugin(self, plugin_name: str) -> CleanResult:
         """
-        Cleans a specified plugin by performing either a normal cleaning or a quick auto
-        cleaning based on the current application state. If the plugin is in the skip
-        list, it is skipped. Errors encountered during the cleaning process are logged
-        and appropriately handled.
-
+        Cleans a specified plugin by always performing Quick Auto Clean (QAC).
         Args:
             plugin_name: The name of the plugin to be cleaned.
-
         Returns:
-            CleanResult: An object representing the result of the cleaning operation. It
-            contains the success status, an optional message, the operation status
-            (e.g., "skipped", "failed"), and the time duration of the cleaning process.
+            CleanResult: An object representing the result of the cleaning operation.
         """
         start_time: float = time.time()
 
@@ -97,12 +90,41 @@ class CleaningService:
                     duration=time.time() - start_time,
                 )
 
-            # Check if plugin needs QuickAutoClean
-            if self._needs_quickautoclean(plugin_name, state_snapshot.game_type):
-                return self._run_quickautoclean(plugin_name, state_snapshot)
+            # Ensure environment is validated and game type is detected
+            if not state_snapshot.game_type:
+                # Try to detect game type
+                game_type: str | None = detect_xedit_game(
+                    str(state_snapshot.xedit_exe_path), state_snapshot.load_order_path
+                )
+                if game_type:
+                    self.state.update(game_type=game_type)
+                    logger.info(f"Detected game type: {game_type}")
+                    # Get updated state
+                    state_snapshot = self.state.state
+                # For universal xEdit executables, try to detect from load order
+                elif state_snapshot.load_order_path and state_snapshot.load_order_path.exists():
+                    from PactLib.utils import detect_game_from_load_order
 
-            # Run normal cleaning
-            return self._run_normal_clean(plugin_name, state_snapshot)
+                    game_type = detect_game_from_load_order(state_snapshot.load_order_path)
+                    if game_type:
+                        self.state.update(game_type=game_type)
+                        logger.info(f"Detected game type from load order: {game_type}")
+                        state_snapshot = self.state.state
+
+            # Always run Quick Auto Clean
+            command: list[str] = self._build_cleaning_command(plugin_name, state_snapshot)
+            if not command:
+                return CleanResult(
+                    success=False,
+                    message=f"Failed to build cleaning command for {plugin_name}",
+                    status="failed",
+                    duration=time.time() - start_time,
+                )
+
+            result: CleanResult = self._execute_cleaning_command(command, plugin_name, state_snapshot.cleaning_timeout)
+
+            if result.success:
+                result.status = "cleaned"
 
         except (OSError, RuntimeError, ValueError, KeyError) as e:
             logger.error(f"Error cleaning {plugin_name}: {e}")
@@ -112,94 +134,112 @@ class CleaningService:
                 status="failed",
                 duration=time.time() - start_time,
             )
+        else:
+            return result
 
     def _should_skip_plugin(self, plugin_name: str, game_type: str | None) -> bool:
         """Check if plugin should be skipped."""
         if not game_type:
             return False
 
-        game_config: dict[str, Any] = self.config.get_game_config(game_type)
+        game_config: dict[str, Any] = self.main_config.get_game_config(game_type)
         skip_list: list[str] = game_config.get("skip_list", [])
 
+        # Special case: TTW plugins are listed under FNV in the skip list
+        if game_type == "TTW":
+            fnv_config: dict[str, Any] = self.main_config.get_game_config("FNV")
+            fnv_skip_list: list[str] = fnv_config.get("skip_list", [])
+            skip_list.extend(fnv_skip_list)
+
         # Also check universal skip list
-        universal_skip: list[str] = self.config.get("PACT_Data.Skip_Lists.Universal", [])
+        universal_skip: list[str] = self.main_config.get("PACT_Data.Skip_Lists.Universal", [])
 
         return plugin_name.lower() in [p.lower() for p in skip_list + universal_skip]
 
-    def _needs_quickautoclean(self, plugin_name: str, game_type: str | None) -> bool:
-        """Check if plugin needs QuickAutoClean."""
-        if not game_type:
-            return False
-
-        game_config: dict[str, Any] = self.config.get_game_config(game_type)
-        qac_list: list[str] = game_config.get("quickautoclean_list", [])
-
-        # Also check universal QAC list
-        universal_qac: list[str] = self.config.get("PACT_Data.QAC_Lists.Universal", [])
-
-        return plugin_name.lower() in [p.lower() for p in qac_list + universal_qac]
-
-    def _run_quickautoclean(self, plugin_name: str, state_snapshot: AppState) -> CleanResult:
-        """Run QuickAutoClean on a plugin."""
-        logger.info(f"Running QuickAutoClean on {plugin_name}")
-
-        command: list[str] = self._build_cleaning_command(
-            plugin_name,
-            state_snapshot,
-            quickautoclean=True,
-        )
-
-        result: CleanResult = self._execute_cleaning_command(command, plugin_name, state_snapshot.cleaning_timeout)
-
-        if result.success:
-            return CleanResult(
-                success=True,
-                message=f"QuickAutoClean completed for {plugin_name}",
-                status="quickautoclean",
-                duration=result.duration,
-            )
-        return result
-
-    def _run_normal_clean(self, plugin_name: str, state_snapshot: AppState) -> CleanResult:
-        """Run normal cleaning on a plugin."""
-        logger.info(f"Running normal clean on {plugin_name}")
-
-        command: list[str] = self._build_cleaning_command(
-            plugin_name,
-            state_snapshot,
-            quickautoclean=False,
-        )
-
-        result: CleanResult = self._execute_cleaning_command(command, plugin_name, state_snapshot.cleaning_timeout)
-
-        if result.success:
-            result.status = "cleaned"
-
-        return result
-
     @staticmethod
-    def _build_cleaning_command(
-            plugin_name: str, state_snapshot: AppState, quickautoclean: bool = False
-    ) -> list[str]:
-        """Build the command to clean a plugin."""
+    def _build_cleaning_command(plugin_name: str, state_snapshot: AppState) -> list[str]:
+        """Build the command to clean a plugin using -QAC."""
         command: list[str] = []
 
-        # Add MO2 if in MO2 mode
+        # Check if xEdit executable path is set
+        if not state_snapshot.xedit_exe_path:
+            logger.error("xEdit executable path not set")
+            return []
+
+        # Determine if xEdit executable is specific or universal
+        xedit_exe_name: str = state_snapshot.xedit_exe_path.name.lower()
+
+        # Specific xEdit executables (game-specific)
+        specific_xedit_list: list[str] = [
+            "fo3edit.exe",
+            "fo3edit64.exe",
+            "fnvedit.exe",
+            "fnvedit64.exe",
+            "fo4edit.exe",
+            "fo4edit64.exe",
+            "sseedit.exe",
+            "sseedit64.exe",
+            "fo4vredit.exe",
+            "fo4vredit64.exe",
+            "tes5vredit.exe",
+        ]
+
+        # Universal xEdit executables
+        universal_xedit_list: list[str] = ["xedit.exe", "xedit64.exe", "xfoedit.exe", "xfoedit64.exe"]
+
+        is_specific_xedit: bool = xedit_exe_name in specific_xedit_list
+        is_universal_xedit: bool = xedit_exe_name in universal_xedit_list
+
+        if not is_specific_xedit and not is_universal_xedit:
+            logger.error(f"Invalid xEdit executable: {xedit_exe_name}")
+            return []
+
+        # Always use -QAC for cleaning
+        cleaning_flag = "-QAC"
+
+        # Add Partial Forms options if enabled
+        partial_forms_options: list[str] = []
+        if state_snapshot.partial_forms_enabled:
+            partial_forms_options = ["-iknowwhatimdoing", "-allowmakepartial"]
+            logger.info("Partial Forms feature enabled - adding experimental command line options")
+
+        # Build command based on MO2 mode and xEdit type
         if state_snapshot.mo2_mode and state_snapshot.mo2_exe_path:
-            command.extend([str(state_snapshot.mo2_exe_path), "moshell", "run"])
-
-        # Add xEdit executable
-        command.append(str(state_snapshot.xedit_exe_path))
-
-        # Add arguments
-        if quickautoclean:
-            command.extend(["-quickautoclean", "-autoload"])
+            command.extend([str(state_snapshot.mo2_exe_path), "run", str(state_snapshot.xedit_exe_path), "-a"])
+            args_list: list[str] = []
+            if is_specific_xedit:
+                args_list.extend([cleaning_flag, "-autoexit", "-autoload", f'"{plugin_name}"'])
+                args_list.extend(partial_forms_options)
+            elif state_snapshot.game_type:
+                args_list.extend([
+                    f"-{state_snapshot.game_type}",
+                    cleaning_flag,
+                    "-autoexit",
+                    "-autoload",
+                    f'"{plugin_name}"',
+                ])
+                args_list.extend(partial_forms_options)
+            else:
+                logger.error("Game type not set for universal xEdit executable")
+                return []
+            command.append(f'"{(" ".join(args_list))}"')
         else:
-            command.extend(["-autoclean", "-autoload"])
-
-        # Add plugin name
-        command.append(plugin_name)
-
+            command.append(str(state_snapshot.xedit_exe_path))
+            if is_specific_xedit:
+                command.extend([cleaning_flag, "-autoexit", "-autoload", f'"{plugin_name}"'])
+                command.extend(partial_forms_options)
+            elif state_snapshot.game_type:
+                command.extend([
+                    f"-{state_snapshot.game_type}",
+                    cleaning_flag,
+                    "-autoexit",
+                    "-autoload",
+                    f'"{plugin_name}"',
+                ])
+                command.extend(partial_forms_options)
+            else:
+                logger.error("Game type not set for universal xEdit executable")
+                return []
         return command
 
     def _execute_cleaning_command(self, command: list[str], plugin_name: str, timeout: int) -> CleanResult:
@@ -358,14 +398,17 @@ class CleaningService:
 
         # Detect game type if not set
         if not state_snapshot.game_type:
-            game_type: str | None = detect_xedit_game(str(state_snapshot.xedit_exe_path))
+            game_type: str | None = detect_xedit_game(
+                str(state_snapshot.xedit_exe_path), state_snapshot.load_order_path
+            )
             if game_type:
                 self.state.update(game_type=game_type)
+                logger.info(f"Detected game type: {game_type}")
             else:
                 # For generic xEdit executables (xEdit.exe, xEdit64.exe),
                 # we can't auto-detect game type, but we can still proceed
                 logger.warning(
-                    "Could not auto-detect game type from xEdit executable. "
+                    "Could not auto-detect game type from xEdit executable or load order file. "
                     "For generic xEdit executables, game type may need to be set manually."
                 )
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import contextlib
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -11,12 +10,14 @@ import psutil
 import ruamel.yaml
 from PySide6.QtCore import QMutex, QMutexLocker, QThread
 
+from PactLib.logging_config import get_logger
+
 if TYPE_CHECKING:
     from subprocess import CompletedProcess
 
     from ruamel.yaml.main import YAML
 
-logger: logging.Logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class YamlManager:
@@ -224,8 +225,8 @@ def yaml_settings_write(yaml_path: str | Path, new_value: Any, key_path: str | l
             yaml.dump(new_value, f)
 
         # Thread-safe cache update after full file write
-        with QMutexLocker(_yaml_manager._cache_mutex):
-            _yaml_manager._cache[str(yaml_path)] = new_value
+        with QMutexLocker(_yaml_manager._cache_mutex):  # noqa: SLF001
+            _yaml_manager._cache[str(yaml_path)] = new_value  # noqa: SLF001
     else:
         _yaml_manager.set_value(str(yaml_path), key_path, new_value)
 
@@ -257,17 +258,67 @@ def check_process(pid: int, threshold: int = 5) -> bool:
         return cpu_percent > threshold
 
 
-def detect_xedit_game(xedit_path: str) -> str | None:
+def detect_game_from_load_order(load_order_path: Path) -> str | None:
+    """
+    Detects the game type by reading the load order file and looking for specific game master files.
+
+    This function reads the load order file line by line to determine the game mode
+    by checking for specific game master files in the first few lines.
+
+    Args:
+        load_order_path: The path to the load order file.
+
+    Returns:
+        The game type abbreviation (e.g., "SSE", "FO3", "FNV", "FO4") if detected,
+        or None if no game type could be determined.
+
+    Raises:
+        FileNotFoundError: If the load order file is not found.
+        OSError: If there is an error reading the load order file.
+    """
+    try:
+        with load_order_path.open("r", encoding="utf-8", errors="ignore") as lo_check:
+            for line in lo_check:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    # Remove any prefix characters (*, +, etc.)
+                    if line[0] in ["*", "+", "-"]:
+                        line = line[1:].strip()
+
+                    if "Skyrim.esm" in line:
+                        return "SSE"
+                    if "Fallout3.esm" in line:
+                        return "FO3"
+                    if "FalloutNV.esm" in line:
+                        return "FNV"
+                    if "Fallout4.esm" in line:
+                        return "FO4"
+    except FileNotFoundError:
+        logger.error(f"Load order file not found: {load_order_path}")
+        raise
+    except Exception as e:
+        logger.error(f"Error reading load order file: {load_order_path}, error: {e!s}")
+        raise
+
+    return None
+
+
+def detect_xedit_game(xedit_path: str, load_order_path: Path | None = None) -> str | None:
     """
     Detects the game type associated with a given xEdit executable based on its file
-    name. The function identifies the game by checking for specific keywords in the
-    file name and returns the corresponding game abbreviation if a match is found.
+    name, and optionally from the load order file if the executable detection fails.
+
+    The function first attempts to identify the game by checking for specific keywords in the
+    xEdit executable filename. If that fails and a load order path is provided, it will
+    attempt to detect the game type by reading the load order file and looking for specific
+    game master files.
 
     Args:
         xedit_path: The file path to the xEdit executable.
+        load_order_path: Optional path to the load order file for fallback detection.
 
     Returns:
-        The abbreviation of the detected game (e.g., "FO3", "FNV", "FO4", "SSE") if a
+        The abbreviation of the detected game (e.g., "FO3", "FNV", "FO4", "SSE", "TTW") if a
         match is found, or None if no match is identified.
     """
     filename: str = Path(xedit_path).stem.lower()
@@ -275,6 +326,7 @@ def detect_xedit_game(xedit_path: str) -> str | None:
     game_map: dict[str, str] = {
         "fo3edit": "FO3",
         "fnvedit": "FNV",
+        "ttwedit": "TTW",
         "fo4edit": "FO4",
         "fo4vredit": "FO4",
         "sseedit": "SSE",
@@ -282,21 +334,30 @@ def detect_xedit_game(xedit_path: str) -> str | None:
         "skyrimvredit": "SSE",
     }
 
+    # First try to detect from xEdit executable name
     for key, game in game_map.items():
         if key in filename:
             return game
 
+    # If xEdit detection failed and load order path is provided, try load order detection
+    if load_order_path and load_order_path.exists():
+        try:
+            return detect_game_from_load_order(load_order_path)
+        except (FileNotFoundError, OSError) as e:
+            logger.warning(f"Could not detect game type from load order file: {e}")
+            return None
+
     return None
 
 
-def run_process(command: list[str], timeout: int | None = None) -> tuple[int, str, str]:
+def run_process(command: list[str] | str, timeout: int | None = None) -> tuple[int, str, str]:
     """
     Executes a subprocess command and captures its output, handling potential errors
     gracefully. The function allows setting a timeout for the subprocess execution
     and returns the exit code, standard output, and standard error.
 
     Args:
-        command: The command to execute as a list of strings. Each element should
+        command: The command to execute as a list of strings or a string. Each element should
             represent a part of the command, such as the executable and its
             arguments.
         timeout: The timeout in seconds for the command to complete execution. If
@@ -337,7 +398,7 @@ def run_process(command: list[str], timeout: int | None = None) -> tuple[int, st
 
 
 def run_process_with_realtime_output(
-    command: list[str],
+    command: list[str] | str,
     output_callback: Callable[[str], None] | None = None,
     timeout: int | None = None,
     working_dir: str | Path | None = None,
@@ -351,8 +412,8 @@ def run_process_with_realtime_output(
     terminate processes that exceed the specified duration.
 
     Args:
-        command (list[str]): The command to be executed as a list of strings. For example,
-            ["ls", "-la"].
+        command (list[str] | str): The command to be executed as a list of strings or a string. For example,
+            ["ls", "-la"] or "ls -la".
         output_callback (Callable[[str], None] | None): A callback function to handle each line
             of the standard output in real time. If None, the lines will only be collected and
             returned at the end.
@@ -375,9 +436,12 @@ def run_process_with_realtime_output(
     start_time: float = time.time()
     stdout_lines: list[Any] = []
     stderr_lines: list[Any] = []
+    process: subprocess.Popen | None = None
+    stdout_thread: OutputReaderThread | None = None
+    stderr_thread: OutputReaderThread | None = None
 
     try:
-        process: subprocess.Popen = subprocess.Popen(
+        process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -401,7 +465,10 @@ def run_process_with_realtime_output(
             except (OSError, ValueError) as oe:
                 logger.error(f"Error reading process output: {oe}")
             finally:
-                pipe.close()
+                try:
+                    pipe.close()
+                except (OSError, ValueError):
+                    pass  # Ignore errors when closing pipe
 
         class OutputReaderThread(QThread):
             def __init__(self, pipe: Any, line_list: list[str], callback: Callable[[str], None] | None) -> None:
@@ -409,13 +476,25 @@ def run_process_with_realtime_output(
                 self.pipe = pipe
                 self.line_list = line_list
                 self.callback = callback
+                self._stop_flag = False
 
             def run(self) -> None:
-                read_output(self.pipe, self.line_list, self.callback)
+                try:
+                    read_output(self.pipe, self.line_list, self.callback)
+                except Exception as e:
+                    logger.error(f"Error in output reader thread: {e}")
+
+            def stop(self) -> None:
+                """Stop the thread gracefully."""
+                self._stop_flag = True
+                self.quit()
+                if not self.wait(1000):  # Wait up to 1 second
+                    self.terminate()
+                    self.wait(1000)  # Wait up to 1 second for termination
 
         # Start threads to read stdout and stderr
-        stdout_thread: OutputReaderThread = OutputReaderThread(process.stdout, stdout_lines, output_callback)
-        stderr_thread: OutputReaderThread = OutputReaderThread(process.stderr, stderr_lines, None)
+        stdout_thread = OutputReaderThread(process.stdout, stdout_lines, output_callback)
+        stderr_thread = OutputReaderThread(process.stderr, stderr_lines, None)
 
         stdout_thread.start()
         stderr_thread.start()
@@ -423,22 +502,59 @@ def run_process_with_realtime_output(
         # Monitor for timeout
         while process.poll() is None:
             if timeout and (time.time() - start_time) > timeout:
+                # Timeout reached - terminate process and threads
+                logger.info("Process timeout reached, terminating...")
                 process.terminate()
                 process.wait(timeout=5)  # Give it 5 seconds to terminate gracefully
                 if process.poll() is None:
                     process.kill()  # Force kill if still running
+
+                # Stop threads
+                if stdout_thread:
+                    stdout_thread.stop()
+                if stderr_thread:
+                    stderr_thread.stop()
+
                 return -1, "\n".join(stdout_lines), "Process timed out"
 
             time.sleep(0.1)
 
         # Wait for threads to finish reading all output
-        stdout_thread.wait(5000)  # 5 second timeout
-        stderr_thread.wait(5000)  # 5 second timeout
+        if stdout_thread:
+            stdout_thread.wait(5000)  # 5 second timeout
+        if stderr_thread:
+            stderr_thread.wait(5000)  # 5 second timeout
 
         return process.returncode, "\n".join(stdout_lines), "\n".join(stderr_lines)
 
     except (OSError, subprocess.SubprocessError, ValueError) as e:
+        logger.error(f"Error in run_process_with_realtime_output: {e}")
         return -1, "", str(e)
+    except KeyboardInterrupt:
+        logger.info("Process interrupted by user")
+        # Clean up process and threads
+        if process:
+            try:
+                process.terminate()
+                process.wait(timeout=2)
+                if process.poll() is None:
+                    process.kill()
+            except (OSError, subprocess.SubprocessError):
+                pass
+
+        # Stop threads
+        if stdout_thread:
+            stdout_thread.stop()
+        if stderr_thread:
+            stderr_thread.stop()
+
+        return -1, "\n".join(stdout_lines), "Process interrupted by user"
+    finally:
+        # Ensure threads are cleaned up
+        if stdout_thread and stdout_thread.isRunning():
+            stdout_thread.stop()
+        if stderr_thread and stderr_thread.isRunning():
+            stderr_thread.stop()
 
 
 def monitor_log_file(

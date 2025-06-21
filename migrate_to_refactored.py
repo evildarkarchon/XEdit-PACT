@@ -3,17 +3,18 @@
 
 from __future__ import annotations
 
-import logging
 import shutil
 import sys
-from logging import Logger
 from pathlib import Path
 
 from PactLib.config_manager import ConfigManager
+from PactLib.logging_config import get_logger, setup_logging
 from PactLib.state_manager import StateManager
 from PactLib.utils import yaml_settings
 
-logger: Logger = logging.getLogger(__name__)
+# Setup logging for migration
+setup_logging(log_file="migration.log")
+logger = get_logger(__name__)
 
 # Paths
 PACT_SETTINGS_PATH: Path = Path("PACT Settings.yaml")

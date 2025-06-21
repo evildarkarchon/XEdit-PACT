@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QThread, Signal
+
+from PactLib.logging_config import get_logger
 
 if TYPE_CHECKING:
     from PactLib.cleaning_service import CleaningService, CleanResult
     from PactLib.state_manager import StateManager
 
-logger: logging.Logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CleaningWorker(QThread):
@@ -73,7 +74,7 @@ class CleaningWorker(QThread):
 
             # Process each plugin
             for i, plugin in enumerate(self.plugins):
-                if self._should_stop:
+                if self._should_stop or self.isInterruptionRequested():
                     logger.info("Cleaning stopped by user")
                     break
 
@@ -81,19 +82,33 @@ class CleaningWorker(QThread):
                 self.state.update(current_plugin=plugin)
                 self.plugin_started.emit(plugin)
 
-                # Clean the plugin with real-time monitoring
-                result: CleanResult = self.service.clean_plugin(plugin)
+                try:
+                    # Clean the plugin with real-time monitoring
+                    result: CleanResult = self.service.clean_plugin(plugin)
 
-                # Update results
-                self.state.add_result(plugin, result.status, result.message)
-                self.plugin_completed.emit(plugin, result.success, result.message)
-                self.progress.emit(i + 1, len(self.plugins))
+                    # Update results
+                    self.state.add_result(plugin, result.status, result.message)
+                    self.plugin_completed.emit(plugin, result.success, result.message)
+                    self.progress.emit(i + 1, len(self.plugins))
 
-                logger.info(f"Processed {plugin}: {result.status} ({result.duration:.1f}s) - {result.message}")
+                    logger.info(f"Processed {plugin}: {result.status} ({result.duration:.1f}s) - {result.message}")
+
+                except Exception as e:
+                    logger.error(f"Error processing plugin {plugin}: {e}")
+                    # Mark plugin as failed
+                    self.state.add_result(plugin, "failed", f"Error: {e}")
+                    self.plugin_completed.emit(plugin, False, f"Error: {e}")
+                    self.progress.emit(i + 1, len(self.plugins))
 
         except (OSError, RuntimeError, ValueError) as e:
             logger.error(f"Error in cleaning worker: {e}")
             self.error.emit(str(e))
+        except KeyboardInterrupt:
+            logger.info("Cleaning worker interrupted by user")
+            self.error.emit("Cleaning process was interrupted by user")
+        except Exception as e:
+            logger.error(f"Unexpected error in cleaning worker: {e}")
+            self.error.emit(f"Unexpected error: {e}")
         finally:
             # Reset cleaning state
             self.state.update(is_cleaning=False, current_plugin=None)
@@ -110,8 +125,15 @@ class CleaningWorker(QThread):
         Returns:
             None
         """
+        logger.info("Stopping cleaning worker...")
         self._should_stop = True
         self.requestInterruption()
+
+        # Wait for the thread to finish gracefully
+        if self.isRunning() and not self.wait(5000):  # Wait up to 5 seconds
+            logger.warning("Cleaning worker did not stop gracefully, terminating...")
+            self.terminate()
+            self.wait(2000)  # Wait up to 2 seconds for termination
 
     def _on_cleaning_progress(self, progress_info: dict) -> None:
         """Handle real-time progress updates from cleaning service."""
@@ -129,14 +151,10 @@ class CleaningWorker(QThread):
 
         This method retrieves the cleaning statistics from the current state
         and formats a detailed summary string, including the number of
-        cleaned, failed, skipped, quick auto-cleaned items, and the total
-        count. It ensures that the cleaning results are presented in a
-        readable, structured format.
+        cleaned, failed, skipped items, and the total count.
 
         Returns:
-            str: A formatted string summarizing the cleaning statistics. The
-            output includes keys `cleaned`, `failed`, `skipped`,
-            `quickautoclean`, and `total` extracted from the current state.
+            str: A formatted string summarizing the cleaning statistics.
         """
         stats = self.state.state.cleaning_stats
         return (
@@ -144,6 +162,5 @@ class CleaningWorker(QThread):
             f"  Cleaned: {stats['cleaned']}\n"
             f"  Failed: {stats['failed']}\n"
             f"  Skipped: {stats['skipped']}\n"
-            f"  QuickAutoClean: {stats['quickautoclean']}\n"
             f"  Total: {stats['total']}"
         )

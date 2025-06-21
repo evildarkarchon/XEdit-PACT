@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Any
 
 from ruamel import yaml
 
+from PactLib.logging_config import get_logger
 from PactLib.utils import yaml_settings, yaml_settings_write
 
-logger: logging.Logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ConfigManager:
@@ -169,13 +169,13 @@ class ConfigManager:
               specified game type.
             - "skip_list": The list of items to be skipped for the
               specified game type.
-            - "quickautoclean_list": The list of items for quick auto-clean
-              related to the specified game type.
         """
+        # Get skip list from the correct key in PACT Main.yaml
+        skip_list = self.get(f"PACT_Data.Skip_Lists.{game_type}", [])
+
         return {
             "xedit_list": self.get(f"PACT_Data.XEdit_Lists.{game_type}", []),
-            "skip_list": self.get(f"PACT_Data.Skip_Lists.{game_type}", []),
-            "quickautoclean_list": self.get(f"PACT_Data.QAC_Lists.{game_type}", []),
+            "skip_list": skip_list,
         }
 
     def get_paths(self) -> dict[str, Path | None]:

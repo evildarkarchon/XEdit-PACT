@@ -42,13 +42,13 @@ class AppState:
     cleaned_plugins: set[str] = field(default_factory=set)
     failed_plugins: set[str] = field(default_factory=set)
     skipped_plugins: set[str] = field(default_factory=set)
-    quickautoclean_plugins: set[str] = field(default_factory=set)
 
     # Settings
     journal_expiration: int = 7
     cleaning_timeout: int = 300
     cpu_threshold: int = 5
     mo2_mode: bool = False
+    partial_forms_enabled: bool = False
     game_type: str | None = None
 
     @property
@@ -67,7 +67,6 @@ class AppState:
             "cleaned": len(self.cleaned_plugins),
             "failed": len(self.failed_plugins),
             "skipped": len(self.skipped_plugins),
-            "quickautoclean": len(self.quickautoclean_plugins),
             "total": self.total_plugins,
         }
 
@@ -177,7 +176,7 @@ class StateManager(QObject):
         Args:
             plugin (str): The name of the plugin being processed.
             status (str): The status of the plugin processing. Possible values are
-                'cleaned', 'failed', 'skipped', or 'quickautoclean'.
+                'cleaned', 'failed', or 'skipped'.
             message (str, optional): A message providing additional context about the
                 plugin processing. Defaults to an empty string.
         """
@@ -188,8 +187,6 @@ class StateManager(QObject):
                 self._state.failed_plugins.add(plugin)
             elif status == "skipped":
                 self._state.skipped_plugins.add(plugin)
-            elif status == "quickautoclean":
-                self._state.quickautoclean_plugins.add(plugin)
 
             self._state.progress += 1
             self.plugin_processed.emit(plugin, status, message)
@@ -217,7 +214,6 @@ class StateManager(QObject):
             self._state.cleaned_plugins.clear()
             self._state.failed_plugins.clear()
             self._state.skipped_plugins.clear()
-            self._state.quickautoclean_plugins.clear()
 
     def update_configuration_paths(
         self,

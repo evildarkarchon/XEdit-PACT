@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import logging
 import sys
 from pathlib import Path
 
@@ -29,6 +28,7 @@ from PySide6.QtWidgets import (
 
 from PactLib.config_manager import ConfigManager
 from PactLib.gui_controller import GuiController
+from PactLib.logging_config import get_logger, log_startup_info, setup_logging
 from PactLib.state_manager import AppState, StateManager
 
 # Constants
@@ -36,12 +36,10 @@ PACT_DATA_PATH: Path = Path("PACT Data")
 PACT_YAML_PATH: Path = PACT_DATA_PATH / "PACT Main.yaml"
 PACT_CONFIG_PATH: Path = PACT_DATA_PATH / "PACT Config.yaml"  # New config file
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-logger: logging.Logger = logging.getLogger(__name__)
+# Setup logging
+setup_logging()
+logger = get_logger(__name__)
+log_startup_info(logger)
 
 
 class CleaningProgressDialog(QDialog):
@@ -101,7 +99,6 @@ class CleaningProgressDialog(QDialog):
             ("cleaned", "✓ Cleaned:"),
             ("failed", "✗ Failed:"),
             ("skipped", "⊘ Skipped:"),
-            ("quickautoclean", "⚡ QuickAutoClean:"),
             ("total", "Total:"),
         ]
 
@@ -260,8 +257,9 @@ class MainWindow(QMainWindow):
         self.progress_dialog: CleaningProgressDialog | None = None
         self.load_order_button: QPushButton | None = None
         self.mo2_button: QPushButton | None = None
-        self.xedit_button: QPushButton | None = None
         self.mo2_mode_button: QPushButton | None = None
+        self.partial_forms_button: QPushButton | None = None
+        self.xedit_button: QPushButton | None = None
         self.start_button: QPushButton | None = None
         self.stop_button: QPushButton | None = None
         self.status_bar: QStatusBar | None = None
@@ -353,6 +351,16 @@ class MainWindow(QMainWindow):
         xedit_layout.addWidget(self.xedit_button)
         xedit_layout.addStretch()
         layout.addLayout(xedit_layout)
+
+        # Partial Forms (Experimental Feature)
+        partial_forms_layout: QHBoxLayout = QHBoxLayout()
+        self.partial_forms_button = QPushButton("Partial Forms: OFF")
+        self.partial_forms_button.setCheckable(True)
+        self.partial_forms_button.setToolTip("Enable experimental Partial Forms feature (requires XEdit >= 4.1.5b)")
+        self.partial_forms_button.clicked.connect(self._toggle_partial_forms)
+        partial_forms_layout.addWidget(self.partial_forms_button)
+        partial_forms_layout.addStretch()
+        layout.addLayout(partial_forms_layout)
 
         group.setLayout(layout)
         return group
@@ -454,6 +462,16 @@ class MainWindow(QMainWindow):
                 if self.mo2_mode_button.text() != new_text:
                     self.mo2_mode_button.setText(new_text)
 
+            # Update Partial Forms button efficiently
+            if self.partial_forms_button:
+                new_checked = state_snapshot.partial_forms_enabled
+                if self.partial_forms_button.isChecked() != new_checked:
+                    self.partial_forms_button.setChecked(new_checked)
+
+                new_text = f"Partial Forms: {'ON' if state_snapshot.partial_forms_enabled else 'OFF'}"
+                if self.partial_forms_button.text() != new_text:
+                    self.partial_forms_button.setText(new_text)
+
             # Update control buttons efficiently
             if self.start_button:
                 new_enabled = state_snapshot.is_fully_configured and not state_snapshot.is_cleaning
@@ -500,9 +518,31 @@ class MainWindow(QMainWindow):
         self.controller.toggle_mo2_mode(enabled)
 
     @Slot()
+    def _toggle_partial_forms(self) -> None:
+        """Toggle Partial Forms feature with confirmation dialog."""
+        if self.partial_forms_button is None:
+            return
+        enabled: bool = self.partial_forms_button.isChecked()
+        if enabled:
+            # Show warning dialog if enabling
+            from PACT_Interface import show_partial_forms_warning
+
+            confirmed = show_partial_forms_warning(self)
+            if not confirmed:
+                # User cancelled or closed dialog, revert button
+                self.partial_forms_button.setChecked(False)
+                return
+        self.controller.toggle_partial_forms(enabled)
+
+    @Slot()
     def _start_cleaning(self) -> None:
         """Start the cleaning process."""
-        self.controller.start_cleaning()
+        try:
+            logger.info("Starting cleaning process...")
+            self.controller.start_cleaning()
+        except Exception as e:
+            logger.error(f"Error starting cleaning: {e}")
+            self._show_error("Error", f"Failed to start cleaning: {e}")
 
     @Slot()
     def _stop_cleaning(self) -> None:
@@ -577,7 +617,6 @@ class MainWindow(QMainWindow):
             "cleaned": "✓",
             "failed": "✗",
             "skipped": "⊘",
-            "quickautoclean": "⚡",
         }.get(status, "?")
 
         self._log(f"{icon} {plugin}: {message}")
@@ -597,6 +636,7 @@ class MainWindow(QMainWindow):
             "is_mo2_configured",
             "is_xedit_configured",
             "mo2_mode",
+            "partial_forms_enabled",
             "is_cleaning",
         ]:
             self._update_ui_from_state()
@@ -643,6 +683,32 @@ class MainWindow(QMainWindow):
             "A tool for automating plugin cleaning with xEdit",
         )
 
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Handle window close event with proper cleanup."""
+        # If cleaning is in progress, ask user for confirmation
+        if self.state.get("is_cleaning"):
+            reply: QMessageBox.StandardButton = QMessageBox.question(
+                self,
+                "Cleaning in Progress",
+                "Cleaning is currently in progress. Are you sure you want to close the application?\n\n"
+                "This will stop the cleaning process.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.No:
+                event.ignore()
+                return
+
+        # Stop any running cleaning process
+        if self.state.get("is_cleaning"):
+            self.controller.stop_cleaning()
+
+        # Close progress dialog if open
+        if self.progress_dialog and self.progress_dialog.isVisible():
+            self.progress_dialog.close()
+
+        event.accept()
+
 
 def create_application() -> tuple[QApplication, MainWindow]:
     """
@@ -659,9 +725,10 @@ def create_application() -> tuple[QApplication, MainWindow]:
         main window object.
     """
     # Create instances
-    config: ConfigManager = ConfigManager(PACT_CONFIG_PATH)
+    main_config: ConfigManager = ConfigManager(PACT_YAML_PATH)  # For skip lists and game configs
+    user_config: ConfigManager = ConfigManager(PACT_CONFIG_PATH)  # For user settings
     state: StateManager = StateManager()
-    controller: GuiController = GuiController(state, config)
+    controller: GuiController = GuiController(state, main_config, user_config)
 
     # Create GUI
     instance: QCoreApplication | None = QApplication.instance()
@@ -695,10 +762,63 @@ def main() -> None:
         app, window = create_application()
         window.show()
         sys.exit(app.exec())
+    except KeyboardInterrupt:
+        logger.info("Application interrupted by user")
+        sys.exit(0)
     except (OSError, RuntimeError, ValueError) as e:
         logger.error(f"Fatal error: {e}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
         sys.exit(1)
 
 
 if __name__ == "__main__":
     main()
+
+
+def show_partial_forms_warning(parent: QWidget) -> bool:
+    """
+    Show a custom warning dialog for the Partial Forms experimental feature.
+    Returns True if the user confirms, False if cancelled or closed.
+    """
+    dialog = QDialog(parent)
+    dialog.setWindowTitle("Experimental Feature Warning")
+    dialog.setModal(True)
+    layout = QVBoxLayout(dialog)
+    label = QLabel(
+        "<b>⚠️ EXPERIMENTAL FEATURE WARNING ⚠️</b><br><br>"
+        "Partial Forms is an extremely experimental feature that may cause issues.<br>"
+        "It requires an XEdit version &gt;= 4.1.5b.<br><br>"
+        "Because of the experimental nature of this feature:<br>"
+        "&bull; No support will be provided for issues related to this feature<br>"
+        "&bull; Use at your own risk<br>"
+        "&bull; It may cause data corruption or other problems<br><br>"
+        "Are you sure you want to enable Partial Forms?"
+    )
+    label.setWordWrap(True)
+    layout.addWidget(label)
+
+    button_box = QDialogButtonBox()
+    enable_btn = QPushButton("Enable")
+    cancel_btn = QPushButton("Cancel")
+    button_box.addButton(enable_btn, QDialogButtonBox.ButtonRole.AcceptRole)
+    button_box.addButton(cancel_btn, QDialogButtonBox.ButtonRole.RejectRole)
+    layout.addWidget(button_box)
+
+    result = {"confirmed": False}
+
+    def on_enable() -> None:
+        result["confirmed"] = True
+        dialog.accept()
+
+    def on_cancel() -> None:
+        dialog.reject()
+
+    enable_btn.clicked.connect(on_enable)
+    cancel_btn.clicked.connect(on_cancel)
+
+    # If closed via window close, treat as cancel
+    dialog.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, True)
+
+    return bool(dialog.exec() == QDialog.DialogCode.Accepted and result["confirmed"])
