@@ -112,7 +112,7 @@ class CleaningService:
                         state_snapshot = self.state.state
 
             # Always run Quick Auto Clean
-            command: list[str] = self._build_cleaning_command(plugin_name, state_snapshot)
+            command: str = self._build_cleaning_command(plugin_name, state_snapshot)
             if not command:
                 return CleanResult(
                     success=False,
@@ -157,14 +157,13 @@ class CleaningService:
         return plugin_name.lower() in [p.lower() for p in skip_list + universal_skip]
 
     @staticmethod
-    def _build_cleaning_command(plugin_name: str, state_snapshot: AppState) -> list[str]:
+    def _build_cleaning_command(plugin_name: str, state_snapshot: AppState) -> str:
         """Build the command to clean a plugin using -QAC."""
-        command: list[str] = []
 
         # Check if xEdit executable path is set
         if not state_snapshot.xedit_exe_path:
             logger.error("xEdit executable path not set")
-            return []
+            return ""
 
         # Determine if xEdit executable is specific or universal
         xedit_exe_name: str = state_snapshot.xedit_exe_path.name.lower()
@@ -192,57 +191,44 @@ class CleaningService:
 
         if not is_specific_xedit and not is_universal_xedit:
             logger.error(f"Invalid xEdit executable: {xedit_exe_name}")
-            return []
+            return ""
 
         # Always use -QAC for cleaning
         cleaning_flag = "-QAC"
 
         # Add Partial Forms options if enabled
-        partial_forms_options: list[str] = []
+        partial_forms_options: str = ""
         if state_snapshot.partial_forms_enabled:
-            partial_forms_options = ["-iknowwhatimdoing", "-allowmakepartial"]
+            partial_forms_options = " -iknowwhatimdoing -allowmakepartial"
             logger.info("Partial Forms feature enabled - adding experimental command line options")
 
         # Build command based on MO2 mode and xEdit type
         if state_snapshot.mo2_mode and state_snapshot.mo2_exe_path:
-            command.extend([str(state_snapshot.mo2_exe_path), "run", str(state_snapshot.xedit_exe_path), "-a"])
-            args_list: list[str] = []
+            mo2_path = str(state_snapshot.mo2_exe_path)
+            xedit_path = str(state_snapshot.xedit_exe_path)
+            
             if is_specific_xedit:
-                args_list.extend([cleaning_flag, "-autoexit", "-autoload", f'"{plugin_name}"'])
-                args_list.extend(partial_forms_options)
+                args = f'{cleaning_flag} -autoexit -autoload "{plugin_name}"{partial_forms_options}'
             elif state_snapshot.game_type:
-                args_list.extend([
-                    f"-{state_snapshot.game_type}",
-                    cleaning_flag,
-                    "-autoexit",
-                    "-autoload",
-                    f'"{plugin_name}"',
-                ])
-                args_list.extend(partial_forms_options)
+                args = f'-{state_snapshot.game_type} {cleaning_flag} -autoexit -autoload "{plugin_name}"{partial_forms_options}'
             else:
                 logger.error("Game type not set for universal xEdit executable")
-                return []
-            command.append(f'"{(" ".join(args_list))}"')
+                return ""
+            
+            # MO2 requires special quoting for arguments
+            return f'"{mo2_path}" run "{xedit_path}" -a "{args}"'
         else:
-            command.append(str(state_snapshot.xedit_exe_path))
+            xedit_path = str(state_snapshot.xedit_exe_path)
+            
             if is_specific_xedit:
-                command.extend([cleaning_flag, "-autoexit", "-autoload", f'"{plugin_name}"'])
-                command.extend(partial_forms_options)
+                return f'"{xedit_path}" {cleaning_flag} -autoexit -autoload "{plugin_name}"{partial_forms_options}'
             elif state_snapshot.game_type:
-                command.extend([
-                    f"-{state_snapshot.game_type}",
-                    cleaning_flag,
-                    "-autoexit",
-                    "-autoload",
-                    f'"{plugin_name}"',
-                ])
-                command.extend(partial_forms_options)
+                return f'"{xedit_path}" -{state_snapshot.game_type} {cleaning_flag} -autoexit -autoload "{plugin_name}"{partial_forms_options}'
             else:
                 logger.error("Game type not set for universal xEdit executable")
-                return []
-        return command
+                return ""
 
-    def _execute_cleaning_command(self, command: list[str], plugin_name: str, timeout: int) -> CleanResult:
+    def _execute_cleaning_command(self, command: str, plugin_name: str, timeout: int) -> CleanResult:
         """Execute the cleaning command with real-time monitoring."""
         start_time: float = time.time()
 
@@ -267,7 +253,7 @@ class CleaningService:
                 self._parse_cleaning_output(line, plugin_name)
 
             # Execute command with real-time monitoring
-            logger.info(f"Executing command: {' '.join(command)}")
+            logger.info(f"Executing command: {command}")
             exit_code, _, stderr = run_process_with_realtime_output(
                 command=command, output_callback=on_output_line, timeout=timeout, working_dir=None
             )
