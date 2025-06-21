@@ -525,7 +525,7 @@ class MainWindow(QMainWindow):
         enabled: bool = self.partial_forms_button.isChecked()
         if enabled:
             # Show warning dialog if enabling
-            from PACT_Interface import show_partial_forms_warning
+            from PACT_Interface import show_partial_forms_warning  # noqa: PLC0415
 
             confirmed = show_partial_forms_warning(self)
             if not confirmed:

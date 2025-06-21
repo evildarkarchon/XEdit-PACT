@@ -103,7 +103,7 @@ class CleaningService:
                     state_snapshot = self.state.state
                 # For universal xEdit executables, try to detect from load order
                 elif state_snapshot.load_order_path and state_snapshot.load_order_path.exists():
-                    from PactLib.utils import detect_game_from_load_order
+                    from PactLib.utils import detect_game_from_load_order  # noqa: PLC0415
 
                     game_type = detect_game_from_load_order(state_snapshot.load_order_path)
                     if game_type:
