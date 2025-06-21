@@ -208,25 +208,25 @@ class CleaningService:
             xedit_path = str(state_snapshot.xedit_exe_path)
             
             if is_specific_xedit:
-                args = f'{cleaning_flag} -autoexit -autoload "{plugin_name}"{partial_forms_options}'
+                args = f'{cleaning_flag} -autoexit -autoload{partial_forms_options} "{plugin_name}"'
             elif state_snapshot.game_type:
-                args = f'-{state_snapshot.game_type} {cleaning_flag} -autoexit -autoload "{plugin_name}"{partial_forms_options}'
+                args = f'-{state_snapshot.game_type} {cleaning_flag} -autoexit -autoload{partial_forms_options} "{plugin_name}"'
             else:
                 logger.error("Game type not set for universal xEdit executable")
                 return ""
             
             # MO2 requires special quoting for arguments
             return f'"{mo2_path}" run "{xedit_path}" -a "{args}"'
-        else:
-            xedit_path = str(state_snapshot.xedit_exe_path)
-            
-            if is_specific_xedit:
-                return f'"{xedit_path}" {cleaning_flag} -autoexit -autoload "{plugin_name}"{partial_forms_options}'
-            elif state_snapshot.game_type:
-                return f'"{xedit_path}" -{state_snapshot.game_type} {cleaning_flag} -autoexit -autoload "{plugin_name}"{partial_forms_options}'
-            else:
-                logger.error("Game type not set for universal xEdit executable")
-                return ""
+        
+        xedit_path = str(state_snapshot.xedit_exe_path)
+
+        # Build command based on xEdit type
+        if is_specific_xedit:
+            return f'"{xedit_path}" {cleaning_flag} -autoexit -autoload{partial_forms_options} "{plugin_name}"'
+        if state_snapshot.game_type:
+            return f'"{xedit_path}" -{state_snapshot.game_type} {cleaning_flag} -autoexit -autoload{partial_forms_options} "{plugin_name}"'
+        logger.error("Game type not set for universal xEdit executable")
+        return ""
 
     def _execute_cleaning_command(self, command: str, plugin_name: str, timeout: int) -> CleanResult:
         """Execute the cleaning command with real-time monitoring."""

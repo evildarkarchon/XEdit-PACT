@@ -18,3 +18,4 @@ __pycache__/
 !.vscode/extensions.json
 poetry.lock
 logs/
+*.code-workspace
