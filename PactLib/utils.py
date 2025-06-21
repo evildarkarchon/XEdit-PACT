@@ -13,11 +13,12 @@ from PySide6.QtCore import QMutex, QMutexLocker, QThread
 from PactLib.logging_config import get_logger
 
 if TYPE_CHECKING:
+    from logging import Logger
     from subprocess import CompletedProcess
 
     from ruamel.yaml.main import YAML
 
-logger = get_logger(__name__)
+logger: Logger = get_logger(__name__)
 
 
 class YamlManager:
@@ -134,7 +135,7 @@ class YamlManager:
                         self._cache[yaml_path] = {}
                     else:
                         with path.open(encoding="utf-8") as yaml_file:
-                            content = yaml_file.read().strip()
+                            content: str = yaml_file.read().strip()
                             if not content:
                                 # Handle empty file
                                 self._cache[yaml_path] = {}

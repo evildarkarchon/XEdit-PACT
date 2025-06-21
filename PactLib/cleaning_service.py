@@ -11,13 +11,14 @@ from PactLib.logging_config import get_logger
 from PactLib.utils import detect_xedit_game, run_process_with_realtime_output
 
 if TYPE_CHECKING:
+    from logging import Logger
     from re import Pattern
 
     from PactLib.config_manager import ConfigManager
     from PactLib.state_manager import AppState, StateManager
 
 
-logger = get_logger(__name__)
+logger: Logger = get_logger(__name__)
 
 
 @dataclass
@@ -204,11 +205,11 @@ class CleaningService:
 
         # Build command based on MO2 mode and xEdit type
         if state_snapshot.mo2_mode and state_snapshot.mo2_exe_path:
-            mo2_path = str(state_snapshot.mo2_exe_path)
-            xedit_path = str(state_snapshot.xedit_exe_path)
+            mo2_path: str = str(state_snapshot.mo2_exe_path)
+            xedit_path: str = str(state_snapshot.xedit_exe_path)
             
             if is_specific_xedit:
-                args = f'{cleaning_flag} -autoexit -autoload{partial_forms_options} "{plugin_name}"'
+                args: str = f'{cleaning_flag} -autoexit -autoload{partial_forms_options} "{plugin_name}"'
             elif state_snapshot.game_type:
                 args = f'-{state_snapshot.game_type} {cleaning_flag} -autoexit -autoload{partial_forms_options} "{plugin_name}"'
             else:

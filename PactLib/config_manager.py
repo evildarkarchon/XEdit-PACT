@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ruamel import yaml
+from ruamel.yaml import YAML
 
 from PactLib.logging_config import get_logger
 from PactLib.utils import yaml_settings, yaml_settings_write
@@ -114,9 +115,7 @@ class ConfigManager:
             OSError: If an operating system-related error occurs during file access.
         """
         try:
-            from ruamel.yaml import YAML
-
-            yaml_loader = YAML(typ="safe", pure=True)
+            yaml_loader: YAML = YAML(typ="safe", pure=True)
             with self._path.open(encoding="utf-8") as f:
                 return yaml_loader.load(f) or {}
         except (yaml.YAMLError, FileNotFoundError, PermissionError, OSError) as e:

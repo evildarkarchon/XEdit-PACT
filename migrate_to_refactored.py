@@ -6,15 +6,19 @@ from __future__ import annotations
 import shutil
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PactLib.config_manager import ConfigManager
 from PactLib.logging_config import get_logger, setup_logging
 from PactLib.state_manager import StateManager
 from PactLib.utils import yaml_settings
 
+if TYPE_CHECKING:
+    from logging import Logger
+
 # Setup logging for migration
-setup_logging(log_file="migration.log")
-logger = get_logger(__name__)
+setup_logging()
+logger: Logger = get_logger(__name__)
 
 # Paths
 PACT_SETTINGS_PATH: Path = Path("PACT Settings.yaml")
@@ -38,21 +42,21 @@ def migrate_configuration() -> bool:
         print(f"Created backup of old config: {PACT_DATA_PATH / 'PACT Main.yaml.backup'}")
 
     # Initialize new components
-    config = ConfigManager(PACT_CONFIG_PATH)
-    state = StateManager()
+    config: ConfigManager = ConfigManager(PACT_CONFIG_PATH)
+    state: StateManager = StateManager()
 
     # Load existing configuration
     print("Loading existing configuration...")
 
     # Migrate paths from PACT Settings.yaml
-    settings_paths_mapping = {
+    settings_paths_mapping: dict[str, str] = {
         "PACT_Settings.LoadOrder TXT": "load_order_path",
         "PACT_Settings.MO2 EXE": "mo2_exe_path",
         "PACT_Settings.XEDIT EXE": "xedit_exe_path",
     }
 
     # Also check old PACT Main.yaml format for fallback
-    yaml_paths_mapping = {
+    yaml_paths_mapping: dict[str, str] = {
         "PACT_Settings.Load_Order.File": "load_order_path",
         "PACT_Settings.Mod_Organizer.Binary": "mo2_exe_path",
         "PACT_Settings.Mod_Organizer.Install_Path": "mo2_install_path",
@@ -67,7 +71,7 @@ def migrate_configuration() -> bool:
             value = yaml_settings(str(PACT_SETTINGS_PATH), yaml_key)
             if value and value.strip():  # Check for non-empty strings
                 print(f"  Migrating {yaml_key}: {value}")
-                path = Path(value)
+                path: Path = Path(value)
                 settings_found = True
 
                 # Update state and save to new config format
@@ -116,7 +120,7 @@ def migrate_configuration() -> bool:
                     config.set("PACT_Settings.xEdit.Binary", str(path))
 
     # Migrate settings from PACT Settings.yaml
-    settings_mapping = {
+    settings_mapping: dict[str, str] = {
         "PACT_Settings.Journal Expiration": "journal_expiration",
         "PACT_Settings.Cleaning Timeout": "cleaning_timeout",
     }
@@ -130,7 +134,7 @@ def migrate_configuration() -> bool:
                 config.set(f"PACT_Settings.{state_key.replace('_', ' ').title()}", value)
 
     # Also check for old format settings
-    old_settings_mapping = {
+    old_settings_mapping: dict[str, str] = {
         "PACT_Settings.Journal_Expiration": "journal_expiration",
         "PACT_Settings.Cleaning_Timeout": "cleaning_timeout",
         "PACT_Settings.CPU_Threshold": "cpu_threshold",
@@ -165,7 +169,7 @@ def verify_imports() -> bool:
     try:
         import importlib.util  # noqa: PLC0415
 
-        required_modules = [
+        required_modules: list[str] = [
             "PactLib.cleaning_service",
             "PactLib.cleaning_worker",
             "PactLib.config_manager",
