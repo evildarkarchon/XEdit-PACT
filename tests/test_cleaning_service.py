@@ -92,20 +92,13 @@ class TestCleaningService:
         assert str(state_snapshot.xedit_exe_path) in command
         assert "-a" in command
 
-        # Find the arguments string
-        args_string = None
-        for arg in command:
-            if arg.startswith('"') and arg.endswith('"'):
-                args_string = arg
-                break
-
-        assert args_string is not None
-        assert "-iknowwhatimdoing" in args_string
-        assert "-allowmakepartial" in args_string
-        assert "-QAC" in args_string
-        assert "-autoexit" in args_string
-        assert "-autoload" in args_string
-        assert '"test.esp"' in args_string
+        # Verify Partial Forms options are included in the command
+        assert "-iknowwhatimdoing" in command
+        assert "-allowmakepartial" in command
+        assert "-QAC" in command
+        assert "-autoexit" in command
+        assert "-autoload" in command
+        assert '"test.esp"' in command
 
     def test_build_cleaning_command_universal_xedit_with_partial_forms(self, service):
         """Test Partial Forms options with universal xEdit executable."""

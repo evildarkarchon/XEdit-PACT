@@ -19,3 +19,5 @@ __pycache__/
 poetry.lock
 logs/
 *.code-workspace
+test_*.yaml
+!tests/test_*.yaml

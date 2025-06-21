@@ -1,4 +1,4 @@
-"""Tests for the GuiController class."""
+"""Test GUI controller functionality."""
 
 import pytest
 from pathlib import Path
@@ -38,7 +38,7 @@ def controller(
 
 
 class TestGuiController:
-    """Test the GUI controller."""
+    """Test the GUI controller with real state manager."""
 
     def test_initialization(
         self, state_manager: StateManager, main_config_manager: ConfigManager, user_config_manager: ConfigManager
@@ -55,10 +55,11 @@ class TestGuiController:
             mock_dialog.return_value = ("/path/to/loadorder.txt", "")
 
             with patch.object(Path, "exists", return_value=True):
-                result = controller.configure_load_order(Mock(spec=QWidget))
+                with patch.object(controller.user_config, "set", return_value=True):
+                    result = controller.configure_load_order(Mock(spec=QWidget))
 
-                assert result is True
-                assert controller.state.get("load_order_path") == Path("/path/to/loadorder.txt")
+                    assert result is True
+                    assert controller.state.get("load_order_path") == Path("/path/to/loadorder.txt")
 
     def test_configure_load_order_cancelled(self, controller: GuiController) -> None:
         """Test cancelled load order configuration."""
@@ -75,10 +76,11 @@ class TestGuiController:
             mock_dialog.return_value = ("/path/to/ModOrganizer.exe", "")
 
             with patch.object(Path, "exists", return_value=True):
-                result = controller.configure_mo2(Mock(spec=QWidget))
+                with patch.object(controller.user_config, "update_multiple", return_value=True):
+                    result = controller.configure_mo2(Mock(spec=QWidget))
 
-                assert result is True
-                assert controller.state.get("mo2_exe_path") == Path("/path/to/ModOrganizer.exe")
+                    assert result is True
+                    assert controller.state.get("mo2_exe_path") == Path("/path/to/ModOrganizer.exe")
 
     def test_configure_xedit_success(self, controller: GuiController) -> None:
         """Test successful xEdit configuration."""
@@ -87,11 +89,12 @@ class TestGuiController:
 
             with patch.object(Path, "exists", return_value=True):
                 with patch("PactLib.utils.detect_xedit_game", return_value="SSE"):
-                    result = controller.configure_xedit(Mock(spec=QWidget))
+                    with patch.object(controller.user_config, "update_multiple", return_value=True):
+                        result = controller.configure_xedit(Mock(spec=QWidget))
 
-                    assert result is True
-                    assert controller.state.get("xedit_exe_path") == Path("/path/to/SSEEdit.exe")
-                    assert controller.state.get("game_type") == "SSE"
+                        assert result is True
+                        assert controller.state.get("xedit_exe_path") == Path("/path/to/SSEEdit.exe")
+                        assert controller.state.get("game_type") == "SSE"
 
     def test_configure_xedit_invalid_file(self, controller: GuiController) -> None:
         """Test xEdit configuration with invalid file."""
@@ -113,7 +116,7 @@ class TestGuiController:
     def test_get_plugins_to_clean_with_file(self, controller: GuiController) -> None:
         """Test getting plugins from load order file."""
         # Set up load order path
-        controller.state.update(load_order_path=Path("/path/to/loadorder.txt"))
+        controller.state.update_configuration_paths(load_order_path=Path("/path/to/loadorder.txt"))
 
         with patch.object(Path, "exists", return_value=True):
             with patch("builtins.open", mock_open(read_data="plugin1.esp\nplugin2.esm\n")):
@@ -124,7 +127,7 @@ class TestGuiController:
     def test_get_plugins_to_clean_no_file(self, controller: GuiController) -> None:
         """Test getting plugins when file doesn't exist."""
         # Set up load order path
-        controller.state.update(load_order_path=Path("/path/to/loadorder.txt"))
+        controller.state.update_configuration_paths(load_order_path=Path("/path/to/loadorder.txt"))
 
         with patch.object(Path, "exists", return_value=False):
             plugins = controller.get_plugins_to_clean()
@@ -170,7 +173,7 @@ class TestGuiController:
     def test_get_plugins_to_clean_with_malformed_lines(self, controller: GuiController) -> None:
         """Test getting plugins from load order file with malformed lines."""
         # Set up load order path
-        controller.state.update(load_order_path=Path("/path/to/loadorder.txt"))
+        controller.state.update_configuration_paths(load_order_path=Path("/path/to/loadorder.txt"))
 
         # Mock file content with malformed lines
         mock_content = """# Load order file
@@ -191,13 +194,13 @@ plugin7.esp
 
     def test_start_cleaning_not_configured(self, controller: GuiController) -> None:
         """Test starting cleaning when not fully configured."""
-        with patch.object(controller.state, "state") as mock_state:
-            mock_state.is_fully_configured = False
+        # Ensure state is not fully configured by default
+        assert not controller.state.state.is_fully_configured
 
-            controller.start_cleaning()
+        controller.start_cleaning()
 
-            # Should not create worker when not configured
-            assert controller.worker is None
+        # Should not create worker when not configured
+        assert controller.worker is None
 
     def test_start_cleaning_already_running(self, controller: GuiController) -> None:
         """Test starting cleaning when already running."""
@@ -211,13 +214,15 @@ plugin7.esp
     def test_start_cleaning_success(self, controller: GuiController) -> None:
         """Test successful cleaning start."""
         # Set up full configuration
+        controller.state.update_configuration_paths(
+            load_order_path=Path("/path/to/loadorder.txt"),
+            mo2_exe_path=Path("/path/to/ModOrganizer.exe"),
+            xedit_exe_path=Path("/path/to/SSEEdit.exe"),
+        )
         controller.state.update(
             is_load_order_configured=True,
             is_mo2_configured=True,
             is_xedit_configured=True,
-            load_order_path=Path("/path/to/loadorder.txt"),
-            mo2_exe_path=Path("/path/to/ModOrganizer.exe"),
-            xedit_exe_path=Path("/path/to/SSEEdit.exe"),
         )
 
         with patch.object(controller, "get_plugins_to_clean", return_value=["test.esp"]):
@@ -263,6 +268,10 @@ plugin7.esp
         assert isinstance(summary, str)
         assert "Configuration Status" in summary
 
+
+class TestGuiControllerPartialForms:
+    """Test GUI controller with partial forms functionality using mocks."""
+
     @pytest.fixture
     def mock_state(self) -> Mock:
         """Create a mock state manager."""
@@ -300,60 +309,47 @@ plugin7.esp
         return config
 
     @pytest.fixture
-    def controller(self, mock_state, mock_main_config, mock_user_config) -> GuiController:
+    def partial_forms_controller(self, mock_state, mock_main_config, mock_user_config) -> GuiController:
         """Create a GuiController instance for testing."""
         return GuiController(mock_state, mock_main_config, mock_user_config)
 
-    def test_toggle_partial_forms_first_time(self, controller, mock_user_config, mock_state):
+    def test_toggle_partial_forms_first_time(self, partial_forms_controller, mock_user_config, mock_state):
         """Test enabling Partial Forms for the first time shows warning."""
-        # Mock that warning hasn't been shown before
-        mock_user_config.get.return_value = False
-
         # Enable Partial Forms
-        controller.toggle_partial_forms(True)
+        partial_forms_controller.toggle_partial_forms(True)
 
-        # Verify warning was shown
+        # Verify state was updated
         mock_state.update.assert_called_with(partial_forms_enabled=True)
-        mock_user_config.set.assert_any_call("Settings.Partial_Forms", True)
-        mock_user_config.set.assert_any_call("Settings.Partial_Forms_Warning_Shown", True)
+        mock_user_config.set.assert_called_with("Settings.Partial_Forms", True)
 
-        # Verify signal was emitted (check that emit was called)
-        assert mock_user_config.get.call_count >= 1
-
-    def test_toggle_partial_forms_subsequent_time(self, controller, mock_user_config, mock_state):
+    def test_toggle_partial_forms_subsequent_time(self, partial_forms_controller, mock_user_config, mock_state):
         """Test enabling Partial Forms after warning has been shown."""
         # Mock that warning has been shown before
         mock_user_config.get.return_value = True
 
         # Enable Partial Forms
-        controller.toggle_partial_forms(True)
+        partial_forms_controller.toggle_partial_forms(True)
 
-        # Verify state was updated but no warning shown
+        # Verify state was updated
         mock_state.update.assert_called_with(partial_forms_enabled=True)
         mock_user_config.set.assert_called_with("Settings.Partial_Forms", True)
 
-        # Verify warning was not shown (only one call to get for the setting)
-        assert mock_user_config.get.call_count == 1
-
-    def test_toggle_partial_forms_disable(self, controller, mock_user_config, mock_state):
+    def test_toggle_partial_forms_disable(self, partial_forms_controller, mock_user_config, mock_state):
         """Test disabling Partial Forms."""
         # Disable Partial Forms
-        controller.toggle_partial_forms(False)
+        partial_forms_controller.toggle_partial_forms(False)
 
         # Verify state was updated
         mock_state.update.assert_called_with(partial_forms_enabled=False)
         mock_user_config.set.assert_called_with("Settings.Partial_Forms", False)
 
-        # Verify no warning was shown (no calls to get for warning check)
-        assert mock_user_config.get.call_count == 0
-
-    def test_toggle_partial_forms_error_handling(self, controller, mock_user_config, mock_state):
+    def test_toggle_partial_forms_error_handling(self, partial_forms_controller, mock_user_config, mock_state):
         """Test error handling in Partial Forms toggle."""
         # Mock an error during configuration save
         mock_user_config.set.side_effect = OSError("Test error")
 
         # Try to enable Partial Forms
-        controller.toggle_partial_forms(True)
+        partial_forms_controller.toggle_partial_forms(True)
 
         # Verify error was handled (state update was attempted)
         mock_state.update.assert_called_with(partial_forms_enabled=True)

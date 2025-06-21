@@ -41,6 +41,7 @@ class GuiController(QObject):
         self.main_config: ConfigManager = main_config  # For skip lists and game configs
         self.user_config: ConfigManager = user_config  # For user settings
         self.worker: CleaningWorker | None = None
+        self._cleaning_finished_handled: bool = False  # Flag to prevent duplicate dialogs
 
         # Create cleaning service with both config managers
         self.service: CleaningService = CleaningService(main_config, user_config, state)
@@ -382,26 +383,49 @@ class GuiController(QObject):
         # Check for valid plugin extensions
         valid_extensions = (".esp", ".esm", ".esl")
 
-        for ext in valid_extensions:
-            if line.lower().endswith(ext):
-                # Check if there's content after the extension
-                ext_pos = line.lower().rfind(ext)
-                if ext_pos + len(ext) < len(line):
-                    # There's content after the extension - separate it
-                    plugin_name = line[: ext_pos + len(ext)]
-                    remaining_content = line[ext_pos + len(ext) :].strip()
+        # Check if the line contains separators that would indicate multiple plugins
+        if any(sep in line for sep in [",", ";"]):
+            # Line contains separators, extract the first plugin
+            for ext in valid_extensions:
+                ext_pos: int = line.lower().find(ext)
+                if ext_pos != -1:
+                    # Check what comes after the extension
+                    after_ext: str = line[ext_pos + len(ext) :]
 
-                    logger.warning(
-                        f"Line {line_num}: Plugin extension not at end of line. "
-                        f"Original: '{original_line}' -> Using: '{plugin_name}' "
-                        f"(ignored: '{remaining_content}')"
-                    )
+                    # Check if it's followed by common separators (comma, semicolon)
+                    if after_ext and after_ext[0] in [",", ";"]:
+                        plugin_name: str = line[: ext_pos + len(ext)]
+                        remaining_content: str = after_ext.strip()
+                        if remaining_content:  # There's meaningful content after the extension
+                            logger.warning(
+                                f"Line {line_num}: Plugin extension not at end of line. "
+                                f"Original: '{original_line}' -> Using: '{plugin_name}' "
+                                f"(ignored: '{remaining_content}')"
+                            )
+                        return plugin_name
 
-                    return plugin_name
-                # Extension is at the end - valid
-                return line
+        # Check if the line ends with a valid extension (and no separators were found above)
+        if any(line.lower().endswith(ext) for ext in valid_extensions):
+            # Check if there's a space followed by content (like "plugin1.esl extra content")
+            for ext in valid_extensions:
+                if line.lower().endswith(ext):
+                    # This is a clean plugin line
+                    return line
+                if ext in line.lower():
+                    ext_pos = line.lower().find(ext)
+                    after_ext = line[ext_pos + len(ext) :]
+                    if after_ext and after_ext[0] == " ":
+                        plugin_name = line[: ext_pos + len(ext)]
+                        remaining_content = after_ext.strip()
+                        if remaining_content:  # There's meaningful content after the extension
+                            logger.warning(
+                                f"Line {line_num}: Plugin extension not at end of line. "
+                                f"Original: '{original_line}' -> Using: '{plugin_name}' "
+                                f"(ignored: '{remaining_content}')"
+                            )
+                        return plugin_name
 
-        # No valid extension found
+        # No valid extension found or extension not properly positioned
         return None
 
     def start_cleaning(self) -> None:
@@ -445,6 +469,7 @@ class GuiController(QObject):
 
             # Reset previous results
             self.state.reset_cleaning_state()
+            self._cleaning_finished_handled = False  # Reset flag for new cleaning session
 
             # Create and start worker
             self.worker = CleaningWorker(self.service, self.state, plugins)
@@ -486,11 +511,12 @@ class GuiController(QObject):
 
     def _on_cleaning_finished(self) -> None:
         """Handle cleaning completion."""
-        if self.worker is not None:
+        if self.worker is not None and not self._cleaning_finished_handled:
             summary: str = self.worker.get_summary()
             self.show_message.emit("Cleaning Complete", summary)
             self.update_status.emit("Cleaning complete")
             self.worker = None
+            self._cleaning_finished_handled = True
 
     def refresh_configuration(self) -> None:
         """
