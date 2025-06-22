@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch, call
 
-from PactLib.logging_config import (
+from AutoQACLib.logging_config import (
     LoggingConfig,
     TestLoggingConfig,
     setup_logging,
@@ -23,7 +23,7 @@ class TestLoggingConfigClass:
         config = LoggingConfig()
 
         assert config.log_dir == "logs"
-        assert config.log_file == "xedit_pact.log"
+        assert config.log_file == "autoqac.log"
         assert config.max_bytes == 5 * 1024 * 1024  # 5MB
         assert config.backup_count == 5
         assert config.console_level == logging.WARNING
@@ -59,7 +59,7 @@ class TestTestLoggingConfigClass:
         config = TestLoggingConfig()
 
         assert config.log_dir == "logs"
-        assert config.log_file == "test_xedit_pact.log"
+        assert config.log_file == "test_autoqac.log"
         assert config.max_bytes == 1 * 1024 * 1024  # 1MB
         assert config.backup_count == 3
         assert config.encoding == "utf-8"
@@ -140,7 +140,7 @@ class TestLogStartupInfo:
         assert logger.info.call_count >= 3
         calls = [call[0][0] for call in logger.info.call_args_list]
         assert any("=" * 60 in call for call in calls)
-        assert any("XEdit-PACT v2.0.0 - Starting up" in call for call in calls)
+        assert any("AutoQAC v2.0.0 - Starting up" in call for call in calls)
 
     def test_log_startup_info_custom_app_name(self) -> None:
         """Test log_startup_info with custom app name."""

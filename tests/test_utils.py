@@ -1,10 +1,11 @@
 """Tests for the utils module."""
 
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from PactLib.utils import YamlManager, yaml_settings, yaml_settings_write
+from AutoQACLib.utils import YamlManager, yaml_settings, yaml_settings_write
 
 
 class TestYamlManager:
@@ -338,50 +339,50 @@ level1:
 class TestProcessFunctions:
     """Test process-related utility functions."""
 
-    @patch("PactLib.utils.psutil.Process")
+    @patch("AutoQACLib.utils.psutil.Process")
     def test_check_process_below_threshold(self, mock_process) -> None:
         """Test check_process when CPU usage is below threshold."""
         mock_process_instance = Mock()
         mock_process_instance.cpu_percent.return_value = 3.0
         mock_process.return_value = mock_process_instance
 
-        from PactLib.utils import check_process
+        from AutoQACLib.utils import check_process
 
         result = check_process(12345, threshold=5)
         assert result is False
 
-    @patch("PactLib.utils.psutil.Process")
+    @patch("AutoQACLib.utils.psutil.Process")
     def test_check_process_above_threshold(self, mock_process) -> None:
         """Test check_process when CPU usage is above threshold."""
         mock_process_instance = Mock()
         mock_process_instance.cpu_percent.return_value = 7.0
         mock_process.return_value = mock_process_instance
 
-        from PactLib.utils import check_process
+        from AutoQACLib.utils import check_process
 
         result = check_process(12345, threshold=5)
         assert result is True
 
-    @patch("PactLib.utils.psutil.Process")
+    @patch("AutoQACLib.utils.psutil.Process")
     def test_check_process_no_such_process(self, mock_process) -> None:
         """Test check_process when process doesn't exist."""
         from psutil import NoSuchProcess
 
         mock_process.side_effect = NoSuchProcess(12345)
 
-        from PactLib.utils import check_process
+        from AutoQACLib.utils import check_process
 
         result = check_process(12345)
         assert result is False
 
-    @patch("PactLib.utils.psutil.Process")
+    @patch("AutoQACLib.utils.psutil.Process")
     def test_check_process_access_denied(self, mock_process) -> None:
         """Test check_process when access is denied."""
         from psutil import AccessDenied
 
         mock_process.side_effect = AccessDenied(12345)
 
-        from PactLib.utils import check_process
+        from AutoQACLib.utils import check_process
 
         result = check_process(12345)
         assert result is False
@@ -398,7 +399,7 @@ class TestGameDetectionFunctions:
             load_order_path = Path(f.name)
 
         try:
-            from PactLib.utils import detect_game_from_load_order
+            from AutoQACLib.utils import detect_game_from_load_order
 
             result = detect_game_from_load_order(load_order_path)
             assert result == "SSE"
@@ -413,7 +414,7 @@ class TestGameDetectionFunctions:
             load_order_path = Path(f.name)
 
         try:
-            from PactLib.utils import detect_game_from_load_order
+            from AutoQACLib.utils import detect_game_from_load_order
 
             result = detect_game_from_load_order(load_order_path)
             assert result == "FO3"
@@ -428,7 +429,7 @@ class TestGameDetectionFunctions:
             load_order_path = Path(f.name)
 
         try:
-            from PactLib.utils import detect_game_from_load_order
+            from AutoQACLib.utils import detect_game_from_load_order
 
             result = detect_game_from_load_order(load_order_path)
             assert result == "FNV"
@@ -443,7 +444,7 @@ class TestGameDetectionFunctions:
             load_order_path = Path(f.name)
 
         try:
-            from PactLib.utils import detect_game_from_load_order
+            from AutoQACLib.utils import detect_game_from_load_order
 
             result = detect_game_from_load_order(load_order_path)
             assert result == "FO4"
@@ -458,7 +459,7 @@ class TestGameDetectionFunctions:
             load_order_path = Path(f.name)
 
         try:
-            from PactLib.utils import detect_game_from_load_order
+            from AutoQACLib.utils import detect_game_from_load_order
 
             result = detect_game_from_load_order(load_order_path)
             assert result == "SSE"
@@ -473,7 +474,7 @@ class TestGameDetectionFunctions:
             load_order_path = Path(f.name)
 
         try:
-            from PactLib.utils import detect_game_from_load_order
+            from AutoQACLib.utils import detect_game_from_load_order
 
             result = detect_game_from_load_order(load_order_path)
             assert result is None
@@ -482,7 +483,7 @@ class TestGameDetectionFunctions:
 
     def test_detect_game_from_load_order_file_not_found(self) -> None:
         """Test detect_game_from_load_order with non-existent file."""
-        from PactLib.utils import detect_game_from_load_order
+        from AutoQACLib.utils import detect_game_from_load_order
         import pytest
 
         with pytest.raises(FileNotFoundError):
@@ -490,7 +491,7 @@ class TestGameDetectionFunctions:
 
     def test_detect_xedit_game_from_filename(self) -> None:
         """Test detect_xedit_game with various xEdit executable names."""
-        from PactLib.utils import detect_xedit_game
+        from AutoQACLib.utils import detect_xedit_game
 
         test_cases = [
             ("fo3edit.exe", "FO3"),
@@ -509,7 +510,7 @@ class TestGameDetectionFunctions:
 
     def test_detect_xedit_game_no_match(self) -> None:
         """Test detect_xedit_game with no matching executable name."""
-        from PactLib.utils import detect_xedit_game
+        from AutoQACLib.utils import detect_xedit_game
 
         result = detect_xedit_game("some_other_tool.exe")
         assert result is None
@@ -521,7 +522,7 @@ class TestGameDetectionFunctions:
             load_order_path = Path(f.name)
 
         try:
-            from PactLib.utils import detect_xedit_game
+            from AutoQACLib.utils import detect_xedit_game
 
             result = detect_xedit_game("unknown_edit.exe", load_order_path)
             assert result == "SSE"
@@ -563,7 +564,7 @@ class TestLogMonitoringFunctions:
         def line_callback(line: str) -> None:
             lines_received.append(line)
 
-        from PactLib.utils import monitor_log_file
+        from AutoQACLib.utils import monitor_log_file
 
         # Start monitoring in a separate thread
         monitor_thread = threading.Thread(

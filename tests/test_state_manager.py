@@ -1,9 +1,10 @@
-"""Tests for the StateManager class."""
+"""Tests for state management."""
 
 import pytest
+from PySide6.QtCore import QCoreApplication
 from pathlib import Path
 
-from PactLib.state_manager import AppState, StateManager
+from AutoQACLib.state_manager import AppState, StateManager
 
 
 class TestAppState:

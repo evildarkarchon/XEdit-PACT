@@ -1,9 +1,11 @@
+"""Tests for cleaning service."""
+
 import pytest
 from unittest.mock import Mock, patch
 from pathlib import Path
 
-from PactLib.cleaning_service import CleaningService, CleanResult
-from PactLib.state_manager import AppState
+from AutoQACLib.cleaning_service import CleaningService, CleanResult
+from AutoQACLib.state_manager import AppState
 
 
 class TestCleaningService:

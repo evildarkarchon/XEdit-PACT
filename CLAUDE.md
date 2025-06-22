@@ -1,10 +1,10 @@
-# CLAUDE.md
+# AutoQAC Development Guide
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Overview
 
-XEdit-PACT is a PySide6 (Qt) application for batch cleaning Bethesda game plugins using xEdit's quickautoclean. The codebase follows strict architectural patterns with centralized state management and clear separation of concerns.
+AutoQAC is a PySide6 (Qt) application for batch cleaning Bethesda game plugins using xEdit's quickautoclean. The codebase follows strict architectural patterns with centralized state management and clear separation of concerns.
 
 ## Essential Commands
 
@@ -17,11 +17,11 @@ poetry run ruff check .
 poetry run ruff format .
 
 # Run type checking
-poetry run mypy PACT_Interface.py state_manager.py config_manager.py
+poetry run mypy AutoQAC_Interface.py state_manager.py config_manager.py
 
 # Run tests
 pytest                                    # All tests
-pytest --cov=PactLib --cov=PACT_Interface --cov-report=html  # With coverage
+pytest --cov=AutoQACLib --cov=AutoQAC_Interface --cov-report=html  # With coverage
 pytest -m unit                           # Unit tests only
 pytest -m integration                    # Integration tests only
 python run_tests.py                      # Custom test runner
@@ -82,7 +82,7 @@ pytest tests/test_state_manager.py
 pytest -v
 
 # Generate HTML coverage report
-pytest --cov=PactLib --cov-report=html
+pytest --cov=AutoQACLib --cov-report=html
 # Open htmlcov/index.html to view
 ```
 

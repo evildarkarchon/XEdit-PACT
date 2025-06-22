@@ -1,11 +1,12 @@
 """Tests for the main interface components."""
 
+import sys
 from unittest.mock import Mock, patch
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
-from PACT_Interface import CleaningProgressDialog, MainWindow, create_application
+from AutoQAC_Interface import CleaningProgressDialog, MainWindow, create_application
 
 
 class TestCleaningProgressDialog:
@@ -90,7 +91,7 @@ class TestCleaningProgressDialog:
         dialog = CleaningProgressDialog()
 
         # Mock QMessageBox
-        with patch("PACT_Interface.QMessageBox.question") as mock_question:
+        with patch("AutoQAC_Interface.QMessageBox.question") as mock_question:
             mock_question.return_value = Mock()  # Mock the return value
 
             # Test closing during cleaning
@@ -142,7 +143,7 @@ class TestMainWindow:
         assert window.status_bar is not None
 
         # Check window properties
-        assert window.windowTitle() == "XEdit-PACT - Refactored"
+        assert window.windowTitle() == "AutoQAC - Refactored"
         assert window.minimumSize().width() >= 650
         assert window.minimumSize().height() >= 450
 
@@ -301,26 +302,26 @@ class TestMainWindow:
         controller = Mock()
         window = MainWindow(state_manager, controller)
 
-        with patch("PACT_Interface.QMessageBox.about") as mock_about:
+        with patch("AutoQAC_Interface.QMessageBox.about") as mock_about:
             window._show_about()
             mock_about.assert_called_once()
 
             # Check the arguments
             args = mock_about.call_args
             assert args[0][0] == window  # parent
-            assert args[0][1] == "About XEdit-PACT"  # title
-            assert "XEdit-PACT" in args[0][2]  # message
+            assert args[0][1] == "About AutoQAC"  # title
+            assert "AutoQAC" in args[0][2]  # message
 
     def test_message_handlers(self, state_manager, config_manager) -> None:
         """Test message and error handlers."""
         controller = Mock()
         window = MainWindow(state_manager, controller)
 
-        with patch("PACT_Interface.QMessageBox.information") as mock_info:
+        with patch("AutoQAC_Interface.QMessageBox.information") as mock_info:
             window._show_message("Test Title", "Test Message")
             mock_info.assert_called_once_with(window, "Test Title", "Test Message")
 
-        with patch("PACT_Interface.QMessageBox.critical") as mock_critical:
+        with patch("AutoQAC_Interface.QMessageBox.critical") as mock_critical:
             window._show_error("Error Title", "Error Message")
             mock_critical.assert_called_once_with(window, "Error Title", "Error Message")
 
@@ -351,11 +352,11 @@ class TestApplicationCreation:
     def test_create_application(self) -> None:
         """Test create_application function."""
         with (
-            patch("PACT_Interface.ConfigManager") as mock_config_class,
-            patch("PACT_Interface.StateManager") as mock_state_class,
-            patch("PACT_Interface.GuiController") as mock_controller_class,
-            patch("PACT_Interface.QApplication") as mock_app_class,
-            patch("PACT_Interface.MainWindow") as mock_window_class,
+            patch("AutoQAC_Interface.ConfigManager") as mock_config_class,
+            patch("AutoQAC_Interface.StateManager") as mock_state_class,
+            patch("AutoQAC_Interface.GuiController") as mock_controller_class,
+            patch("AutoQAC_Interface.QApplication") as mock_app_class,
+            patch("AutoQAC_Interface.MainWindow") as mock_window_class,
         ):
             # Mock instances
             mock_config = Mock()
@@ -384,14 +385,17 @@ class TestApplicationCreation:
 
     def test_main_function(self) -> None:
         """Test main function."""
-        with patch("PACT_Interface.create_application") as mock_create, patch("PACT_Interface.sys.exit") as mock_exit:
+        with (
+            patch("AutoQAC_Interface.create_application") as mock_create,
+            patch("AutoQAC_Interface.sys.exit") as mock_exit,
+        ):
             # Mock application components
             mock_app = Mock()
             mock_window = Mock()
             mock_create.return_value = (mock_app, mock_window)
 
             # Import and call main
-            from PACT_Interface import main
+            from AutoQAC_Interface import main
 
             main()
 

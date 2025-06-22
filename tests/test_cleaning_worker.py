@@ -1,10 +1,10 @@
-"""Tests for the cleaning_worker module."""
+"""Tests for cleaning worker."""
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from PySide6.QtCore import QThread
 
-from PactLib.cleaning_worker import CleaningWorker
+from AutoQACLib.cleaning_worker import CleaningWorker
 
 
 class TestCleaningWorker:

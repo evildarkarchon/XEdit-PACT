@@ -8,14 +8,14 @@ from typing import TYPE_CHECKING, Any
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QFileDialog, QWidget
 
-from PactLib.cleaning_service import CleaningService
-from PactLib.cleaning_worker import CleaningWorker
-from PactLib.logging_config import get_logger
-from PactLib.utils import detect_xedit_game
+from AutoQACLib.cleaning_service import CleaningService
+from AutoQACLib.cleaning_worker import CleaningWorker
+from AutoQACLib.logging_config import get_logger
+from AutoQACLib.utils import detect_xedit_game
 
 if TYPE_CHECKING:
-    from PactLib.config_manager import ConfigManager
-    from PactLib.state_manager import AppState, StateManager
+    from AutoQACLib.config_manager import ConfigManager
+    from AutoQACLib.state_manager import AppState, StateManager
 
 logger = get_logger(__name__)
 

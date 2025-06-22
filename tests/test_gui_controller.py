@@ -6,9 +6,9 @@ from unittest.mock import Mock, patch, mock_open
 
 from PySide6.QtWidgets import QWidget
 
-from PactLib.config_manager import ConfigManager
-from PactLib.gui_controller import GuiController
-from PactLib.state_manager import StateManager
+from AutoQACLib.config_manager import ConfigManager
+from AutoQACLib.gui_controller import GuiController
+from AutoQACLib.state_manager import StateManager
 
 
 @pytest.fixture
@@ -88,7 +88,7 @@ class TestGuiController:
             mock_dialog.return_value = ("/path/to/SSEEdit.exe", "")
 
             with patch.object(Path, "exists", return_value=True):
-                with patch("PactLib.utils.detect_xedit_game", return_value="SSE"):
+                with patch("AutoQACLib.utils.detect_xedit_game", return_value="SSE"):
                     with patch.object(controller.user_config, "update_multiple", return_value=True):
                         result = controller.configure_xedit(Mock(spec=QWidget))
 
@@ -226,7 +226,7 @@ plugin7.esp
         )
 
         with patch.object(controller, "get_plugins_to_clean", return_value=["test.esp"]):
-            with patch("PactLib.cleaning_worker.CleaningWorker") as mock_worker_class:
+            with patch("AutoQACLib.cleaning_worker.CleaningWorker") as mock_worker_class:
                 mock_worker = Mock()
                 mock_worker_class.return_value = mock_worker
 
@@ -238,7 +238,7 @@ plugin7.esp
 
     def test_stop_cleaning(self, controller: GuiController) -> None:
         """Test stopping cleaning."""
-        with patch("PactLib.cleaning_worker.CleaningWorker") as mock_worker_class:
+        with patch("AutoQACLib.cleaning_worker.CleaningWorker") as mock_worker_class:
             mock_worker = Mock()
             mock_worker.isRunning.return_value = True
             mock_worker_class.return_value = mock_worker

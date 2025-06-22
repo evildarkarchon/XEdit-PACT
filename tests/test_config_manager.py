@@ -2,8 +2,11 @@
 
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
-from PactLib.config_manager import ConfigManager
+import pytest
+
+from AutoQACLib.config_manager import ConfigManager
 
 
 class TestConfigManager:
@@ -103,8 +106,8 @@ class TestConfigManager:
     def test_get_game_config(self, config_manager: ConfigManager) -> None:
         """Test the get_game_config method."""
         # Set up game-specific config
-        config_manager.set("PACT_Data.XEdit_Lists.Skyrim", ["Skyrim.esm", "Update.esm"])
-        config_manager.set("PACT_Data.Skip_Lists.Skyrim", ["Dawnguard.esm"])
+        config_manager.set("AutoQAC_Data.XEdit_Lists.Skyrim", ["Skyrim.esm", "Update.esm"])
+        config_manager.set("AutoQAC_Data.Skip_Lists.Skyrim", ["Dawnguard.esm"])
 
         game_config = config_manager.get_game_config("Skyrim")
 

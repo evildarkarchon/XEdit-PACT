@@ -1,12 +1,12 @@
-"""Integration tests for XEdit-PACT components."""
+"""Integration tests for AutoQAC components."""
 
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch, mock_open
 
-from PactLib.config_manager import ConfigManager
-from PactLib.gui_controller import GuiController
-from PactLib.state_manager import StateManager
+from AutoQACLib.config_manager import ConfigManager
+from AutoQACLib.gui_controller import GuiController
+from AutoQACLib.state_manager import StateManager
 
 
 class TestComponentIntegration:
@@ -177,8 +177,8 @@ class TestComponentIntegration:
 
             # Mock cleaning service and worker
             with (
-                patch("PactLib.gui_controller.CleaningService") as mock_service_class,
-                patch("PactLib.gui_controller.CleaningWorker") as mock_worker_class,
+                patch("AutoQACLib.gui_controller.CleaningService") as mock_service_class,
+                patch("AutoQACLib.gui_controller.CleaningWorker") as mock_worker_class,
                 patch.object(Path, "open", mock_open(read_data="plugin1.esp\nplugin2.esm\n")),
             ):
                 mock_service = Mock()

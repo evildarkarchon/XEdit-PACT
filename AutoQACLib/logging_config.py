@@ -1,10 +1,11 @@
-"""Centralized logging configuration for XEdit-PACT."""
+"""Centralized logging configuration for AutoQAC."""
 
 from __future__ import annotations
 
 import logging
 import logging.handlers
 import sys
+import os
 from dataclasses import dataclass
 from logging import Formatter, Logger, StreamHandler
 from pathlib import Path
@@ -19,7 +20,7 @@ class LoggingConfig:
     """Configuration for logging setup."""
 
     log_dir: Path | str = "logs"
-    log_file: str = "xedit_pact.log"
+    log_file: str = "autoqac.log"
     max_bytes: int = 5 * 1024 * 1024  # 5MB
     backup_count: int = 5
     console_level: int = logging.WARNING
@@ -75,7 +76,7 @@ class TestLoggingConfig:
     """Configuration for test logging setup."""
 
     log_dir: Path | str = "logs"
-    log_file: str = "test_xedit_pact.log"
+    log_file: str = "test_autoqac.log"
     max_bytes: int = 1 * 1024 * 1024  # 1MB for tests
     backup_count: int = 3
     encoding: str = "utf-8"
@@ -131,29 +132,9 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 
-def log_startup_info(logger: logging.Logger, app_name: str = "XEdit-PACT", version: str = "2.0.0") -> None:
-    """
-    Log application startup information.
-
-    Args:
-        logger: Logger instance to use
-        app_name: Application name
-        version: Application version
-    """
-    logger.info("=" * 60)
+def log_startup_info(logger: logging.Logger, app_name: str = "AutoQAC", version: str = "2.0.0") -> None:
+    """Log startup information."""
     logger.info(f"{app_name} v{version} - Starting up")
-    logger.info("=" * 60)
-
-    # Get log file path from handlers
-    log_file_path: str = "Not configured"
-    for handler in logger.handlers:
-        if isinstance(handler, logging.handlers.RotatingFileHandler):
-            log_file_path = handler.baseFilename
-            break
-        if isinstance(handler, logging.FileHandler):
-            log_file_path = handler.baseFilename
-            break
-
-    logger.info(f"Log file: {log_file_path}")
-    logger.info(f"Log level: {logger.getEffectiveLevel()}")
-    logger.info("=" * 60)
+    logger.info(f"Python version: {sys.version}")
+    logger.info(f"Platform: {sys.platform}")
+    logger.info(f"Working directory: {os.getcwd()}")

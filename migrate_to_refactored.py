@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
-"""Migration script to transition from old to new architecture."""
+"""
+AutoQAC Architecture Migration Tool
+
+This script migrates configuration from the old PACT architecture to the new AutoQAC architecture.
+"""
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict
 
-from PactLib.config_manager import ConfigManager
-from PactLib.logging_config import get_logger, setup_logging
-from PactLib.state_manager import StateManager
-from PactLib.utils import yaml_settings
+from AutoQACLib.config_manager import ConfigManager
+from AutoQACLib.logging_config import get_logger, setup_logging
+from AutoQACLib.state_manager import StateManager
+from AutoQACLib.utils import yaml_settings
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -23,6 +28,11 @@ logger: Logger = get_logger(__name__)
 # Paths
 PACT_SETTINGS_PATH: Path = Path("PACT Settings.yaml")
 BACKUP_PATH: Path = Path("PACT Settings.yaml.backup")
+AUTOQAC_DATA_PATH: Path = Path("AutoQAC Data")
+AUTOQAC_YAML_PATH: Path = AUTOQAC_DATA_PATH / "AutoQAC Main.yaml"
+AUTOQAC_CONFIG_PATH: Path = AUTOQAC_DATA_PATH / "AutoQAC Config.yaml"  # New config location
+
+# Constants for migration
 PACT_DATA_PATH: Path = Path("PACT Data")
 PACT_YAML_PATH: Path = PACT_DATA_PATH / "PACT Main.yaml"
 PACT_CONFIG_PATH: Path = PACT_DATA_PATH / "PACT Config.yaml"  # New config location
@@ -36,13 +46,13 @@ def migrate_configuration() -> bool:
     if PACT_SETTINGS_PATH.exists():
         shutil.copy2(PACT_SETTINGS_PATH, BACKUP_PATH)
         print(f"Created backup: {BACKUP_PATH}")
-    elif PACT_YAML_PATH.exists():
+    elif AUTOQAC_YAML_PATH.exists():
         # Fallback to old config if settings file doesn't exist
-        shutil.copy2(PACT_YAML_PATH, PACT_DATA_PATH / "PACT Main.yaml.backup")
-        print(f"Created backup of old config: {PACT_DATA_PATH / 'PACT Main.yaml.backup'}")
+        shutil.copy2(AUTOQAC_YAML_PATH, AUTOQAC_DATA_PATH / "AutoQAC Main.yaml.backup")
+        print(f"Created backup of old config: {AUTOQAC_DATA_PATH / 'AutoQAC Main.yaml.backup'}")
 
     # Initialize new components
-    config: ConfigManager = ConfigManager(PACT_CONFIG_PATH)
+    config: ConfigManager = ConfigManager(AUTOQAC_CONFIG_PATH)
     state: StateManager = StateManager()
 
     # Load existing configuration
@@ -96,10 +106,10 @@ def migrate_configuration() -> bool:
                         config.set("PACT_Settings.xEdit.Install_Path", str(path.parent))
 
     # Fallback to old PACT Main.yaml format if settings file had no paths
-    if not settings_found and PACT_YAML_PATH.exists():
-        print("  No paths found in PACT Settings.yaml, checking PACT Main.yaml...")
+    if not settings_found and AUTOQAC_YAML_PATH.exists():
+        print("  No paths found in PACT Settings.yaml, checking AutoQAC Main.yaml...")
         for yaml_key, state_key in yaml_paths_mapping.items():
-            value = yaml_settings(str(PACT_YAML_PATH), yaml_key)
+            value = yaml_settings(str(AUTOQAC_YAML_PATH), yaml_key)
             if value:
                 print(f"  Migrating {yaml_key}: {value}")
                 path = Path(value)
@@ -141,9 +151,9 @@ def migrate_configuration() -> bool:
         "PACT_Settings.MO2Mode": "mo2_mode",
     }
 
-    if PACT_YAML_PATH.exists():
+    if AUTOQAC_YAML_PATH.exists():
         for yaml_key, state_key in old_settings_mapping.items():
-            value = yaml_settings(str(PACT_YAML_PATH), yaml_key)
+            value = yaml_settings(str(AUTOQAC_YAML_PATH), yaml_key)
             if value is not None:
                 print(f"  Migrating {yaml_key}: {value}")
                 state.update(**{state_key: value})
@@ -158,7 +168,7 @@ def migrate_configuration() -> bool:
     print(f"  MO2 Mode: {'Enabled' if state.state.mo2_mode else 'Disabled'}")
 
     print("\nTo use the refactored version, run:")
-    print("  python PACT_Interface.py")
+    print("  python AutoQAC_Interface.py")
 
     return True
 
@@ -170,11 +180,11 @@ def verify_imports() -> bool:
         import importlib.util  # noqa: PLC0415
 
         required_modules: list[str] = [
-            "PactLib.cleaning_service",
-            "PactLib.cleaning_worker",
-            "PactLib.config_manager",
-            "PactLib.gui_controller",
-            "PactLib.state_manager",
+            "AutoQACLib.cleaning_service",
+            "AutoQACLib.cleaning_worker",
+            "AutoQACLib.config_manager",
+            "AutoQACLib.gui_controller",
+            "AutoQACLib.state_manager",
         ]
 
         for module_name in required_modules:
@@ -218,7 +228,7 @@ def handle_migration_error(error: Exception, error_type: str) -> int:
 
 def main() -> int:
     """Run the migration."""
-    print("XEdit-PACT Architecture Migration Tool\n")
+    print("AutoQAC Architecture Migration Tool\n")
 
     # Verify imports
     if not verify_imports():
@@ -226,7 +236,7 @@ def main() -> int:
         return 1
 
     # Check if any config exists
-    if not PACT_SETTINGS_PATH.exists() and not PACT_YAML_PATH.exists():
+    if not PACT_SETTINGS_PATH.exists() and not AUTOQAC_YAML_PATH.exists():
         print("No existing configuration found. Nothing to migrate.")
         return 0
 

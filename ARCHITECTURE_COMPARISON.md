@@ -1,8 +1,8 @@
-# Architecture Comparison: Old vs Refactored
+# AutoQAC Architecture Comparison
 
 ## Overview
 
-This document compares the old XEdit-PACT architecture with the new refactored version, highlighting improvements in state management, separation of concerns, and maintainability.
+This document compares the old AutoQAC architecture with the new refactored version, highlighting improvements in state management, separation of concerns, and maintainability.
 
 ## Key Improvements
 
@@ -93,7 +93,7 @@ def __init__(self, state: StateManager, config: ConfigManager):
 
 3. **Test Refactored Version:**
    ```bash
-   python PACT_Interface.py
+   python AutoQAC_Interface.py
    ```
 
 ## Code Examples

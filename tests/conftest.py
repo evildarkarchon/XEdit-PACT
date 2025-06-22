@@ -1,5 +1,6 @@
-"""Pytest configuration and common fixtures for XEdit-PACT tests."""
+"""Pytest configuration and common fixtures for AutoQAC tests."""
 
+import os
 import tempfile
 from pathlib import Path
 from typing import Generator
@@ -7,9 +8,9 @@ from typing import Generator
 import pytest
 from PySide6.QtCore import QCoreApplication
 
-from PactLib.config_manager import ConfigManager
-from PactLib.logging_config import setup_test_logging
-from PactLib.state_manager import StateManager
+from AutoQACLib.config_manager import ConfigManager
+from AutoQACLib.logging_config import setup_test_logging
+from AutoQACLib.state_manager import StateManager
 
 
 @pytest.fixture(scope="session")
@@ -48,17 +49,22 @@ def state_manager() -> StateManager:
 
 @pytest.fixture
 def sample_config_data() -> dict:
-    """Sample configuration data for testing."""
+    """Provide sample configuration data for testing."""
     return {
-        "Load_Order": {"File": "/path/to/loadorder.txt"},
-        "Mod_Organizer": {"Binary": "/path/to/ModOrganizer.exe", "Install_Path": "/path/to/ModOrganizer"},
-        "xEdit": {"Binary": "/path/to/xEdit.exe", "Install_Path": "/path/to/xEdit"},
-        "PACT_Data": {
-            "XEdit_Lists": {"Skyrim": ["Skyrim.esm", "Update.esm"], "Fallout4": ["Fallout4.esm"]},
-            "Skip_Lists": {"Skyrim": ["Dawnguard.esm", "HearthFires.esm"], "Fallout4": ["DLCRobot.esm"]},
-            "QAC_Lists": {"Skyrim": ["Unofficial Skyrim Patch.esp"], "Fallout4": ["Unofficial Fallout 4 Patch.esp"]},
+        "AutoQAC_Data": {
+            "Skip_Lists": {
+                "Skyrim": ["Skyrim.esm", "Update.esm", "Dawnguard.esm"],
+                "Fallout4": ["Fallout4.esm", "DLCRobot.esm"],
+            },
+            "XEdit_Lists": {
+                "Skyrim": ["Skyrim.esm", "Update.esm"],
+                "Fallout4": ["Fallout4.esm"],
+            },
         },
-        "Settings": {"Journal_Expiration": 7, "Cleaning_Timeout": 300, "CPU_Threshold": 5, "MO2_Mode": False},
+        "Settings": {
+            "Partial_Forms": False,
+            "MO2_Mode": False,
+        },
     }
 
 

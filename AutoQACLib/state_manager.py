@@ -1,4 +1,4 @@
-"""Centralized state management for XEdit-PACT."""
+"""Centralized state management for AutoQAC."""
 
 from __future__ import annotations
 

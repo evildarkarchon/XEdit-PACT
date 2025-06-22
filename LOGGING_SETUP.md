@@ -1,8 +1,8 @@
-# XEdit-PACT Logging Configuration
+# AutoQAC Logging Configuration
 
 ## Overview
 
-XEdit-PACT now uses a centralized rotating file logging system instead of console output. This provides better debugging capabilities and log persistence while maintaining a clean console interface.
+AutoQAC now uses a centralized rotating file logging system instead of console output. This provides better debugging capabilities and log persistence while maintaining a clean console interface.
 
 ## Features
 
@@ -16,10 +16,10 @@ XEdit-PACT now uses a centralized rotating file logging system instead of consol
 ## Log Files
 
 ### Main Application
-- **Location**: `logs/xedit_pact.log`
+- **Location**: `logs/autoqac.log`
 - **Max Size**: 5MB
 - **Backup Count**: 5 files
-- **Rotation**: `xedit_pact.log.1`, `xedit_pact.log.2`, etc.
+- **Rotation**: `autoqac.log.1`, `autoqac.log.2`, etc.
 
 ### Tests
 - **Location**: `logs/test_xedit_pact.log`
@@ -43,7 +43,7 @@ XEdit-PACT now uses a centralized rotating file logging system instead of consol
 ### In Application Code
 
 ```python
-from PactLib.logging_config import get_logger
+from AutoQACLib.logging_config import get_logger
 
 logger = get_logger(__name__)
 logger.info("Application started")
@@ -54,20 +54,20 @@ logger.error("Failed to process plugin")
 ### Setup Logging
 
 ```python
-from PactLib.logging_config import setup_logging, log_startup_info
+from AutoQACLib.logging_config import setup_logging, log_startup_info
 
 # Setup logging (called automatically in main application)
 setup_logging()
 
 # Log startup information
 logger = get_logger(__name__)
-log_startup_info(logger, "XEdit-PACT", "2.0.0")
+log_startup_info(logger, "AutoQAC", "2.0.0")
 ```
 
 ### Custom Configuration
 
 ```python
-from PactLib.logging_config import setup_logging
+from AutoQACLib.logging_config import setup_logging
 
 # Custom logging setup
 setup_logging(

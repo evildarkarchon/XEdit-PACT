@@ -1,8 +1,8 @@
-# XEdit-PACT Test Suite Summary
+# AutoQAC Test Suite Summary
 
 ## Overview
 
-This comprehensive test suite for XEdit-PACT covers all major components and their interactions. The test suite follows modern Python testing best practices and provides broad coverage of the codebase with **154 total tests** across **9 test modules**.
+This comprehensive test suite for AutoQAC covers all major components and their interactions. The test suite follows modern Python testing best practices and provides broad coverage of the codebase with **154 total tests** across **9 test modules**.
 
 ## Test Suite Structure
 
@@ -27,7 +27,7 @@ tests/
 Based on the latest test run, the suite includes **154 tests** with the following coverage:
 
 - **Overall Coverage**: 21% (1474 statements, 1162 missing)
-- **PactLib Components**:
+- **AutoQACLib Components**:
   - `logging_config.py`: 73% coverage (highest)
   - `state_manager.py`: 38% coverage  
   - `cleaning_worker.py`: 26% coverage
@@ -35,7 +35,7 @@ Based on the latest test run, the suite includes **154 tests** with the followin
   - `cleaning_service.py`: 16% coverage
   - `gui_controller.py`: 13% coverage
   - `utils.py`: 13% coverage
-- **Main Interface**: `PACT_Interface.py`: 17% coverage
+- **Main Interface**: `AutoQAC_Interface.py`: 17% coverage
 
 ## Key Features
 
@@ -153,14 +153,14 @@ pytest -m "not slow"    # Exclude slow tests
 ### Coverage Analysis
 ```bash
 # Run with coverage (configured in pyproject.toml)
-pytest --cov=PactLib --cov=PACT_Interface --cov-report=html --cov-report=term-missing
+pytest --cov=AutoQACLib --cov=AutoQAC_Interface --cov-report=html --cov-report=term-missing
 
 # Generate HTML coverage report
-pytest --cov=PactLib --cov=PACT_Interface --cov-report=html
+pytest --cov=AutoQACLib --cov=AutoQAC_Interface --cov-report=html
 # View: htmlcov/index.html
 
 # Generate XML coverage report  
-pytest --cov=PactLib --cov=PACT_Interface --cov-report=xml
+pytest --cov=AutoQACLib --cov=AutoQAC_Interface --cov-report=xml
 # Output: coverage.xml
 ```
 
@@ -183,7 +183,7 @@ The test suite is configured in `pyproject.toml` with:
 - **Output Options**: Verbose output, short tracebacks, strict markers
 
 ### Coverage Configuration
-- **Source Tracking**: PactLib and PACT_Interface modules
+- **Source Tracking**: AutoQACLib and AutoQAC_Interface modules
 - **Exclusions**: Test files, cache directories, virtual environments
 - **Report Formats**: Terminal, HTML, and XML outputs
 - **Coverage Thresholds**: Configured for quality gates
@@ -266,7 +266,7 @@ The test suite is designed for automated testing:
 - name: Run Tests with Coverage
   run: |
     poetry install --with dev
-    pytest --cov=PactLib --cov=PACT_Interface --cov-report=xml --cov-fail-under=25
+    pytest --cov=AutoQACLib --cov=AutoQAC_Interface --cov-report=xml --cov-fail-under=25
 ```
 
 ## Coverage Goals & Quality Gates
@@ -299,4 +299,4 @@ The test suite includes comprehensive documentation:
 - **Fixture Documentation**: Clear fixture usage examples
 - **Error Handling**: Troubleshooting guides for common test issues
 
-This test suite provides a solid foundation for maintaining and improving XEdit-PACT with confidence, ensuring thread safety and reliable operation across all components. 
+This test suite provides a solid foundation for maintaining and improving AutoQAC with confidence, ensuring thread safety and reliable operation across all components. 

@@ -1,4 +1,4 @@
-"""Configuration management for XEdit-PACT."""
+"""Configuration management for AutoQAC."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from typing import Any
 from ruamel import yaml
 from ruamel.yaml import YAML
 
-from PactLib.logging_config import get_logger
-from PactLib.utils import yaml_settings, yaml_settings_write
+from AutoQACLib.logging_config import get_logger
+from AutoQACLib.utils import yaml_settings, yaml_settings_write
 
 logger = get_logger(__name__)
 
@@ -170,11 +170,11 @@ class ConfigManager:
               specified game type.
         """
         # Get skip list from the correct key in PACT Main.yaml
-        skip_list = self.get(f"PACT_Data.Skip_Lists.{game_type}", [])
+        skip_list = self.get(f"AutoQAC_Data.Skip_Lists.{game_type}", [])
 
         return {
-            "xedit_list": self.get(f"PACT_Data.XEdit_Lists.{game_type}", []),
             "skip_list": skip_list,
+            "xedit_list": self.get(f"AutoQAC_Data.XEdit_Lists.{game_type}", []),
         }
 
     def get_paths(self) -> dict[str, Path | None]:

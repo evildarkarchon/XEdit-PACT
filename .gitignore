@@ -1,6 +1,7 @@
 ﻿/PACT Ignore.yaml
 /PACT Settings.yaml
 /PACT Data/PACT Config.yaml
+/AutoQAC Data/AutoQAC Config.yaml
 *.backup
 __pycache__/
 *.pyc

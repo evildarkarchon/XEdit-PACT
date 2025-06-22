@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""XEdit-PACT Main Interface - Refactored with centralized state management."""
+"""AutoQAC Main Interface - Refactored with centralized state management."""
 
 from __future__ import annotations
 
@@ -27,18 +27,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from PactLib.config_manager import ConfigManager
-from PactLib.gui_controller import GuiController
-from PactLib.logging_config import get_logger, log_startup_info, setup_logging
-from PactLib.state_manager import AppState, StateManager
+from AutoQACLib.config_manager import ConfigManager
+from AutoQACLib.gui_controller import GuiController
+from AutoQACLib.logging_config import get_logger, log_startup_info, setup_logging
+from AutoQACLib.state_manager import AppState, StateManager
 
 if TYPE_CHECKING:
     from logging import Logger
 
 # Constants
-PACT_DATA_PATH: Path = Path("PACT Data")
-PACT_YAML_PATH: Path = PACT_DATA_PATH / "PACT Main.yaml"
-PACT_CONFIG_PATH: Path = PACT_DATA_PATH / "PACT Config.yaml"  # New config file
+AUTOQAC_DATA_PATH: Path = Path("AutoQAC Data")
+AUTOQAC_YAML_PATH: Path = AUTOQAC_DATA_PATH / "AutoQAC Main.yaml"
+AUTOQAC_CONFIG_PATH: Path = AUTOQAC_DATA_PATH / "AutoQAC Config.yaml"  # New config file
 
 # Setup logging
 setup_logging()
@@ -266,7 +266,6 @@ class MainWindow(QMainWindow):
         self.xedit_button: QPushButton | None = None
         self.start_button: QPushButton | None = None
         self.stop_button: QPushButton | None = None
-        self.status_bar: QStatusBar | None = None
 
         # Connect controller signals
         self._connect_controller_signals()
@@ -296,31 +295,34 @@ class MainWindow(QMainWindow):
         self.state.state_changed.connect(self._on_state_changed)
 
     def _setup_ui(self) -> None:
-        """Setup the user interface."""
-        self.setWindowTitle("XEdit-PACT - Refactored")
-        self.setMinimumSize(650, 450)
+        """Setup the main window UI."""
+        self.setWindowTitle("AutoQAC - Refactored")
+        self.setMinimumSize(600, 400)
 
         # Create central widget
         central_widget: QWidget = QWidget()
         self.setCentralWidget(central_widget)
 
-        # Main layout
+        # Create main layout
         main_layout: QVBoxLayout = QVBoxLayout(central_widget)
 
-        # Configuration section
+        # Create configuration group
         config_group: QGroupBox = self._create_configuration_group()
         main_layout.addWidget(config_group)
 
-        # Control section
+        # Create control group
         control_group: QGroupBox = self._create_control_group()
         main_layout.addWidget(control_group)
 
-        # Status bar
+        # Create menu bar
+        self._create_menu_bar()
+
+        # Create status bar
         self.status_bar = self.statusBar()
         self.status_bar.showMessage("Ready")
 
-        # Menu bar
-        self._create_menu_bar()
+        # Initial UI update
+        self._update_ui_from_state()
 
     def _create_configuration_group(self) -> QGroupBox:
         """Create the configuration section."""
@@ -360,7 +362,7 @@ class MainWindow(QMainWindow):
         partial_forms_layout: QHBoxLayout = QHBoxLayout()
         self.partial_forms_button = QPushButton("Partial Forms: OFF")
         self.partial_forms_button.setCheckable(True)
-        self.partial_forms_button.setToolTip("Enable experimental Partial Forms feature (requires XEdit >= 4.1.5b)")
+        self.partial_forms_button.setToolTip("Enable experimental Partial Forms feature (requires xEdit >= 4.1.5b)")
         self.partial_forms_button.clicked.connect(self._toggle_partial_forms)
         partial_forms_layout.addWidget(self.partial_forms_button)
         partial_forms_layout.addStretch()
@@ -523,14 +525,12 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _toggle_partial_forms(self) -> None:
-        """Toggle Partial Forms feature with confirmation dialog."""
+        """Toggle partial forms cleaning."""
         if self.partial_forms_button is None:
             return
         enabled: bool = self.partial_forms_button.isChecked()
         if enabled:
             # Show warning dialog if enabling
-            from PACT_Interface import show_partial_forms_warning  # noqa: PLC0415
-
             confirmed: bool = show_partial_forms_warning(self)
             if not confirmed:
                 # User cancelled or closed dialog, revert button
@@ -677,14 +677,15 @@ class MainWindow(QMainWindow):
             self._update_status(message)
 
     def _show_about(self) -> None:
-        """Show about dialog."""
+        """Show the about dialog."""
         QMessageBox.about(
             self,
-            "About XEdit-PACT",
-            "XEdit-PACT (Refactored)\n\n"
-            "Plugin Auto Cleaning Tool\n"
-            "Version: 2.0.0\n\n"
-            "A tool for automating plugin cleaning with xEdit",
+            "About AutoQAC",
+            "AutoQAC - Automated Quick Auto Clean\n\n"
+            "A PySide6 application for batch cleaning Bethesda game plugins "
+            "using xEdit's quickautoclean functionality.\n\n"
+            "Version: 2.0.0\n"
+            "Built with PySide6 and Python 3.8+",
         )
 
     def closeEvent(self, event: QCloseEvent) -> None:
@@ -715,32 +716,20 @@ class MainWindow(QMainWindow):
 
 
 def create_application() -> tuple[QApplication, MainWindow]:
-    """
-    Creates and initializes the main application and its components.
+    """Create and configure the application and main window."""
+    # Create application
+    app: QApplication = QApplication(sys.argv)
+    app.setApplicationName("AutoQAC")
 
-    This function sets up the necessary components for the graphical user interface,
-    including configuration management, state management, and the GUI controller.
-    It also ensures that the application instance is properly created, with appropriate
-    configuration for integration into the Qt application framework. Finally, it prepares
-    and returns the QApplication instance and the main window for further handling or execution.
+    # Create config managers
+    main_config: ConfigManager = ConfigManager(AUTOQAC_YAML_PATH)  # For skip lists and game configs
+    user_config: ConfigManager = ConfigManager(AUTOQAC_CONFIG_PATH)  # For user settings
 
-    Returns:
-        tuple[QApplication, MainWindow]: A tuple containing the QApplication instance and the
-        main window object.
-    """
-    # Create instances
-    main_config: ConfigManager = ConfigManager(PACT_YAML_PATH)  # For skip lists and game configs
-    user_config: ConfigManager = ConfigManager(PACT_CONFIG_PATH)  # For user settings
+    # Create state manager and controller
     state: StateManager = StateManager()
     controller: GuiController = GuiController(state, main_config, user_config)
 
-    # Create GUI
-    instance: QCoreApplication | None = QApplication.instance()
-    if instance is None:
-        app: QApplication = QApplication(sys.argv)
-    else:
-        app = instance if isinstance(instance, QApplication) else QApplication(sys.argv)
-    app.setApplicationName("XEdit-PACT")
+    # Create main window
     window: MainWindow = MainWindow(state, controller)
 
     return app, window
@@ -783,46 +772,58 @@ if __name__ == "__main__":
 
 def show_partial_forms_warning(parent: QWidget) -> bool:
     """
-    Show a custom warning dialog for the Partial Forms experimental feature.
-    Returns True if the user confirms, False if cancelled or closed.
-    """
-    dialog = QDialog(parent)
-    dialog.setWindowTitle("Experimental Feature Warning")
-    dialog.setModal(True)
-    layout = QVBoxLayout(dialog)
-    label = QLabel(
-        "<b>⚠️ EXPERIMENTAL FEATURE WARNING ⚠️</b><br><br>"
-        "Partial Forms is an extremely experimental feature that may cause issues.<br>"
-        "It requires an XEdit version &gt;= 4.1.5b.<br><br>"
-        "Because of the experimental nature of this feature:<br>"
-        "&bull; No support will be provided for issues related to this feature<br>"
-        "&bull; Use at your own risk<br>"
-        "&bull; It may cause data corruption or other problems<br><br>"
-        "Are you sure you want to enable Partial Forms?"
-    )
-    label.setWordWrap(True)
-    layout.addWidget(label)
+    Show a warning dialog about partial forms cleaning.
 
-    button_box = QDialogButtonBox()
-    enable_btn = QPushButton("Enable")
-    cancel_btn = QPushButton("Cancel")
-    button_box.addButton(enable_btn, QDialogButtonBox.ButtonRole.AcceptRole)
-    button_box.addButton(cancel_btn, QDialogButtonBox.ButtonRole.RejectRole)
+    Args:
+        parent: The parent widget for the dialog.
+
+    Returns:
+        True if the user wants to enable partial forms cleaning, False otherwise.
+    """
+    dialog: QDialog = QDialog(parent)
+    dialog.setWindowTitle("Partial Forms Warning")
+    dialog.setModal(True)
+    dialog.setMinimumSize(400, 200)
+
+    layout: QVBoxLayout = QVBoxLayout(dialog)
+
+    # Warning message
+    warning_label: QLabel = QLabel(
+        "⚠️  WARNING: Partial Forms Cleaning\n\n"
+        "Enabling partial forms cleaning will clean plugins that contain "
+        "partial forms (records that are split across multiple plugins).\n\n"
+        "This can be dangerous and may break your game if not done carefully.\n\n"
+        "Only enable this if you understand the risks and have a backup "
+        "of your plugins.\n\n"
+        "Do you want to enable partial forms cleaning?"
+    )
+    warning_label.setWordWrap(True)
+    layout.addWidget(warning_label)
+
+    # Button box
+    button_box: QDialogButtonBox = QDialogButtonBox()
+    enable_button: QPushButton = QPushButton("Enable Partial Forms")
+    enable_button.setStyleSheet("QPushButton { background-color: #ff4444; color: white; }")
+    cancel_button: QPushButton = QPushButton("Cancel")
+    cancel_button.setStyleSheet("QPushButton { background-color: #666666; color: white; }")
+
+    button_box.addButton(enable_button, QDialogButtonBox.ButtonRole.AcceptRole)
+    button_box.addButton(cancel_button, QDialogButtonBox.ButtonRole.RejectRole)
+
     layout.addWidget(button_box)
 
-    result = {"confirmed": False}
-
+    # Connect signals
     def on_enable() -> None:
-        result["confirmed"] = True
         dialog.accept()
 
     def on_cancel() -> None:
         dialog.reject()
 
-    enable_btn.clicked.connect(on_enable)
-    cancel_btn.clicked.connect(on_cancel)
+    enable_button.clicked.connect(on_enable)
+    cancel_button.clicked.connect(on_cancel)
+    button_box.accepted.connect(on_enable)
+    button_box.rejected.connect(on_cancel)
 
-    # If closed via window close, treat as cancel
-    dialog.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, True)
-
-    return bool(dialog.exec() == QDialog.DialogCode.Accepted and result["confirmed"])
+    # Show dialog and return result
+    result: int = dialog.exec()
+    return result == QDialog.DialogCode.Accepted

@@ -120,8 +120,8 @@ addopts = [
 	"--strict-config",
 	"--verbose",
 	"--tb=short",
-	"--cov=PactLib",
-	"--cov=PACT_Interface",
+	"--cov=AutoQACLib",
+	"--cov=AutoQAC_Interface",
 	"--cov-report=term-missing",
 	"--cov-report=html:htmlcov",
 	"--cov-report=xml",
@@ -138,7 +138,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["PactLib", "PACT_Interface"]
+source = ["AutoQACLib", "AutoQAC_Interface"]
 omit = [
 	"*/tests/*",
 	"*/test_*",

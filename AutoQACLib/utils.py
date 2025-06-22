@@ -1,8 +1,11 @@
-"""Utility functions for XEdit-PACT."""
+"""Utility functions for AutoQAC."""
 
 from __future__ import annotations
 
 import contextlib
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -10,7 +13,7 @@ import psutil
 import ruamel.yaml
 from PySide6.QtCore import QMutex, QMutexLocker, QThread
 
-from PactLib.logging_config import get_logger
+from AutoQACLib.logging_config import get_logger
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -19,6 +22,9 @@ if TYPE_CHECKING:
     from ruamel.yaml.main import YAML
 
 logger: Logger = get_logger(__name__)
+
+# Thread-safe file operations
+_yaml_mutexes: dict[str, QMutex] = {}
 
 
 class YamlManager:

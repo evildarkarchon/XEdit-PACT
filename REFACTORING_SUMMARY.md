@@ -1,8 +1,8 @@
-# XEdit-PACT Refactoring Summary
+# AutoQAC Refactoring Summary
 
 ## Overview
 
-We've successfully implemented a refactored architecture for XEdit-PACT that addresses the complex state management issues identified in the original codebase. The new architecture provides centralized state management, clear separation of concerns, and improved maintainability.
+We've successfully implemented a refactored architecture for AutoQAC that addresses the complex state management issues identified in the original codebase. The new architecture provides centralized state management, clear separation of concerns, and improved maintainability.
 
 ## Files Created
 
@@ -33,7 +33,7 @@ We've successfully implemented a refactored architecture for XEdit-PACT that add
    - Handles user actions and coordinates responses
    - Manages worker threads
 
-6. **`PACT_Interface_Refactored.py`** - Refactored GUI
+6. **`AutoQAC_Interface.py`** - Refactored GUI
    - Pure UI code with no business logic
    - Responds to state changes via signals
    - Clean separation from processing logic
@@ -81,7 +81,7 @@ We've successfully implemented a refactored architecture for XEdit-PACT that add
 ## Migration Path
 
 1. Run `python migrate_to_refactored.py` to migrate existing configuration from `PACT Settings.yaml`
-2. Test with `python PACT_Interface_Refactored.py`
+2. Test with `python AutoQAC_Interface.py`
 3. Gradually update any custom code to use new architecture
 
 ## Benefits

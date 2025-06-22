@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QThread, Signal
 
-from PactLib.logging_config import get_logger
+from AutoQACLib.logging_config import get_logger
 
 if TYPE_CHECKING:
-    from PactLib.cleaning_service import CleaningService, CleanResult
-    from PactLib.state_manager import StateManager
+    from AutoQACLib.cleaning_service import CleaningService, CleanResult
+    from AutoQACLib.state_manager import StateManager
 
 logger = get_logger(__name__)
 

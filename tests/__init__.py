@@ -1,1 +1,1 @@
-"""Test suite for XEdit-PACT."""
+"""Test suite for AutoQAC."""

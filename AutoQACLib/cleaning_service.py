@@ -7,15 +7,15 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable
 
-from PactLib.logging_config import get_logger
-from PactLib.utils import detect_xedit_game, run_process_with_realtime_output
+from AutoQACLib.logging_config import get_logger
+from AutoQACLib.utils import detect_xedit_game, run_process_with_realtime_output
 
 if TYPE_CHECKING:
     from logging import Logger
     from re import Pattern
 
-    from PactLib.config_manager import ConfigManager
-    from PactLib.state_manager import AppState, StateManager
+    from AutoQACLib.config_manager import ConfigManager
+    from AutoQACLib.state_manager import AppState, StateManager
 
 
 logger: Logger = get_logger(__name__)
@@ -104,7 +104,7 @@ class CleaningService:
                     state_snapshot = self.state.state
                 # For universal xEdit executables, try to detect from load order
                 elif state_snapshot.load_order_path and state_snapshot.load_order_path.exists():
-                    from PactLib.utils import detect_game_from_load_order  # noqa: PLC0415
+                    from AutoQACLib.utils import detect_game_from_load_order  # noqa: PLC0415
 
                     game_type = detect_game_from_load_order(state_snapshot.load_order_path)
                     if game_type:
@@ -153,7 +153,7 @@ class CleaningService:
             skip_list.extend(fnv_skip_list)
 
         # Also check universal skip list
-        universal_skip: list[str] = self.main_config.get("PACT_Data.Skip_Lists.Universal", [])
+        universal_skip: list[str] = self.main_config.get("AutoQAC_Data.Skip_Lists.Universal", [])
 
         return plugin_name.lower() in [p.lower() for p in skip_list + universal_skip]
 
@@ -207,7 +207,7 @@ class CleaningService:
         if state_snapshot.mo2_mode and state_snapshot.mo2_exe_path:
             mo2_path: str = str(state_snapshot.mo2_exe_path)
             xedit_path: str = str(state_snapshot.xedit_exe_path)
-            
+
             if is_specific_xedit:
                 args: str = f'{cleaning_flag} -autoexit -autoload{partial_forms_options} "{plugin_name}"'
             elif state_snapshot.game_type:
@@ -215,10 +215,10 @@ class CleaningService:
             else:
                 logger.error("Game type not set for universal xEdit executable")
                 return ""
-            
+
             # MO2 requires special quoting for arguments
             return f'"{mo2_path}" run "{xedit_path}" -a "{args}"'
-        
+
         xedit_path = str(state_snapshot.xedit_exe_path)
 
         # Build command based on xEdit type
