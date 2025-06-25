@@ -492,6 +492,7 @@ class TestGameDetectionFunctions:
 
     def test_detect_game_from_load_order_file_not_found(self) -> None:
         """Test detect_game_from_load_order with non-existent file."""
+        import pytest
 
         from AutoQACLib.utils import detect_game_from_load_order
 
@@ -654,7 +655,7 @@ class TestLogMonitoringFunctions:
         time.sleep(0.1)
         
         # Append new lines (monitor_log_file only reads NEW lines after it starts)
-        with log_file.open("a") as f:
+        with open(log_file, "a") as f:
             f.write("First new line\n")
             f.flush()
             time.sleep(0.1)
@@ -698,7 +699,7 @@ class TestLogMonitoringFunctions:
         time.sleep(0.2)
         
         # Now append lines
-        with log_file.open("a") as f:
+        with open(log_file, "a") as f:
             f.write("First line\n")
             f.flush()
             time.sleep(0.1)
