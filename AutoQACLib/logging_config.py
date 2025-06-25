@@ -134,7 +134,20 @@ def get_logger(name: str) -> logging.Logger:
 
 def log_startup_info(logger: logging.Logger, app_name: str = "AutoQAC", version: str = "2.0.0") -> None:
     """Log startup information."""
+    separator = "=" * 60
+    logger.info(separator)
     logger.info(f"{app_name} v{version} - Starting up")
     logger.info(f"Python version: {sys.version}")
     logger.info(f"Platform: {sys.platform}")
     logger.info(f"Working directory: {os.getcwd()}")
+
+    # Log file information
+    log_file = "Not configured"
+    for handler in logger.handlers:
+        if isinstance(handler, (logging.FileHandler, logging.handlers.RotatingFileHandler)):
+            log_file = handler.baseFilename
+            break
+
+    logger.info(f"Log file: {log_file}")
+    logger.info(f"Log level: {logger.getEffectiveLevel()}")
+    logger.info(separator)

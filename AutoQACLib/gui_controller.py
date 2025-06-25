@@ -64,9 +64,12 @@ class GuiController(QObject):
         # Load settings from user config
         settings: dict[str, Any] = self.user_config.get_settings()
 
-        # Load Partial Forms setting specifically
+        # Load specific settings
         partial_forms_enabled = self.user_config.get("Settings.Partial_Forms", False)
+        mo2_mode = self.user_config.get("Settings.MO2_Mode", False)
+
         settings["partial_forms_enabled"] = partial_forms_enabled
+        settings["mo2_mode"] = mo2_mode
 
         self.state.update(**settings)
 
@@ -354,9 +357,9 @@ class GuiController(QObject):
                         # Remove any prefix characters (*, +, etc.)
                         line = original_line[1:].strip() if original_line[0] in ["*", "+", "-"] else original_line
 
-                        # Check if line ends with a valid plugin extension
-                        if line.lower().endswith((".esp", ".esm", ".esl")):
-                            # Validate that extension is at the end of the line
+                        # Check if line contains a valid plugin extension
+                        if any(ext in line.lower() for ext in [".esp", ".esm", ".esl"]):
+                            # Validate plugin line and extract clean plugin name
                             plugin_name = self._validate_plugin_line(line, line_num, original_line)
                             if plugin_name:
                                 plugins.append(plugin_name)
@@ -404,26 +407,28 @@ class GuiController(QObject):
                             )
                         return plugin_name
 
-        # Check if the line ends with a valid extension (and no separators were found above)
-        if any(line.lower().endswith(ext) for ext in valid_extensions):
-            # Check if there's a space followed by content (like "plugin1.esl extra content")
-            for ext in valid_extensions:
-                if line.lower().endswith(ext):
-                    # This is a clean plugin line
-                    return line
-                if ext in line.lower():
-                    ext_pos = line.lower().find(ext)
-                    after_ext = line[ext_pos + len(ext) :]
-                    if after_ext and after_ext[0] == " ":
-                        plugin_name = line[: ext_pos + len(ext)]
-                        remaining_content = after_ext.strip()
-                        if remaining_content:  # There's meaningful content after the extension
-                            logger.warning(
-                                f"Line {line_num}: Plugin extension not at end of line. "
-                                f"Original: '{original_line}' -> Using: '{plugin_name}' "
-                                f"(ignored: '{remaining_content}')"
-                            )
-                        return plugin_name
+        # Check if the line ends with a valid extension (clean case)
+        for ext in valid_extensions:
+            if line.lower().endswith(ext):
+                # This is a clean plugin line
+                return line
+
+        # Check if the line contains a valid extension followed by space or other content (not other extensions)
+        for ext in valid_extensions:
+            ext_pos = line.lower().find(ext)
+            if ext_pos != -1:
+                after_ext = line[ext_pos + len(ext) :]
+                # Check if there's space or whitespace after the extension (not other extensions)
+                if after_ext and after_ext[0] in [" ", "\t"]:
+                    plugin_name = line[: ext_pos + len(ext)]
+                    remaining_content = after_ext.strip()
+                    if remaining_content:  # There's meaningful content after the extension
+                        logger.warning(
+                            f"Line {line_num}: Plugin extension not at end of line. "
+                            f"Original: '{original_line}' -> Using: '{plugin_name}' "
+                            f"(ignored: '{remaining_content}')"
+                        )
+                    return plugin_name
 
         # No valid extension found or extension not properly positioned
         return None
