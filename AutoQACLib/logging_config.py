@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import logging.handlers
 import sys
-import os
 from dataclasses import dataclass
 from logging import Formatter, Logger, StreamHandler
 from pathlib import Path
@@ -139,7 +138,7 @@ def log_startup_info(logger: logging.Logger, app_name: str = "AutoQAC", version:
     logger.info(f"{app_name} v{version} - Starting up")
     logger.info(f"Python version: {sys.version}")
     logger.info(f"Platform: {sys.platform}")
-    logger.info(f"Working directory: {os.getcwd()}")
+    logger.info(f"Working directory: {Path.cwd()}")
 
     # Log file information
     log_file = "Not configured"

@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import contextlib
-import os
-import subprocess
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -16,6 +13,7 @@ from PySide6.QtCore import QMutex, QMutexLocker, QThread
 from AutoQACLib.logging_config import get_logger
 
 if TYPE_CHECKING:
+    import subprocess
     from logging import Logger
     from subprocess import CompletedProcess
 
@@ -384,7 +382,7 @@ def run_process(command: list[str] | str, timeout: int | None = None) -> tuple[i
             subprocess.
         subprocess.SubprocessError: If a generic subprocess-related error occurs.
     """
-    import subprocess  # noqa: PLC0415
+    import subprocess
 
     try:
         result: CompletedProcess[str] = subprocess.run(
@@ -437,8 +435,8 @@ def run_process_with_realtime_output(
             - A string with all the concatenated lines from the standard output.
             - A string with all the concatenated lines from the standard error.
     """
-    import subprocess  # noqa: PLC0415
-    import time  # noqa: PLC0415
+    import subprocess
+    import time
 
     start_time: float = time.time()
     stdout_lines: list[Any] = []
