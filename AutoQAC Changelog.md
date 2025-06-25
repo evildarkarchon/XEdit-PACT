@@ -7,7 +7,7 @@
 - UI overhaul.
 - No more console output.
 - Progress is now shown in the GUI, with statistics in real time.
-- Add partial form option to the GUI, with a warning dialog.
+- Add partial form option to the GUI, with a warning dialog. Partial forms can confuse some tools (especially tools for Skyrim), so use with caution.
 - A bunch of other stuff I can't remember.
 - Renamed the program to AutoQAC.
 
