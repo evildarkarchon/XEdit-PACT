@@ -1,9 +1,9 @@
 """Test GUI controller functionality."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, mock_open
+from unittest.mock import Mock, mock_open, patch
 
+import pytest
 from PySide6.QtWidgets import QWidget
 
 from AutoQACLib.config_manager import ConfigManager
@@ -44,7 +44,7 @@ class TestGuiController:
         self, state_manager: StateManager, main_config_manager: ConfigManager, user_config_manager: ConfigManager
     ) -> None:
         """Test controller initialization."""
-        controller = GuiController(state_manager, main_config_manager, user_config_manager)
+        controller: GuiController = GuiController(state_manager, main_config_manager, user_config_manager)
         assert controller.state == state_manager
         assert controller.main_config == main_config_manager
         assert controller.user_config == user_config_manager
@@ -54,19 +54,20 @@ class TestGuiController:
         with patch("PySide6.QtWidgets.QFileDialog.getOpenFileName") as mock_dialog:
             mock_dialog.return_value = ("/path/to/loadorder.txt", "")
 
-            with patch.object(Path, "exists", return_value=True):
-                with patch.object(controller.user_config, "set", return_value=True):
-                    result = controller.configure_load_order(Mock(spec=QWidget))
+            with patch.object(Path, "exists", return_value=True) and patch.object(
+                controller.user_config, "set", return_value=True
+            ):
+                result: bool = controller.configure_load_order(Mock(spec=QWidget))
 
-                    assert result is True
-                    assert controller.state.get("load_order_path") == Path("/path/to/loadorder.txt")
+                assert result is True
+                assert controller.state.get("load_order_path") == Path("/path/to/loadorder.txt")
 
     def test_configure_load_order_cancelled(self, controller: GuiController) -> None:
         """Test cancelled load order configuration."""
         with patch("PySide6.QtWidgets.QFileDialog.getOpenFileName") as mock_dialog:
             mock_dialog.return_value = ("", "")
 
-            result = controller.configure_load_order(Mock(spec=QWidget))
+            result: bool = controller.configure_load_order(Mock(spec=QWidget))
 
             assert result is False
 
@@ -75,26 +76,29 @@ class TestGuiController:
         with patch("PySide6.QtWidgets.QFileDialog.getOpenFileName") as mock_dialog:
             mock_dialog.return_value = ("/path/to/ModOrganizer.exe", "")
 
-            with patch.object(Path, "exists", return_value=True):
-                with patch.object(controller.user_config, "update_multiple", return_value=True):
-                    result = controller.configure_mo2(Mock(spec=QWidget))
+            with patch.object(Path, "exists", return_value=True) and patch.object(
+                controller.user_config, "update_multiple", return_value=True
+            ):
+                result: bool = controller.configure_mo2(Mock(spec=QWidget))
 
-                    assert result is True
-                    assert controller.state.get("mo2_exe_path") == Path("/path/to/ModOrganizer.exe")
+                assert result is True
+                assert controller.state.get("mo2_exe_path") == Path("/path/to/ModOrganizer.exe")
 
     def test_configure_xedit_success(self, controller: GuiController) -> None:
         """Test successful xEdit configuration."""
         with patch("PySide6.QtWidgets.QFileDialog.getOpenFileName") as mock_dialog:
             mock_dialog.return_value = ("/path/to/SSEEdit.exe", "")
 
-            with patch.object(Path, "exists", return_value=True):
-                with patch("AutoQACLib.utils.detect_xedit_game", return_value="SSE"):
-                    with patch.object(controller.user_config, "update_multiple", return_value=True):
-                        result = controller.configure_xedit(Mock(spec=QWidget))
+            with (
+                patch.object(Path, "exists", return_value=True)
+                and patch("AutoQACLib.utils.detect_xedit_game", return_value="SSE")
+                and patch.object(controller.user_config, "update_multiple", return_value=True)
+            ):
+                result: bool = controller.configure_xedit(Mock(spec=QWidget))
 
-                        assert result is True
-                        assert controller.state.get("xedit_exe_path") == Path("/path/to/SSEEdit.exe")
-                        assert controller.state.get("game_type") == "SSE"
+                assert result is True
+                assert controller.state.get("xedit_exe_path") == Path("/path/to/SSEEdit.exe")
+                assert controller.state.get("game_type") == "SSE"
 
     def test_configure_xedit_invalid_file(self, controller: GuiController) -> None:
         """Test xEdit configuration with invalid file."""
@@ -102,7 +106,7 @@ class TestGuiController:
             mock_dialog.return_value = ("/path/to/invalid.exe", "")
 
             with patch.object(Path, "exists", return_value=True):
-                result = controller.configure_xedit(Mock(spec=QWidget))
+                result: bool = controller.configure_xedit(Mock(spec=QWidget))
 
                 assert result is False
 
@@ -118,11 +122,12 @@ class TestGuiController:
         # Set up load order path
         controller.state.update_configuration_paths(load_order_path=Path("/path/to/loadorder.txt"))
 
-        with patch.object(Path, "exists", return_value=True):
-            with patch("builtins.open", mock_open(read_data="plugin1.esp\nplugin2.esm\n")):
-                plugins = controller.get_plugins_to_clean()
+        with patch.object(Path, "exists", return_value=True) and patch(
+            "builtins.open", mock_open(read_data="plugin1.esp\nplugin2.esm\n")
+        ):
+            plugins: list[str] = controller.get_plugins_to_clean()
 
-                assert plugins == ["plugin1.esp", "plugin2.esm"]
+            assert plugins == ["plugin1.esp", "plugin2.esm"]
 
     def test_get_plugins_to_clean_no_file(self, controller: GuiController) -> None:
         """Test getting plugins when file doesn't exist."""
@@ -130,45 +135,45 @@ class TestGuiController:
         controller.state.update_configuration_paths(load_order_path=Path("/path/to/loadorder.txt"))
 
         with patch.object(Path, "exists", return_value=False):
-            plugins = controller.get_plugins_to_clean()
+            plugins: list[str] = controller.get_plugins_to_clean()
 
             assert plugins == []
 
     def test_get_plugins_to_clean_no_path(self, controller: GuiController) -> None:
         """Test getting plugins when no path is configured."""
-        plugins = controller.get_plugins_to_clean()
+        plugins: list[str] = controller.get_plugins_to_clean()
 
         assert plugins == []
 
     def test_validate_plugin_line_valid(self, controller: GuiController) -> None:
         """Test validation of valid plugin lines."""
         # Test valid plugin names
-        assert controller._validate_plugin_line("plugin1.esp", 1, "plugin1.esp") == "plugin1.esp"
-        assert controller._validate_plugin_line("plugin2.esm", 2, "plugin2.esm") == "plugin2.esm"
-        assert controller._validate_plugin_line("plugin3.esl", 3, "plugin3.esl") == "plugin3.esl"
+        assert controller._validate_plugin_line("plugin1.esp", 1, "plugin1.esp") == "plugin1.esp"  # noqa: SLF001
+        assert controller._validate_plugin_line("plugin2.esm", 2, "plugin2.esm") == "plugin2.esm"  # noqa: SLF001
+        assert controller._validate_plugin_line("plugin3.esl", 3, "plugin3.esl") == "plugin3.esl"  # noqa: SLF001
 
         # Test with prefix characters
-        assert controller._validate_plugin_line("plugin4.esp", 4, "*plugin4.esp") == "plugin4.esp"
-        assert controller._validate_plugin_line("plugin5.esm", 5, "+plugin5.esm") == "plugin5.esm"
+        assert controller._validate_plugin_line("plugin4.esp", 4, "*plugin4.esp") == "plugin4.esp"  # noqa: SLF001
+        assert controller._validate_plugin_line("plugin5.esm", 5, "+plugin5.esm") == "plugin5.esm"  # noqa: SLF001
 
     def test_validate_plugin_line_invalid_extension_position(self, controller: GuiController) -> None:
         """Test validation of plugin lines with content after extension."""
         # Test with content after extension
-        result = controller._validate_plugin_line("plugin1.esp,plugin2.esp", 1, "plugin1.esp,plugin2.esp")
-        assert result == "plugin1.esp"
+        result1: str | None = controller._validate_plugin_line("plugin1.esp,plugin2.esp", 1, "plugin1.esp,plugin2.esp")  # noqa: SLF001
+        assert result1 == "plugin1.esp"
 
-        result = controller._validate_plugin_line("plugin1.esm;plugin2.esm", 2, "plugin1.esm;plugin2.esm")
-        assert result == "plugin1.esm"
+        result2: str | None = controller._validate_plugin_line("plugin1.esm;plugin2.esm", 2, "plugin1.esm;plugin2.esm")  # noqa: SLF001
+        assert result2 == "plugin1.esm"
 
-        result = controller._validate_plugin_line("plugin1.esl extra content", 3, "plugin1.esl extra content")
-        assert result == "plugin1.esl"
+        result3: str | None = controller._validate_plugin_line("plugin1.esl extra content", 3, "plugin1.esl extra content")  # noqa: SLF001
+        assert result3 == "plugin1.esl"
 
     def test_validate_plugin_line_no_extension(self, controller: GuiController) -> None:
         """Test validation of lines without valid extensions."""
         # Test lines without valid extensions
-        assert controller._validate_plugin_line("plugin1.txt", 1, "plugin1.txt") is None
-        assert controller._validate_plugin_line("plugin1", 2, "plugin1") is None
-        assert controller._validate_plugin_line("plugin1.esp.bak", 3, "plugin1.esp.bak") is None
+        assert controller._validate_plugin_line("plugin1.txt", 1, "plugin1.txt") is None  # noqa: SLF001
+        assert controller._validate_plugin_line("plugin1", 2, "plugin1") is None  # noqa: SLF001
+        assert controller._validate_plugin_line("plugin1.esp.bak", 3, "plugin1.esp.bak") is None  # noqa: SLF001
 
     def test_get_plugins_to_clean_with_malformed_lines(self, controller: GuiController) -> None:
         """Test getting plugins from load order file with malformed lines."""
@@ -176,7 +181,7 @@ class TestGuiController:
         controller.state.update_configuration_paths(load_order_path=Path("/path/to/loadorder.txt"))
 
         # Mock file content with malformed lines
-        mock_content = """# Load order file
+        mock_content: str = """# Load order file
 plugin1.esp
 plugin2.esp,plugin3.esp
 plugin4.esm;plugin5.esm
@@ -184,13 +189,14 @@ plugin6.esl extra content
 plugin7.esp
 """
 
-        with patch.object(Path, "exists", return_value=True):
-            with patch("builtins.open", mock_open(read_data=mock_content)):
-                plugins = controller.get_plugins_to_clean()
+        with patch.object(Path, "exists", return_value=True) and patch(
+            "builtins.open", mock_open(read_data=mock_content)
+        ):
+            plugins: list[str] = controller.get_plugins_to_clean()
 
-                # Should extract valid plugin names, separating malformed lines
-                expected = ["plugin1.esp", "plugin2.esp", "plugin4.esm", "plugin6.esl", "plugin7.esp"]
-                assert plugins == expected
+            # Should extract valid plugin names, separating malformed lines
+            expected: list[str] = ["plugin1.esp", "plugin2.esp", "plugin4.esm", "plugin6.esl", "plugin7.esp"]
+            assert plugins == expected
 
     def test_start_cleaning_not_configured(self, controller: GuiController) -> None:
         """Test starting cleaning when not fully configured."""
@@ -225,21 +231,22 @@ plugin7.esp
             is_xedit_configured=True,
         )
 
-        with patch.object(controller, "get_plugins_to_clean", return_value=["test.esp"]):
-            with patch("AutoQACLib.cleaning_worker.CleaningWorker") as mock_worker_class:
-                mock_worker = Mock()
-                mock_worker_class.return_value = mock_worker
+        with patch.object(controller, "get_plugins_to_clean", return_value=["test.esp"]) and patch(
+            "AutoQACLib.cleaning_worker.CleaningWorker"
+        ) as mock_worker_class:
+            mock_worker: Mock = Mock()
+            mock_worker_class.return_value = mock_worker
 
-                controller.start_cleaning()
+            controller.start_cleaning()
 
-                # Should create and start worker
-                mock_worker_class.assert_called_once()
-                mock_worker.start.assert_called_once()
+            # Should create and start worker
+            mock_worker_class.assert_called_once()
+            mock_worker.start.assert_called_once()
 
     def test_stop_cleaning(self, controller: GuiController) -> None:
         """Test stopping cleaning."""
         with patch("AutoQACLib.cleaning_worker.CleaningWorker") as mock_worker_class:
-            mock_worker = Mock()
+            mock_worker: Mock = Mock()
             mock_worker.isRunning.return_value = True
             mock_worker_class.return_value = mock_worker
 
@@ -263,7 +270,7 @@ plugin7.esp
 
     def test_get_state_summary(self, controller: GuiController) -> None:
         """Test getting state summary."""
-        summary = controller.get_state_summary()
+        summary: str = controller.get_state_summary()
 
         assert isinstance(summary, str)
         assert "Configuration Status" in summary
@@ -275,7 +282,7 @@ class TestGuiControllerPartialForms:
     @pytest.fixture
     def mock_state(self) -> Mock:
         """Create a mock state manager."""
-        state = Mock(spec=StateManager)
+        state: Mock = Mock(spec=StateManager)
         state.state.partial_forms_enabled = False
         state.state.mo2_mode = False
         state.state.is_fully_configured = True
@@ -292,7 +299,7 @@ class TestGuiControllerPartialForms:
     @pytest.fixture
     def mock_main_config(self) -> Mock:
         """Create a mock main config manager."""
-        config = Mock(spec=ConfigManager)
+        config: Mock = Mock(spec=ConfigManager)
         config.get_game_config.return_value = {"xedit_list": [], "skip_list": []}
         config.get.return_value = []
         return config
@@ -300,7 +307,7 @@ class TestGuiControllerPartialForms:
     @pytest.fixture
     def mock_user_config(self) -> Mock:
         """Create a mock user config manager."""
-        config = Mock(spec=ConfigManager)
+        config: Mock = Mock(spec=ConfigManager)
         config.get.return_value = False
         config.set.return_value = True
         config.update_multiple.return_value = True
@@ -309,11 +316,13 @@ class TestGuiControllerPartialForms:
         return config
 
     @pytest.fixture
-    def partial_forms_controller(self, mock_state, mock_main_config, mock_user_config) -> GuiController:
+    def partial_forms_controller(self, mock_state: Mock, mock_main_config: Mock, mock_user_config: Mock) -> GuiController:
         """Create a GuiController instance for testing."""
         return GuiController(mock_state, mock_main_config, mock_user_config)
 
-    def test_toggle_partial_forms_first_time(self, partial_forms_controller, mock_user_config, mock_state):
+    def test_toggle_partial_forms_first_time(
+        self, partial_forms_controller: GuiController, mock_user_config: Mock, mock_state: Mock
+    ) -> None:
         """Test enabling Partial Forms for the first time shows warning."""
         # Enable Partial Forms
         partial_forms_controller.toggle_partial_forms(True)
@@ -322,7 +331,9 @@ class TestGuiControllerPartialForms:
         mock_state.update.assert_called_with(partial_forms_enabled=True)
         mock_user_config.set.assert_called_with("Settings.Partial_Forms", True)
 
-    def test_toggle_partial_forms_subsequent_time(self, partial_forms_controller, mock_user_config, mock_state):
+    def test_toggle_partial_forms_subsequent_time(
+        self, partial_forms_controller: GuiController, mock_user_config: Mock, mock_state: Mock
+    ) -> None:
         """Test enabling Partial Forms after warning has been shown."""
         # Mock that warning has been shown before
         mock_user_config.get.return_value = True
@@ -334,7 +345,9 @@ class TestGuiControllerPartialForms:
         mock_state.update.assert_called_with(partial_forms_enabled=True)
         mock_user_config.set.assert_called_with("Settings.Partial_Forms", True)
 
-    def test_toggle_partial_forms_disable(self, partial_forms_controller, mock_user_config, mock_state):
+    def test_toggle_partial_forms_disable(
+        self, partial_forms_controller: GuiController, mock_user_config: Mock, mock_state: Mock
+    ) -> None:
         """Test disabling Partial Forms."""
         # Disable Partial Forms
         partial_forms_controller.toggle_partial_forms(False)
@@ -343,7 +356,9 @@ class TestGuiControllerPartialForms:
         mock_state.update.assert_called_with(partial_forms_enabled=False)
         mock_user_config.set.assert_called_with("Settings.Partial_Forms", False)
 
-    def test_toggle_partial_forms_error_handling(self, partial_forms_controller, mock_user_config, mock_state):
+    def test_toggle_partial_forms_error_handling(
+        self, partial_forms_controller: GuiController, mock_user_config: Mock, mock_state: Mock
+    ) -> None:
         """Test error handling in Partial Forms toggle."""
         # Mock an error during configuration save
         mock_user_config.set.side_effect = OSError("Test error")

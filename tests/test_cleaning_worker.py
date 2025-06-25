@@ -1,7 +1,8 @@
 """Tests for cleaning worker."""
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from typing import Any
+from unittest.mock import Mock, patch
+
 from PySide6.QtCore import QThread
 
 from AutoQACLib.cleaning_worker import CleaningWorker
@@ -12,16 +13,16 @@ class TestCleaningWorker:
 
     def test_initialization(self) -> None:
         """Test CleaningWorker initialization."""
-        mock_service = Mock()
-        mock_state = Mock()
-        plugins = ["plugin1.esp", "plugin2.esp"]
+        mock_service: Mock = Mock()
+        mock_state: Mock = Mock()
+        plugins: list[str] = ["plugin1.esp", "plugin2.esp"]
 
-        worker = CleaningWorker(mock_service, mock_state, plugins)
+        worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
         assert worker.service == mock_service
         assert worker.state == mock_state
         assert worker.plugins == plugins
-        assert worker._should_stop is False
+        assert worker._should_stop is False  # noqa: SLF001
         assert isinstance(worker, QThread)
 
     @patch.object(CleaningWorker, "progress")
@@ -29,25 +30,25 @@ class TestCleaningWorker:
     @patch.object(CleaningWorker, "plugin_completed")
     @patch.object(CleaningWorker, "error")
     def test_run_successful_cleaning(
-        self, mock_error, mock_plugin_completed, mock_plugin_started, mock_progress
+        self, mock_error: Mock, mock_plugin_completed: Mock, mock_plugin_started: Mock, mock_progress: Mock  # noqa: ARG002
     ) -> None:
         """Test successful cleaning process."""
-        mock_service = Mock()
-        mock_state = Mock()
-        plugins = ["plugin1.esp", "plugin2.esp"]
+        mock_service: Mock = Mock()
+        mock_state: Mock = Mock()
+        plugins: list[str] = ["plugin1.esp", "plugin2.esp"]
 
         # Mock validation success
         mock_service.validate_environment.return_value = (True, "Valid environment")
 
         # Mock clean result
-        mock_result = Mock()
+        mock_result: Mock = Mock()
         mock_result.status = "cleaned"
         mock_result.success = True
         mock_result.message = "Successfully cleaned"
         mock_result.duration = 1.5
         mock_service.clean_plugin.return_value = mock_result
 
-        worker = CleaningWorker(mock_service, mock_state, plugins)
+        worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
         # Run the worker
         worker.run()
@@ -68,16 +69,16 @@ class TestCleaningWorker:
         assert mock_plugin_completed.emit.call_count == 2
 
     @patch.object(CleaningWorker, "error")
-    def test_run_validation_failure(self, mock_error) -> None:
+    def test_run_validation_failure(self, mock_error: Mock) -> None:
         """Test cleaning process when validation fails."""
-        mock_service = Mock()
-        mock_state = Mock()
-        plugins = ["plugin1.esp"]
+        mock_service: Mock = Mock()
+        mock_state: Mock = Mock()
+        plugins: list[str] = ["plugin1.esp"]
 
         # Mock validation failure
         mock_service.validate_environment.return_value = (False, "Invalid environment")
 
-        worker = CleaningWorker(mock_service, mock_state, plugins)
+        worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
         # Run the worker
         worker.run()
@@ -90,12 +91,12 @@ class TestCleaningWorker:
     @patch.object(CleaningWorker, "plugin_completed")
     @patch.object(CleaningWorker, "error")
     def test_run_plugin_cleaning_failure(
-        self, mock_error, mock_plugin_completed, mock_plugin_started, mock_progress
+        self, mock_error: Mock, mock_plugin_completed: Mock, mock_plugin_started: Mock, mock_progress: Mock  # noqa: ARG002
     ) -> None:
         """Test cleaning process when a plugin fails to clean."""
-        mock_service = Mock()
-        mock_state = Mock()
-        plugins = ["plugin1.esp"]
+        mock_service: Mock = Mock()
+        mock_state: Mock = Mock()
+        plugins: list[str] = ["plugin1.esp"]
 
         # Mock validation success
         mock_service.validate_environment.return_value = (True, "Valid environment")
@@ -103,7 +104,7 @@ class TestCleaningWorker:
         # Mock clean failure
         mock_service.clean_plugin.side_effect = RuntimeError("Cleaning failed")
 
-        worker = CleaningWorker(mock_service, mock_state, plugins)
+        worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
         # Run the worker
         worker.run()
@@ -120,19 +121,19 @@ class TestCleaningWorker:
     @patch.object(CleaningWorker, "plugin_started")
     @patch.object(CleaningWorker, "plugin_completed")
     @patch.object(CleaningWorker, "error")
-    def test_run_with_stop_request(self, mock_error, mock_plugin_completed, mock_plugin_started, mock_progress) -> None:
+    def test_run_with_stop_request(self, mock_error: Mock, mock_plugin_completed: Mock, mock_plugin_started: Mock, mock_progress: Mock) -> None:  # noqa: ARG002
         """Test cleaning process when stop is requested."""
-        mock_service = Mock()
-        mock_state = Mock()
-        plugins = ["plugin1.esp", "plugin2.esp"]
+        mock_service: Mock = Mock()
+        mock_state: Mock = Mock()
+        plugins: list[str] = ["plugin1.esp", "plugin2.esp"]
 
         # Mock validation success
         mock_service.validate_environment.return_value = (True, "Valid environment")
 
-        worker = CleaningWorker(mock_service, mock_state, plugins)
+        worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
         # Set stop flag before running
-        worker._should_stop = True
+        worker._should_stop = True  # noqa: SLF001
 
         # Run the worker
         worker.run()
@@ -145,17 +146,17 @@ class TestCleaningWorker:
     @patch.object(CleaningWorker, "plugin_completed")
     @patch.object(CleaningWorker, "error")
     def test_run_with_interruption_request(
-        self, mock_error, mock_plugin_completed, mock_plugin_started, mock_progress
+        self, mock_error: Mock, mock_plugin_completed: Mock, mock_plugin_started: Mock, mock_progress: Mock  # noqa: ARG002
     ) -> None:
         """Test cleaning process when interruption is requested."""
-        mock_service = Mock()
-        mock_state = Mock()
-        plugins = ["plugin1.esp", "plugin2.esp"]
+        mock_service: Mock = Mock()
+        mock_state: Mock = Mock()
+        plugins: list[str] = ["plugin1.esp", "plugin2.esp"]
 
         # Mock validation success
         mock_service.validate_environment.return_value = (True, "Valid environment")
 
-        worker = CleaningWorker(mock_service, mock_state, plugins)
+        worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
         # Mock interruption request
         with patch.object(worker, "isInterruptionRequested", return_value=True):
@@ -165,17 +166,17 @@ class TestCleaningWorker:
         mock_service.clean_plugin.assert_not_called()
 
     @patch.object(CleaningWorker, "error")
-    def test_run_with_exception(self, mock_error) -> None:
+    def test_run_with_exception(self, mock_error: Mock) -> None:
         """Test cleaning process when an exception occurs."""
-        mock_service = Mock()
-        mock_state = Mock()
-        plugins = ["plugin1.esp"]
+        mock_service: Mock = Mock()
+        mock_state: Mock = Mock()
+        plugins: list[str] = ["plugin1.esp"]
 
         # Mock validation success but service raises exception
         mock_service.validate_environment.return_value = (True, "Valid environment")
         mock_service.set_progress_callback.side_effect = RuntimeError("Service error")
 
-        worker = CleaningWorker(mock_service, mock_state, plugins)
+        worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
         # Run the worker
         worker.run()
@@ -184,17 +185,17 @@ class TestCleaningWorker:
         mock_error.emit.assert_called_once_with("Service error")
 
     @patch.object(CleaningWorker, "error")
-    def test_run_with_keyboard_interrupt(self, mock_error) -> None:
+    def test_run_with_keyboard_interrupt(self, mock_error: Mock) -> None:
         """Test cleaning process when interrupted by keyboard."""
-        mock_service = Mock()
-        mock_state = Mock()
-        plugins = ["plugin1.esp"]
+        mock_service: Mock = Mock()
+        mock_state: Mock = Mock()
+        plugins: list[str] = ["plugin1.esp"]
 
         # Mock validation success but raise KeyboardInterrupt
         mock_service.validate_environment.return_value = (True, "Valid environment")
         mock_service.set_progress_callback.side_effect = KeyboardInterrupt()
 
-        worker = CleaningWorker(mock_service, mock_state, plugins)
+        worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
         # Run the worker
         worker.run()
@@ -203,17 +204,17 @@ class TestCleaningWorker:
         mock_error.emit.assert_called_once_with("Cleaning process was interrupted by user")
 
     @patch.object(CleaningWorker, "error")
-    def test_run_with_type_error(self, mock_error) -> None:
+    def test_run_with_type_error(self, mock_error: Mock) -> None:
         """Test cleaning process when TypeError occurs."""
-        mock_service = Mock()
-        mock_state = Mock()
-        plugins = ["plugin1.esp"]
+        mock_service: Mock = Mock()
+        mock_state: Mock = Mock()
+        plugins: list[str] = ["plugin1.esp"]
 
         # Mock validation success but raise TypeError
         mock_service.validate_environment.return_value = (True, "Valid environment")
         mock_service.set_progress_callback.side_effect = TypeError("Type error")
 
-        worker = CleaningWorker(mock_service, mock_state, plugins)
+        worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
         # Run the worker
         worker.run()
@@ -225,24 +226,24 @@ class TestCleaningWorker:
     @patch.object(CleaningWorker, "plugin_started")
     @patch.object(CleaningWorker, "plugin_completed")
     @patch.object(CleaningWorker, "error")
-    def test_run_final_state_reset(self, mock_error, mock_plugin_completed, mock_plugin_started, mock_progress) -> None:
+    def test_run_final_state_reset(self, mock_error: Mock, mock_plugin_completed: Mock, mock_plugin_started: Mock, mock_progress: Mock) -> None:  # noqa: ARG002
         """Test that cleaning state is reset in finally block."""
-        mock_service = Mock()
-        mock_state = Mock()
-        plugins = ["plugin1.esp"]
+        mock_service: Mock = Mock()
+        mock_state: Mock = Mock()
+        plugins: list[str] = ["plugin1.esp"]
 
         # Mock validation success
         mock_service.validate_environment.return_value = (True, "Valid environment")
 
         # Mock clean result
-        mock_result = Mock()
+        mock_result: Mock = Mock()
         mock_result.status = "cleaned"
         mock_result.success = True
         mock_result.message = "Successfully cleaned"
         mock_result.duration = 1.5
         mock_service.clean_plugin.return_value = mock_result
 
-        worker = CleaningWorker(mock_service, mock_state, plugins)
+        worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
         # Run the worker
         worker.run()
@@ -252,80 +253,78 @@ class TestCleaningWorker:
 
     def test_stop_method(self) -> None:
         """Test the stop method."""
-        mock_service = Mock()
-        mock_state = Mock()
-        plugins = ["plugin1.esp"]
+        mock_service: Mock = Mock()
+        mock_state: Mock = Mock()
+        plugins: list[str] = ["plugin1.esp"]
 
-        worker = CleaningWorker(mock_service, mock_state, plugins)
+        worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
         # Mock thread state
-        with patch.object(worker, "isRunning", return_value=True):
-            with patch.object(worker, "wait", return_value=True):
-                worker.stop()
+        with patch.object(worker, "isRunning", return_value=True) and patch.object(worker, "wait", return_value=True):
+            worker.stop()
 
         # Verify stop flag was set
-        assert worker._should_stop is True
+        assert worker._should_stop is True  # noqa: SLF001
 
     def test_stop_method_with_termination(self) -> None:
         """Test the stop method when graceful stop fails."""
-        mock_service = Mock()
-        mock_state = Mock()
-        plugins = ["plugin1.esp"]
+        mock_service: Mock = Mock()
+        mock_state: Mock = Mock()
+        plugins: list[str] = ["plugin1.esp"]
 
-        worker = CleaningWorker(mock_service, mock_state, plugins)
+        worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
         # Mock thread state - first wait returns False (graceful stop failed)
-        with patch.object(worker, "isRunning", return_value=True):
-            with patch.object(worker, "wait") as mock_wait:
-                mock_wait.side_effect = [False, True]  # First wait fails, second succeeds
-                with patch.object(worker, "terminate"):
-                    worker.stop()
+        with patch.object(worker, "isRunning", return_value=True), patch.object(worker, "wait") as mock_wait:
+            mock_wait.side_effect = [False, True]  # First wait fails, second succeeds
+            with patch.object(worker, "terminate"):
+                worker.stop()
 
         # Verify stop flag was set
-        assert worker._should_stop is True
+        assert worker._should_stop is True  # noqa: SLF001
 
     @patch.object(CleaningWorker, "plugin_progress")
-    def test_on_cleaning_progress(self, mock_plugin_progress) -> None:
+    def test_on_cleaning_progress(self, mock_plugin_progress: Mock) -> None:
         """Test the _on_cleaning_progress callback."""
-        mock_service = Mock()
-        mock_state = Mock()
-        plugins = ["plugin1.esp"]
+        mock_service: Mock = Mock()
+        mock_state: Mock = Mock()
+        plugins: list[str] = ["plugin1.esp"]
 
-        worker = CleaningWorker(mock_service, mock_state, plugins)
+        worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
-        progress_info = {"current": 5, "total": 10, "message": "Processing..."}
-        worker._on_cleaning_progress(progress_info)
+        progress_info: dict[str, Any] = {"current": 5, "total": 10, "message": "Processing..."}
+        worker._on_cleaning_progress(progress_info)  # noqa: SLF001
 
         # Verify signal was emitted
         mock_plugin_progress.emit.assert_called_once_with(progress_info)
 
     @patch.object(CleaningWorker, "log_output")
-    def test_on_log_output(self, mock_log_output) -> None:
+    def test_on_log_output(self, mock_log_output: Mock) -> None:
         """Test the _on_log_output callback."""
-        mock_service = Mock()
-        mock_state = Mock()
-        plugins = ["plugin1.esp"]
+        mock_service: Mock = Mock()
+        mock_state: Mock = Mock()
+        plugins: list[str] = ["plugin1.esp"]
 
-        worker = CleaningWorker(mock_service, mock_state, plugins)
+        worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
-        log_line = "Processing plugin..."
-        worker._on_log_output(log_line)
+        log_line: str = "Processing plugin..."
+        worker._on_log_output(log_line)  # noqa: SLF001
 
         # Verify signal was emitted
         mock_log_output.emit.assert_called_once_with(log_line)
 
     def test_get_summary(self) -> None:
         """Test the get_summary method."""
-        mock_service = Mock()
-        mock_state = Mock()
-        plugins = ["plugin1.esp"]
+        mock_service: Mock = Mock()
+        mock_state: Mock = Mock()
+        plugins: list[str] = ["plugin1.esp"]
 
         # Mock state with cleaning stats
         mock_state.state.cleaning_stats = {"cleaned": 5, "failed": 2, "skipped": 1, "total": 8}
 
-        worker = CleaningWorker(mock_service, mock_state, plugins)
+        worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
-        summary = worker.get_summary()
+        summary: str = worker.get_summary()
 
         # Verify summary format
         assert "Cleaning complete:" in summary

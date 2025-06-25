@@ -2,9 +2,10 @@
 
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from typing import Any
+from unittest.mock import patch  # noqa: F401
 
-import pytest
+import pytest  # noqa: F401
 
 from AutoQACLib.config_manager import ConfigManager
 
@@ -15,15 +16,15 @@ class TestConfigManager:
     def test_initialization_with_new_file(self) -> None:
         """Test ConfigManager initialization with a new config file."""
         with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
-            config_path = Path(f.name)
+            config_path: Path = Path(f.name)
 
         try:
-            config = ConfigManager(config_path)
-            assert config._path == config_path
+            config: ConfigManager = ConfigManager(config_path)
+            assert config._path == config_path  # noqa: SLF001
             assert config_path.exists()
 
             # Should create empty config
-            all_config = config.get_all()
+            all_config: dict[str, Any] = config.get_all()
             assert all_config == {}
         finally:
             config_path.unlink(missing_ok=True)
@@ -31,15 +32,15 @@ class TestConfigManager:
     def test_initialization_with_existing_file(self) -> None:
         """Test ConfigManager initialization with existing config file."""
         with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
-            config_path = Path(f.name)
+            config_path: Path = Path(f.name)
             f.write(b"test_key: test_value\n")
 
         try:
-            config = ConfigManager(config_path)
-            assert config._path == config_path
+            config: ConfigManager = ConfigManager(config_path)
+            assert config._path == config_path  # noqa: SLF001
 
             # Should read existing config
-            value = config.get("test_key")
+            value: Any = config.get("test_key")
             assert value == "test_value"
         finally:
             config_path.unlink(missing_ok=True)
@@ -93,9 +94,9 @@ class TestConfigManager:
 
     def test_update_multiple_method(self, config_manager: ConfigManager) -> None:
         """Test the update_multiple method."""
-        updates = {"key1": "value1", "key2": "value2", "nested.key3": "value3"}
+        updates: dict[str, Any] = {"key1": "value1", "key2": "value2", "nested.key3": "value3"}
 
-        success = config_manager.update_multiple(updates)
+        success: bool = config_manager.update_multiple(updates)
         assert success is True
 
         # Verify all updates were applied
@@ -109,7 +110,7 @@ class TestConfigManager:
         config_manager.set("AutoQAC_Data.XEdit_Lists.Skyrim", ["Skyrim.esm", "Update.esm"])
         config_manager.set("AutoQAC_Data.Skip_Lists.Skyrim", ["Dawnguard.esm"])
 
-        game_config = config_manager.get_game_config("Skyrim")
+        game_config: dict[str, Any] = config_manager.get_game_config("Skyrim")
 
         assert "xedit_list" in game_config
         assert "skip_list" in game_config
@@ -125,7 +126,7 @@ class TestConfigManager:
         config_manager.set("xEdit.Binary", "/path/to/xEdit.exe")
         config_manager.set("xEdit.Install_Path", "/path/to/xEdit")
 
-        paths = config_manager.get_paths()
+        paths: dict[str, Any] = config_manager.get_paths()
 
         assert "load_order_path" in paths
         assert "mo2_exe_path" in paths
@@ -147,7 +148,7 @@ class TestConfigManager:
         config_manager.set("Settings.CPU_Threshold", 5)
         config_manager.set("Settings.MO2_Mode", False)
 
-        settings = config_manager.get_settings()
+        settings: dict[str, Any] = config_manager.get_settings()
 
         assert "journal_expiration" in settings
         assert "cleaning_timeout" in settings
@@ -166,7 +167,7 @@ class TestConfigManager:
         config_manager.set("Mod_Organizer.Binary", "/non/existent/path.exe")  # Invalid path
         config_manager.set("xEdit.Binary", "/another/non/existent/path.exe")  # Invalid path
 
-        validation = config_manager.validate_paths()
+        validation: dict[str, Any] = config_manager.validate_paths()
 
         assert "load_order_path" in validation
         assert "mo2_exe_path" in validation
@@ -180,11 +181,11 @@ class TestConfigManager:
     def test_error_handling(self, config_manager: ConfigManager) -> None:
         """Test error handling in config operations."""
         # Test setting with invalid data (should not crash)
-        success = config_manager.set("test_key", {"complex": "data"})
+        success: bool = config_manager.set("test_key", {"complex": "data"})
         assert success is True
 
         # Test getting from corrupted config (should return default)
-        value = config_manager.get("corrupted_key", "default")
+        value: Any = config_manager.get("corrupted_key", "default")
         assert value == "default"
 
     def test_nested_key_operations(self, config_manager: ConfigManager) -> None:
@@ -213,7 +214,7 @@ class TestConfigManager:
         config_manager.set("nested.persistent", "nested_persistent_value")
 
         # Create new config manager with same file
-        new_config = ConfigManager(config_manager._path)
+        new_config: ConfigManager = ConfigManager(config_manager._path)  # noqa: SLF001
 
         # Values should persist
         assert new_config.get("persistent_key") == "persistent_value"
@@ -222,15 +223,15 @@ class TestConfigManager:
     def test_empty_file_handling(self) -> None:
         """Test handling of empty config files."""
         with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
-            config_path = Path(f.name)
+            config_path: Path = Path(f.name)
             # Create empty file
             f.write(b"")
 
         try:
-            config = ConfigManager(config_path)
+            config: ConfigManager = ConfigManager(config_path)
 
             # Should handle empty file gracefully
-            all_config = config.get_all()
+            all_config: dict[str, Any] = config.get_all()
             assert all_config == {}
 
             # Should be able to set values

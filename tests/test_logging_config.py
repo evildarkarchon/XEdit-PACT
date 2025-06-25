@@ -1,17 +1,16 @@
 """Tests for the logging_config module."""
 
 import logging
-import tempfile
-from pathlib import Path
-from unittest.mock import Mock, patch, call
+import logging.handlers
+from unittest.mock import Mock
 
 from AutoQACLib.logging_config import (
     LoggingConfig,
     TestLoggingConfig,
-    setup_logging,
-    setup_test_logging,
     get_logger,
     log_startup_info,
+    setup_logging,  # noqa: F401
+    setup_test_logging,  # noqa: F401
 )
 
 
@@ -20,7 +19,7 @@ class TestLoggingConfigClass:
 
     def test_default_values(self) -> None:
         """Test LoggingConfig default values."""
-        config = LoggingConfig()
+        config: LoggingConfig = LoggingConfig()
 
         assert config.log_dir == "logs"
         assert config.log_file == "autoqac.log"
@@ -32,7 +31,7 @@ class TestLoggingConfigClass:
 
     def test_custom_values(self) -> None:
         """Test LoggingConfig with custom values."""
-        config = LoggingConfig(
+        config: LoggingConfig = LoggingConfig(
             log_dir="custom_logs",
             log_file="custom.log",
             max_bytes=1024 * 1024,  # 1MB
@@ -56,7 +55,7 @@ class TestTestLoggingConfigClass:
 
     def test_default_values(self) -> None:
         """Test TestLoggingConfig default values."""
-        config = TestLoggingConfig()
+        config: TestLoggingConfig = TestLoggingConfig()
 
         assert config.log_dir == "logs"
         assert config.log_file == "test_autoqac.log"
@@ -66,7 +65,7 @@ class TestTestLoggingConfigClass:
 
     def test_custom_values(self) -> None:
         """Test TestLoggingConfig with custom values."""
-        config = TestLoggingConfig(
+        config: TestLoggingConfig = TestLoggingConfig(
             log_dir="test_logs",
             log_file="test_custom.log",
             max_bytes=512 * 1024,  # 512KB
@@ -104,22 +103,22 @@ class TestGetLogger:
 
     def test_get_logger_returns_logger(self) -> None:
         """Test that get_logger returns a logger instance."""
-        logger = get_logger("test_module")
+        logger: logging.Logger = get_logger("test_module")
 
         assert isinstance(logger, logging.Logger)
         assert logger.name == "test_module"
 
     def test_get_logger_same_name_returns_same_logger(self) -> None:
         """Test that get_logger returns the same logger for the same name."""
-        logger1 = get_logger("test_module")
-        logger2 = get_logger("test_module")
+        logger1: logging.Logger = get_logger("test_module")
+        logger2: logging.Logger = get_logger("test_module")
 
         assert logger1 is logger2
 
     def test_get_logger_different_names_returns_different_loggers(self) -> None:
         """Test that get_logger returns different loggers for different names."""
-        logger1 = get_logger("test_module_1")
-        logger2 = get_logger("test_module_2")
+        logger1: logging.Logger = get_logger("test_module_1")
+        logger2: logging.Logger = get_logger("test_module_2")
 
         assert logger1 is not logger2
         assert logger1.name == "test_module_1"
@@ -131,77 +130,77 @@ class TestLogStartupInfo:
 
     def test_log_startup_info_basic(self) -> None:
         """Test log_startup_info with basic parameters."""
-        logger = Mock()
+        logger: Mock = Mock()
         logger.handlers = []  # Empty handlers list
 
         log_startup_info(logger)
 
         # Verify separator lines were logged
         assert logger.info.call_count >= 3
-        calls = [call[0][0] for call in logger.info.call_args_list]
-        assert any("=" * 60 in call for call in calls)
-        assert any("AutoQAC v2.0.0 - Starting up" in call for call in calls)
+        calls: list[str] = [c[0][0] for c in logger.info.call_args_list]
+        assert any("=" * 60 in c for c in calls)
+        assert any("AutoQAC v2.0.0 - Starting up" in c for c in calls)
 
     def test_log_startup_info_custom_app_name(self) -> None:
         """Test log_startup_info with custom app name."""
-        logger = Mock()
+        logger: Mock = Mock()
         logger.handlers = []  # Empty handlers list
 
         log_startup_info(logger, app_name="CustomApp", version="1.0.0")
 
         # Verify custom app name was logged
-        calls = [call[0][0] for call in logger.info.call_args_list]
-        assert any("CustomApp v1.0.0 - Starting up" in call for call in calls)
+        calls: list[str] = [c[0][0] for c in logger.info.call_args_list]
+        assert any("CustomApp v1.0.0 - Starting up" in c for c in calls)
 
     def test_log_startup_info_with_file_handler(self) -> None:
         """Test log_startup_info when logger has a file handler."""
-        logger = Mock()
+        logger: Mock = Mock()
 
         # Mock a file handler with proper type and attributes
-        mock_handler = Mock(spec=logging.FileHandler)
+        mock_handler: Mock = Mock(spec=logging.FileHandler)
         mock_handler.baseFilename = "/path/to/log/file.log"
         logger.handlers = [mock_handler]
 
         log_startup_info(logger)
 
         # Verify log file path was logged
-        calls = [call[0][0] for call in logger.info.call_args_list]
-        assert any("Log file: /path/to/log/file.log" in call for call in calls)
+        calls: list[str] = [c[0][0] for c in logger.info.call_args_list]
+        assert any("Log file: /path/to/log/file.log" in c for c in calls)
 
     def test_log_startup_info_with_rotating_file_handler(self) -> None:
         """Test log_startup_info when logger has a rotating file handler."""
-        logger = Mock()
+        logger: Mock = Mock()
 
         # Mock a rotating file handler with proper type and attributes
-        mock_handler = Mock(spec=logging.handlers.RotatingFileHandler)
+        mock_handler: Mock = Mock(spec=logging.handlers.RotatingFileHandler)
         mock_handler.baseFilename = "/path/to/rotating.log"
         logger.handlers = [mock_handler]
 
         log_startup_info(logger)
 
         # Verify log file path was logged
-        calls = [call[0][0] for call in logger.info.call_args_list]
-        assert any("Log file: /path/to/rotating.log" in call for call in calls)
+        calls: list[str] = [c[0][0] for c in logger.info.call_args_list]
+        assert any("Log file: /path/to/rotating.log" in c for c in calls)
 
     def test_log_startup_info_no_file_handler(self) -> None:
         """Test log_startup_info when logger has no file handler."""
-        logger = Mock()
+        logger: Mock = Mock()
         logger.handlers = []
 
         log_startup_info(logger)
 
         # Verify default log file message was logged
-        calls = [call[0][0] for call in logger.info.call_args_list]
-        assert any("Log file: Not configured" in call for call in calls)
+        calls: list[str] = [c[0][0] for c in logger.info.call_args_list]
+        assert any("Log file: Not configured" in c for c in calls)
 
     def test_log_startup_info_log_level(self) -> None:
         """Test log_startup_info logs the effective log level."""
-        logger = Mock()
+        logger: Mock = Mock()
         logger.handlers = []  # Empty handlers list
         logger.getEffectiveLevel.return_value = logging.INFO
 
         log_startup_info(logger)
 
         # Verify log level was logged
-        calls = [call[0][0] for call in logger.info.call_args_list]
-        assert any("Log level: 20" in call for call in calls)  # INFO level is 20
+        calls: list[str] = [c[0][0] for c in logger.info.call_args_list]
+        assert any("Log level: 20" in c for c in calls)  # INFO level is 20

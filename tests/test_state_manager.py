@@ -1,8 +1,8 @@
 """Tests for state management."""
 
-import pytest
-from PySide6.QtCore import QCoreApplication
 from pathlib import Path
+
+from PySide6.QtCore import QCoreApplication
 
 from AutoQACLib.state_manager import AppState, StateManager
 
@@ -12,7 +12,7 @@ class TestAppState:
 
     def test_default_state(self) -> None:
         """Test default AppState initialization."""
-        state = AppState()
+        state: AppState = AppState()
 
         assert state.load_order_path is None
         assert state.mo2_exe_path is None
@@ -32,7 +32,7 @@ class TestAppState:
     def test_is_fully_configured_property(self) -> None:
         """Test the is_fully_configured property."""
         # Initially not configured
-        state = AppState()
+        state: AppState = AppState()
         assert state.is_fully_configured is False
 
         # Partially configured
@@ -48,13 +48,13 @@ class TestAppState:
 
     def test_cleaning_stats_property(self) -> None:
         """Test the cleaning_stats property."""
-        state = AppState()
+        state: AppState = AppState()
         state.total_plugins = 10
         state.cleaned_plugins = {"plugin1.esp", "plugin2.esp"}
         state.failed_plugins = {"plugin3.esp"}
         state.skipped_plugins = {"plugin4.esp"}
 
-        stats = state.cleaning_stats
+        stats: dict[str, int] = state.cleaning_stats
         assert stats["cleaned"] == 2
         assert stats["failed"] == 1
         assert stats["skipped"] == 1
@@ -62,11 +62,11 @@ class TestAppState:
 
     def test_state_immutability(self) -> None:
         """Test that state.snapshot returns an immutable copy."""
-        state = AppState()
+        state: AppState = AppState()
         state.cleaned_plugins.add("test.esp")
 
         # Create a copy
-        copy_state = AppState(cleaned_plugins={"test.esp"}, total_plugins=1)
+        copy_state: AppState = AppState(cleaned_plugins={"test.esp"}, total_plugins=1)
 
         # Modify the copy
         copy_state.cleaned_plugins.add("another.esp")
@@ -82,7 +82,7 @@ class TestStateManager:
     def test_initialization(self, state_manager: StateManager) -> None:
         """Test StateManager initialization."""
         assert state_manager is not None
-        state = state_manager.state
+        state: AppState = state_manager.state
         assert isinstance(state, AppState)
         assert state.is_fully_configured is False
 
@@ -109,9 +109,9 @@ class TestStateManager:
         assert state_manager.get("total_plugins") == 10
         assert state_manager.get("current_plugin") == "test.esp"
 
-    def test_configuration_signals(self, state_manager: StateManager, qt_app) -> None:
+    def test_configuration_signals(self, state_manager: StateManager, qt_app: QCoreApplication) -> None:
         """Test configuration change signals."""
-        signals_received = []
+        signals_received: list[bool] = []
 
         def on_config_changed(is_configured: bool) -> None:
             signals_received.append(is_configured)
@@ -131,9 +131,9 @@ class TestStateManager:
         assert len(signals_received) > 0
         assert signals_received[-1] is True
 
-    def test_progress_signals(self, state_manager: StateManager, qt_app) -> None:
+    def test_progress_signals(self, state_manager: StateManager, qt_app: QCoreApplication) -> None:
         """Test progress change signals."""
-        progress_updates = []
+        progress_updates: list[tuple[int, int]] = []
 
         def on_progress_changed(current: int, total: int) -> None:
             progress_updates.append((current, total))
@@ -150,9 +150,9 @@ class TestStateManager:
         assert len(progress_updates) > 0
         assert progress_updates[-1] == (3, 10)
 
-    def test_cleaning_signals(self, state_manager: StateManager, qt_app) -> None:
+    def test_cleaning_signals(self, state_manager: StateManager, qt_app: QCoreApplication) -> None:
         """Test cleaning start/finish signals."""
-        cleaning_events = []
+        cleaning_events: list[str] = []
 
         def on_cleaning_started() -> None:
             cleaning_events.append("started")
@@ -175,9 +175,9 @@ class TestStateManager:
         assert "started" in cleaning_events
         assert "finished" in cleaning_events
 
-    def test_add_result_method(self, state_manager: StateManager, qt_app) -> None:
+    def test_add_result_method(self, state_manager: StateManager, qt_app: QCoreApplication) -> None:
         """Test the add_result method."""
-        plugin_results = []
+        plugin_results: list[tuple[str, str, str]] = []
 
         def on_plugin_processed(plugin: str, status: str, message: str) -> None:
             plugin_results.append((plugin, status, message))
@@ -192,7 +192,7 @@ class TestStateManager:
         qt_app.processEvents()
 
         # Check state updates
-        state = state_manager.state
+        state: AppState = state_manager.state
         assert "plugin1.esp" in state.cleaned_plugins
         assert "plugin2.esp" in state.failed_plugins
         assert "plugin3.esp" in state.skipped_plugins
@@ -219,7 +219,7 @@ class TestStateManager:
         state_manager.reset_cleaning_state()
 
         # Check reset
-        state = state_manager.state
+        state: AppState = state_manager.state
         assert state.is_cleaning is False
         assert state.progress == 0
         assert state.total_plugins == 0
@@ -231,15 +231,15 @@ class TestStateManager:
 
     def test_update_configuration_paths(self, state_manager: StateManager) -> None:
         """Test updating configuration paths."""
-        load_order_path = Path("/path/to/loadorder.txt")
-        mo2_exe_path = Path("/path/to/ModOrganizer.exe")
-        xedit_exe_path = Path("/path/to/xEdit.exe")
+        load_order_path: Path = Path("/path/to/loadorder.txt")
+        mo2_exe_path: Path = Path("/path/to/ModOrganizer.exe")
+        xedit_exe_path: Path = Path("/path/to/xEdit.exe")
 
         state_manager.update_configuration_paths(
             load_order_path=load_order_path, mo2_exe_path=mo2_exe_path, xedit_exe_path=xedit_exe_path
         )
 
-        state = state_manager.state
+        state: AppState = state_manager.state
         assert state.load_order_path == load_order_path
         assert state.mo2_exe_path == mo2_exe_path
         assert state.xedit_exe_path == xedit_exe_path
@@ -255,9 +255,9 @@ class TestStateManager:
                 time.sleep(0.001)  # Small delay to increase race condition chance
 
         # Create multiple threads updating state
-        threads = []
+        threads: list[threading.Thread] = []
         for i in range(5):
-            thread = threading.Thread(target=update_state, args=(i,))
+            thread: threading.Thread = threading.Thread(target=update_state, args=(i,))
             threads.append(thread)
             thread.start()
 
@@ -266,7 +266,7 @@ class TestStateManager:
             thread.join()
 
         # State should be consistent (no crashes or corruption)
-        state = state_manager.state
+        state: AppState = state_manager.state
         assert isinstance(state.progress, int)
         assert state.progress >= 0
         assert isinstance(state.current_plugin, (str, type(None)))
