@@ -1,10 +1,20 @@
 """Tests for the utils module."""
 
 import tempfile
+import time
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from AutoQACLib.utils import YamlManager, yaml_settings, yaml_settings_write
+import pytest
+
+from AutoQACLib.utils import (
+    YamlManager,
+    monitor_log_file,
+    run_process,
+    run_process_with_realtime_output,
+    yaml_settings,
+    yaml_settings_write,
+)
 
 
 class TestYamlManager:
@@ -533,24 +543,179 @@ class TestGameDetectionFunctions:
 class TestProcessExecutionFunctions:
     """Test process execution utility functions."""
 
-    def test_run_process_placeholder(self) -> None:
-        """Placeholder test for run_process functions."""
-        # TODO: Fix subprocess mocking and re-enable these tests
-        assert True
+    def test_run_process_success(self) -> None:
+        """Test run_process with successful command."""
+        # Test with a simple cross-platform command
+        exit_code, stdout, stderr = run_process(["python", "-c", "print('Hello, World!')"])
+        
+        assert exit_code == 0
+        assert "Hello, World!" in stdout
+        assert stderr == ""
+    
+    def test_run_process_failure(self) -> None:
+        """Test run_process with failing command."""
+        # Test with invalid command
+        exit_code, stdout, stderr = run_process(["python", "-c", "import sys; sys.exit(1)"])
+        
+        assert exit_code == 1
+        assert stdout == ""
+    
+    def test_run_process_timeout(self) -> None:
+        """Test run_process with timeout."""
+        # Test command that would run forever without timeout
+        exit_code, stdout, stderr = run_process(
+            ["python", "-c", "import time; time.sleep(10)"],
+            timeout=1
+        )
+        
+        assert exit_code == -1
+        assert "Process timed out" in stderr
+    
+    def test_run_process_invalid_command(self) -> None:
+        """Test run_process with invalid command."""
+        # Test with non-existent command
+        exit_code, stdout, stderr = run_process(["this_command_does_not_exist"])
+        
+        assert exit_code == -1
+        assert stderr != ""
 
-    def test_run_process_with_realtime_output_placeholder(self) -> None:
-        """Placeholder test for run_process_with_realtime_output functions."""
-        # TODO: Fix subprocess mocking and re-enable these tests
-        assert True
+    def test_run_process_with_realtime_output_success(self) -> None:
+        """Test run_process_with_realtime_output with successful command."""
+        output_lines = []
+        
+        def callback(line: str) -> None:
+            output_lines.append(line)
+        
+        # Test with command that outputs multiple lines
+        exit_code, stdout, stderr = run_process_with_realtime_output(
+            ["python", "-c", "print('Line 1'); print('Line 2'); print('Line 3')"],
+            output_callback=callback
+        )
+        
+        assert exit_code == 0
+        assert len(output_lines) >= 3
+        assert any("Line 1" in line for line in output_lines)
+        assert any("Line 2" in line for line in output_lines)
+        assert any("Line 3" in line for line in output_lines)
+    
+    def test_run_process_with_realtime_output_no_callback(self) -> None:
+        """Test run_process_with_realtime_output without callback."""
+        # Should work without callback
+        exit_code, stdout, stderr = run_process_with_realtime_output(
+            ["python", "-c", "print('Test output')"]
+        )
+        
+        assert exit_code == 0
+        assert "Test output" in stdout
+    
+    def test_run_process_with_realtime_output_cwd(self, tmp_path: Path) -> None:
+        """Test run_process_with_realtime_output with custom working directory."""
+        # Create a test file in temp directory
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("test content")
+        
+        # Run command in the temp directory
+        exit_code, stdout, stderr = run_process_with_realtime_output(
+            ["python", "-c", "import os; print(os.listdir('.'))"],
+            working_dir=str(tmp_path)
+        )
+        
+        assert exit_code == 0
+        assert "test.txt" in stdout
 
 
 class TestLogMonitoringFunctions:
     """Test log monitoring utility functions."""
 
-    def test_monitor_log_file_placeholder(self) -> None:
-        """Placeholder test for log monitoring functions."""
-        # TODO: Fix file permission issues and re-enable these tests
-        assert True
+    def test_monitor_log_file_existing_file(self, tmp_path: Path) -> None:
+        """Test monitor_log_file with existing file."""
+        import threading
+        
+        # Create a log file with initial content
+        log_file = tmp_path / "test.log"
+        log_file.write_text("Initial line\n")
+        
+        # Track lines read
+        lines_read = []
+        stop_event = threading.Event()
+        
+        def callback(line: str) -> None:
+            lines_read.append(line.strip())
+            if len(lines_read) >= 2:
+                stop_event.set()
+        
+        # Start monitoring in a thread
+        monitor_thread = threading.Thread(
+            target=monitor_log_file,
+            args=(str(log_file), callback, stop_event)
+        )
+        monitor_thread.start()
+        
+        # Give it time to start monitoring
+        time.sleep(0.1)
+        
+        # Append new lines (monitor_log_file only reads NEW lines after it starts)
+        with open(log_file, "a") as f:
+            f.write("First new line\n")
+            f.flush()
+            time.sleep(0.1)
+            f.write("Second new line\n")
+            f.flush()
+        
+        # Wait for monitoring to complete or timeout
+        monitor_thread.join(timeout=2)
+        
+        # Should only see the new lines, not the initial content
+        assert "First new line" in lines_read
+        assert "Second new line" in lines_read
+        assert "Initial line" not in lines_read  # This was written before monitoring started
+    
+    def test_monitor_log_file_new_file(self, tmp_path: Path) -> None:
+        """Test monitor_log_file with file created after monitoring starts."""
+        import threading
+        
+        log_file = tmp_path / "new_test.log"
+        lines_read = []
+        stop_event = threading.Event()
+        
+        def callback(line: str) -> None:
+            lines_read.append(line.strip())
+            if "Stop monitoring" in line:
+                stop_event.set()
+        
+        # Start monitoring before file exists
+        monitor_thread = threading.Thread(
+            target=monitor_log_file,
+            args=(str(log_file), callback, stop_event)
+        )
+        monitor_thread.start()
+        
+        # Create file after monitoring starts
+        time.sleep(0.2)
+        # Create empty file first
+        log_file.touch()
+        
+        # Give monitor time to find the file and seek to end
+        time.sleep(0.2)
+        
+        # Now append lines
+        with open(log_file, "a") as f:
+            f.write("First line\n")
+            f.flush()
+            time.sleep(0.1)
+            f.write("Second line\n")
+            f.flush()
+            time.sleep(0.1)
+            f.write("Stop monitoring\n")
+            f.flush()
+        
+        # Wait for monitoring to complete
+        monitor_thread.join(timeout=3)
+        
+        # Should read all lines from the newly created file
+        assert "First line" in lines_read
+        assert "Second line" in lines_read
+        assert "Stop monitoring" in lines_read
 
     def test_monitor_log_file_nonexistent(self) -> None:
         """Test log file monitoring with non-existent file."""
