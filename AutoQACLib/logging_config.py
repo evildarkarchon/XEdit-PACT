@@ -74,7 +74,7 @@ def setup_logging(config: LoggingConfig | None = None) -> None:
 class TestLoggingConfig:
     """Configuration for test logging setup."""
 
-    log_dir: Path | str = "logs"
+    log_dir: Path | str = "tests/test_output"
     log_file: str = "test_autoqac.log"
     max_bytes: int = 1 * 1024 * 1024  # 1MB for tests
     backup_count: int = 3
@@ -92,7 +92,7 @@ def setup_test_logging(config: TestLoggingConfig | None = None) -> None:
         config = TestLoggingConfig()
 
     log_path: Path = Path(config.log_dir)
-    log_path.mkdir(exist_ok=True)
+    log_path.mkdir(parents=True, exist_ok=True)
 
     # Create formatter
     formatter: Formatter = logging.Formatter(

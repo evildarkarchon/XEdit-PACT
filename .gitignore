@@ -22,3 +22,8 @@ logs/
 *.code-workspace
 test_*.yaml
 !tests/test_*.yaml
+
+# Test output directory - ignore contents but keep the directory
+tests/test_output/*
+!tests/test_output/.gitkeep
+!tests/test_output/README.md
