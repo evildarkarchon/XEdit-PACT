@@ -24,6 +24,11 @@ logger: Logger = get_logger(__name__)
 # Thread-safe file operations
 _yaml_mutexes: dict[str, QMutex] = {}
 
+# Subprocess resource management
+_subprocess_semaphore = QMutex()
+_active_subprocesses = 0
+_max_concurrent_subprocesses = 3  # Default limit
+
 
 class YamlManager:
     """Thread-safe YAML file manager with caching capabilities using Qt threading."""
@@ -130,26 +135,40 @@ class YamlManager:
 
     def _load_yaml(self, yaml_path: str) -> Any:
         """Load YAML file, using cache if available."""
+        # First check cache without loading
         with QMutexLocker(self._cache_mutex):
-            if yaml_path not in self._cache:
-                try:
-                    path: Path = Path(yaml_path)
-                    if not path.exists():
-                        logger.warning(f"YAML file not found: {yaml_path}")
-                        self._cache[yaml_path] = {}
-                    else:
-                        with path.open(encoding="utf-8") as yaml_file:
-                            content: str = yaml_file.read().strip()
-                            if not content:
-                                # Handle empty file
-                                self._cache[yaml_path] = {}
-                            else:
-                                self._cache[yaml_path] = self._yaml.load(content) or {}
-                except (OSError, ruamel.yaml.YAMLError, ValueError) as e:
-                    logger.error(f"Failed to load YAML file '{yaml_path}': {e}")
-                    self._cache[yaml_path] = {}
-
-            return self._cache[yaml_path]
+            if yaml_path in self._cache:
+                return self._cache[yaml_path]
+        
+        # Load file outside of mutex
+        warning_msg = None
+        error_msg = None
+        data = {}
+        
+        try:
+            path: Path = Path(yaml_path)
+            if not path.exists():
+                warning_msg = f"YAML file not found: {yaml_path}"
+            else:
+                with path.open(encoding="utf-8") as yaml_file:
+                    content: str = yaml_file.read().strip()
+                    # Handle empty file
+                    data = {} if not content else self._yaml.load(content) or {}
+        except (OSError, ruamel.yaml.YAMLError, ValueError) as e:
+            error_msg = f"Failed to load YAML file '{yaml_path}': {e}"
+            data = {}
+        
+        # Update cache with loaded data
+        with QMutexLocker(self._cache_mutex):
+            self._cache[yaml_path] = data
+        
+        # Log messages outside of mutex
+        if warning_msg:
+            logger.warning(warning_msg)
+        if error_msg:
+            logger.error(error_msg)
+            
+        return data
 
     def _save_yaml(self, yaml_path: str, data: Any) -> None:
         """Save data to YAML file with atomic write."""
@@ -402,6 +421,107 @@ def run_process(command: list[str] | str, timeout: int | None = None) -> tuple[i
         return result.returncode, result.stdout, result.stderr
 
 
+def set_max_concurrent_subprocesses(limit: int) -> None:
+    """
+    Set the maximum number of concurrent subprocesses.
+    
+    Args:
+        limit: Maximum number of subprocesses allowed to run concurrently.
+               Must be greater than 0.
+    """
+    global _max_concurrent_subprocesses
+    if limit <= 0:
+        raise ValueError("Subprocess limit must be greater than 0")
+    with QMutexLocker(_subprocess_semaphore):
+        _max_concurrent_subprocesses = limit
+        logger.info(f"Set maximum concurrent subprocesses to {limit}")
+
+
+def get_active_subprocess_count() -> int:
+    """Get the current number of active subprocesses."""
+    with QMutexLocker(_subprocess_semaphore):
+        return _active_subprocesses
+
+
+@contextlib.contextmanager
+def _subprocess_resource_manager():
+    """
+    Context manager to track and limit subprocess resources.
+    
+    Raises:
+        RuntimeError: If subprocess limit is exceeded.
+    """
+    global _active_subprocesses
+    
+    # Wait for available slot
+    acquired = False
+    wait_count = 0
+    max_wait_cycles = 600  # 60 seconds with 0.1s sleep
+    
+    while not acquired and wait_count < max_wait_cycles:
+        with QMutexLocker(_subprocess_semaphore):
+            if _active_subprocesses < _max_concurrent_subprocesses:
+                _active_subprocesses += 1
+                acquired = True
+                logger.debug(f"Acquired subprocess slot ({_active_subprocesses}/{_max_concurrent_subprocesses})")
+        
+        if not acquired:
+            QThread.msleep(100)  # Wait 100ms
+            wait_count += 1
+    
+    if not acquired:
+        raise RuntimeError(f"Subprocess limit exceeded: maximum {_max_concurrent_subprocesses} concurrent processes")
+    
+    try:
+        yield
+    finally:
+        with QMutexLocker(_subprocess_semaphore):
+            _active_subprocesses -= 1
+            logger.debug(f"Released subprocess slot ({_active_subprocesses}/{_max_concurrent_subprocesses})")
+
+
+@contextlib.contextmanager
+def safe_popen(*args: Any, **kwargs: Any) -> Any:
+    """
+    Context manager for safe subprocess handling with guaranteed cleanup.
+    
+    Ensures that:
+    - Process is terminated/killed on exit
+    - All pipes are properly closed
+    - Resources are freed even on exceptions
+    """
+    import subprocess
+    
+    with _subprocess_resource_manager():
+        process = None
+        try:
+            process = subprocess.Popen(*args, **kwargs)
+            yield process
+        finally:
+            if process is not None:
+                # Close pipes first to prevent deadlock
+                for pipe in [process.stdin, process.stdout, process.stderr]:
+                    if pipe is not None:
+                        try:
+                            pipe.close()
+                        except (OSError, ValueError):
+                            pass
+                
+                # Terminate process if still running
+                if process.poll() is None:
+                    try:
+                        process.terminate()
+                        # Give it time to terminate gracefully
+                        try:
+                            process.wait(timeout=2.0)
+                        except subprocess.TimeoutExpired:
+                            # Force kill if still running
+                            process.kill()
+                            process.wait(timeout=1.0)
+                    except (OSError, subprocess.SubprocessError):
+                        pass
+
+
 def run_process_with_realtime_output(
     command: list[str] | str,
     output_callback: Callable[[str], None] | None = None,
@@ -446,7 +566,7 @@ def run_process_with_realtime_output(
     stderr_thread: OutputReaderThread | None = None
 
     try:
-        process = subprocess.Popen(
+        with safe_popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -456,99 +576,89 @@ def run_process_with_realtime_output(
             bufsize=1,  # Line buffered
             universal_newlines=True,
             cwd=str(working_dir) if working_dir else None,
-        )
+        ) as process:
 
-        def read_output(pipe: Any, line_list: list[str], callback: Callable[[str], None] | None) -> None:
-            """Read output from pipe and call callback for each line."""
-            try:
-                for line in iter(pipe.readline, ""):
-                    line = line.rstrip("\n\r")
-                    if line:
-                        line_list.append(line)
-                        if callback:
-                            callback(line)
-            except (OSError, ValueError) as oe:
-                logger.error(f"Error reading process output: {oe}")
-            finally:
-                with contextlib.suppress(OSError, ValueError):
-                    pipe.close()
-
-        class OutputReaderThread(QThread):
-            def __init__(self, pipe: Any, line_list: list[str], callback: Callable[[str], None] | None) -> None:
-                super().__init__()
-                self.pipe = pipe
-                self.line_list = line_list
-                self.callback = callback
-                self._stop_flag = False
-
-            def run(self) -> None:
+            def read_output(pipe: Any, line_list: list[str], callback: Callable[[str], None] | None) -> None:
+                """Read output from pipe and call callback for each line."""
                 try:
-                    read_output(self.pipe, self.line_list, self.callback)
-                except (OSError, ValueError) as e:
-                    logger.error(f"Error in output reader thread: {e}")
+                    if pipe is None:
+                        return
+                    for line in iter(pipe.readline, ""):
+                        line = line.rstrip("\n\r")
+                        if line:
+                            line_list.append(line)
+                            if callback:
+                                callback(line)
+                except (OSError, ValueError) as oe:
+                    logger.error(f"Error reading process output: {oe}")
+                # Note: pipe closure is handled by safe_popen context manager
 
-            def stop(self) -> None:
-                """Stop the thread gracefully."""
-                self._stop_flag = True
-                self.quit()
-                if not self.wait(1000):  # Wait up to 1 second
-                    self.terminate()
-                    self.wait(1000)  # Wait up to 1 second for termination
+            class OutputReaderThread(QThread):
+                def __init__(self, pipe: Any, line_list: list[str], callback: Callable[[str], None] | None) -> None:
+                    super().__init__()
+                    self.pipe = pipe
+                    self.line_list = line_list
+                    self.callback = callback
+                    self._stop_flag = False
 
-        # Start threads to read stdout and stderr
-        stdout_thread = OutputReaderThread(process.stdout, stdout_lines, output_callback)
-        stderr_thread = OutputReaderThread(process.stderr, stderr_lines, None)
+                def run(self) -> None:
+                    try:
+                        read_output(self.pipe, self.line_list, self.callback)
+                    except (OSError, ValueError) as e:
+                        logger.error(f"Error in output reader thread: {e}")
 
-        stdout_thread.start()
-        stderr_thread.start()
+                def stop(self) -> None:
+                    """Stop the thread gracefully."""
+                    self._stop_flag = True
+                    self.quit()
+                    if not self.wait(2000):  # Wait up to 2 seconds
+                        logger.warning("Output reader thread did not stop gracefully, terminating...")
+                        self.terminate()
+                        self.wait(1000)  # Wait up to 1 second for termination
 
-        # Monitor for timeout
-        while process.poll() is None:
-            if timeout and (time.time() - start_time) > timeout:
-                # Timeout reached - terminate process and threads
-                logger.info("Process timeout reached, terminating...")
-                process.terminate()
-                process.wait(timeout=5)  # Give it 5 seconds to terminate gracefully
-                if process.poll() is None:
-                    process.kill()  # Force kill if still running
+            # Start threads to read stdout and stderr
+            stdout_thread = OutputReaderThread(process.stdout, stdout_lines, output_callback)
+            stderr_thread = OutputReaderThread(process.stderr, stderr_lines, None)
 
-                # Stop threads
-                if stdout_thread:
-                    stdout_thread.stop()
-                if stderr_thread:
-                    stderr_thread.stop()
+            stdout_thread.start()
+            stderr_thread.start()
 
-                return -1, "\n".join(stdout_lines), "Process timed out"
+            # Monitor for timeout
+            while process.poll() is None:
+                if timeout and (time.time() - start_time) > timeout:
+                    # Timeout reached - terminate process and threads
+                    logger.info("Process timeout reached, terminating...")
+                    # Process termination is handled by safe_popen
+                    
+                    # Stop threads
+                    if stdout_thread and stdout_thread.isRunning():
+                        stdout_thread.stop()
+                    if stderr_thread and stderr_thread.isRunning():
+                        stderr_thread.stop()
 
-            time.sleep(0.1)
+                    return -1, "\n".join(stdout_lines), "Process timed out"
 
-        # Wait for threads to finish reading all output
-        if stdout_thread:
-            stdout_thread.wait(5000)  # 5 second timeout
-        if stderr_thread:
-            stderr_thread.wait(5000)  # 5 second timeout
+                time.sleep(0.1)
 
-        return process.returncode, "\n".join(stdout_lines), "\n".join(stderr_lines)
+            # Wait for threads to finish reading all output
+            if stdout_thread and stdout_thread.isRunning():
+                stdout_thread.wait(5000)  # 5 second timeout
+            if stderr_thread and stderr_thread.isRunning():
+                stderr_thread.wait(5000)  # 5 second timeout
+
+            return process.returncode, "\n".join(stdout_lines), "\n".join(stderr_lines)
 
     except (OSError, subprocess.SubprocessError, ValueError) as e:
         logger.error(f"Error in run_process_with_realtime_output: {e}")
         return -1, "", str(e)
     except KeyboardInterrupt:
         logger.info("Process interrupted by user")
-        # Clean up process and threads
-        if process:
-            try:
-                process.terminate()
-                process.wait(timeout=2)
-                if process.poll() is None:
-                    process.kill()
-            except (OSError, subprocess.SubprocessError):
-                pass
-
+        # Process cleanup is handled by safe_popen
+        
         # Stop threads
-        if stdout_thread:
+        if stdout_thread and stdout_thread.isRunning():
             stdout_thread.stop()
-        if stderr_thread:
+        if stderr_thread and stderr_thread.isRunning():
             stderr_thread.stop()
 
         return -1, "\n".join(stdout_lines), "Process interrupted by user"

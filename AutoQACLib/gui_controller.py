@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtWidgets import QFileDialog, QWidget
 
 from AutoQACLib.cleaning_service import CleaningService
@@ -42,6 +42,13 @@ class GuiController(QObject):
         self.user_config: ConfigManager = user_config  # For user settings
         self.worker: CleaningWorker | None = None
         self._cleaning_finished_handled: bool = False  # Flag to prevent duplicate dialogs
+        
+        # Deferred configuration saves to avoid deadlocks
+        self._pending_config_saves: list[tuple[str, Any]] = []
+        self._config_save_timer = QTimer(self)
+        self._config_save_timer.setSingleShot(True)
+        self._config_save_timer.timeout.connect(self._process_pending_config_saves)
+        self._config_save_timer.setInterval(100)  # 100ms delay
 
         # Create cleaning service with both config managers
         self.service: CleaningService = CleaningService(main_config, user_config, state)
@@ -106,17 +113,8 @@ class GuiController(QObject):
                     # Update state immediately for responsive UI
                     self.state.update_configuration_paths(load_order_path=path)
 
-                    # Save to config asynchronously
-                    try:
-                        success: bool = self.user_config.set("Load_Order.File", str(path))
-                        if not success:
-                            logger.error("Failed to save load order path to configuration")
-                            self.show_error.emit("Error", "Failed to save configuration")
-                            return False
-                    except (OSError, ValueError, TypeError) as e:
-                        logger.error(f"Error saving load order configuration: {e}")
-                        self.show_error.emit("Error", f"Configuration error: {e}")
-                        return False
+                    # Defer config save to avoid deadlock
+                    self._defer_config_save("Load_Order.File", str(path))
 
                     self.update_status.emit(f"Load order configured: {path.name}")
                     return True
@@ -163,20 +161,9 @@ class GuiController(QObject):
                         mo2_install_path=install_path,
                     )
 
-                    # Save to config asynchronously
-                    try:
-                        success: bool = self.user_config.update_multiple({
-                            "Mod_Organizer.Binary": str(path),
-                            "Mod_Organizer.Install_Path": str(install_path),
-                        })
-                        if not success:
-                            logger.error("Failed to save MO2 configuration")
-                            self.show_error.emit("Error", "Failed to save configuration")
-                            return False
-                    except (OSError, ValueError, TypeError) as e:
-                        logger.error(f"Error saving MO2 configuration: {e}")
-                        self.show_error.emit("Error", f"Configuration error: {e}")
-                        return False
+                    # Defer config saves to avoid deadlock
+                    self._defer_config_save("Mod_Organizer.Binary", str(path))
+                    self._defer_config_save("Mod_Organizer.Install_Path", str(install_path))
 
                     self.update_status.emit("Mod Organizer 2 configured")
                     return True
@@ -250,20 +237,9 @@ class GuiController(QObject):
                         self.state.update(game_type=game_type)
                         logger.info(f"Detected game type: {game_type}")
 
-                    # Save to config asynchronously
-                    try:
-                        success: bool = self.user_config.update_multiple({
-                            "xEdit.Binary": str(path),
-                            "xEdit.Install_Path": str(install_path),
-                        })
-                        if not success:
-                            logger.error("Failed to save xEdit configuration")
-                            self.show_error.emit("Error", "Failed to save configuration")
-                            return False
-                    except (OSError, ValueError, TypeError) as e:
-                        logger.error(f"Error saving xEdit configuration: {e}")
-                        self.show_error.emit("Error", f"Configuration error: {e}")
-                        return False
+                    # Defer config saves to avoid deadlock
+                    self._defer_config_save("xEdit.Binary", str(path))
+                    self._defer_config_save("xEdit.Install_Path", str(install_path))
 
                     self.update_status.emit(f"xEdit configured: {path.name}")
                     return True
@@ -290,8 +266,10 @@ class GuiController(QObject):
             enabled (bool): Specifies whether to enable or disable MO2 mode.
         """
         try:
+            # Update state immediately
             self.state.update(mo2_mode=enabled)
-            self.user_config.set("Settings.MO2_Mode", enabled)
+            # Defer config save to avoid deadlock
+            self._defer_config_save("Settings.MO2_Mode", enabled)
             self.update_status.emit(f"MO2 Mode {'enabled' if enabled else 'disabled'}")
         except (OSError, ValueError, TypeError) as e:
             logger.error(f"Error toggling MO2 mode: {e}")
@@ -478,6 +456,7 @@ class GuiController(QObject):
 
             # Create and start worker
             self.worker = CleaningWorker(self.service, self.state, plugins)
+            self.worker.setParent(self)  # Set parent for proper Qt object management
 
             # Connect signals
             self.worker.plugin_started.connect(lambda p: self.update_status.emit(f"Cleaning: {p}"))
@@ -508,6 +487,103 @@ class GuiController(QObject):
             logger.info("Stopping cleaning process")
             self.worker.stop()
             self.update_status.emit("Stopping cleaning...")
+    
+    def cleanup(self) -> None:
+        """
+        Performs comprehensive cleanup of all resources and threads.
+        
+        This method ensures that:
+        - All worker threads are properly stopped and joined
+        - Signal connections are disconnected
+        - Resources are freed
+        - State is properly reset
+        
+        This should be called during application shutdown.
+        """
+        logger.info("Starting GuiController cleanup")
+        
+        # Stop config save timer and process any pending saves
+        if self._config_save_timer.isActive():
+            self._config_save_timer.stop()
+        self._process_pending_config_saves()
+        
+        # Stop any running cleaning process
+        if self.worker is not None:
+            if self.worker.isRunning():
+                logger.info("Stopping cleaning worker thread")
+                self.worker.stop()
+                
+                # Wait for worker to finish (max 10 seconds)
+                if not self.worker.wait(10000):
+                    logger.warning("Cleaning worker did not stop gracefully within 10 seconds")
+                    self.worker.terminate()
+                    self.worker.wait(2000)  # Wait 2 more seconds after termination
+            
+            # Disconnect all worker signals
+            try:
+                self.worker.progress.disconnect()
+                self.worker.plugin_started.disconnect()
+                self.worker.plugin_completed.disconnect()
+                self.worker.plugin_progress.disconnect()
+                self.worker.log_output.disconnect()
+                self.worker.error.disconnect()
+                self.worker.finished.disconnect()
+            except RuntimeError:
+                # Signal might not be connected, that's okay
+                pass
+            
+            # Delete the worker
+            self.worker.deleteLater()
+            self.worker = None
+        
+        # Reset cleaning state
+        self.state.reset_cleaning_state()
+        
+        # Disconnect our own signals
+        try:
+            self.show_message.disconnect()
+            self.show_error.disconnect()
+            self.update_status.disconnect()
+        except RuntimeError:
+            # Signals might not be connected
+            pass
+        
+        logger.info("GuiController cleanup completed")
+    
+    def _defer_config_save(self, key: str, value: Any) -> None:
+        """
+        Defers a configuration save to avoid holding locks across StateManager and ConfigManager.
+        
+        This method queues configuration updates and processes them after a short delay,
+        ensuring that state locks are released before config file operations occur.
+        
+        Args:
+            key: Configuration key to save
+            value: Value to save
+        """
+        self._pending_config_saves.append((key, value))
+        self._config_save_timer.start()
+    
+    def _process_pending_config_saves(self) -> None:
+        """
+        Processes all pending configuration saves.
+        
+        This method is called by a timer after state updates are complete,
+        avoiding potential deadlocks between StateManager and ConfigManager.
+        """
+        if not self._pending_config_saves:
+            return
+        
+        # Process all pending saves
+        saves_to_process = self._pending_config_saves.copy()
+        self._pending_config_saves.clear()
+        
+        for key, value in saves_to_process:
+            try:
+                if not self.user_config.set(key, value):
+                    logger.error(f"Failed to save config key: {key}")
+            except (OSError, ValueError, TypeError) as e:
+                logger.error(f"Error saving config key {key}: {e}")
 
     @staticmethod
     def _on_plugin_completed(plugin: str, success: bool, message: str) -> None:

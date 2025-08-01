@@ -7,11 +7,10 @@ This script migrates configuration from the old PACT architecture to the new Aut
 
 from __future__ import annotations
 
-import os
 import shutil
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING
 
 from AutoQACLib.config_manager import ConfigManager
 from AutoQACLib.logging_config import get_logger, setup_logging
@@ -177,7 +176,7 @@ def verify_imports() -> bool:
     """Verify all required modules can be imported."""
     print("Verifying imports...")
     try:
-        import importlib.util  # noqa: PLC0415
+        import importlib.util
 
         required_modules: list[str] = [
             "AutoQACLib.cleaning_service",

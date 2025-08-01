@@ -22,7 +22,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QStatusBar,
     QVBoxLayout,
     QWidget,
 )
@@ -226,6 +225,13 @@ class CleaningProgressDialog(QDialog):
         else:
             self.progress_bar.setFormat(f"Stopped - {self.progress_bar.value()}%")
 
+    def cleanup(self) -> None:
+        """Clean up signal connections."""
+        try:
+            self.button_box.rejected.disconnect()
+        except RuntimeError:
+            pass  # Already disconnected
+
     def closeEvent(self, event: QCloseEvent) -> None:
         """Handle close event."""
         if self._cleaning_in_progress:
@@ -240,6 +246,7 @@ class CleaningProgressDialog(QDialog):
             if reply == QMessageBox.StandardButton.No:
                 event.ignore()
                 return
+        self.cleanup()
         event.accept()
 
 
@@ -252,7 +259,7 @@ class MainWindow(QMainWindow):
         self.state: StateManager = state
         self.controller: GuiController = controller
         self._updating_ui: bool = False  # Flag to prevent recursive updates
-        self._update_timer: QTimer = QTimer()  # Timer for debouncing UI updates
+        self._update_timer: QTimer = QTimer(self)  # Timer for debouncing UI updates
         self._update_timer.setSingleShot(True)
         self._update_timer.setInterval(50)  # 50ms delay
         self._update_timer.timeout.connect(self._perform_ui_update)
@@ -300,7 +307,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(600, 400)
 
         # Create central widget
-        central_widget: QWidget = QWidget()
+        central_widget: QWidget = QWidget(self)
         self.setCentralWidget(central_widget)
 
         # Create main layout
@@ -688,6 +695,70 @@ class MainWindow(QMainWindow):
             "Built with PySide6 and Python 3.8+",
         )
 
+    def _disconnect_all_signals(self) -> None:
+        """Disconnect all signal connections to prevent memory leaks."""
+        # Disconnect controller signals
+        try:
+            self.controller.show_message.disconnect(self._show_message)
+            self.controller.show_error.disconnect(self._show_error)
+            self.controller.update_status.disconnect(self._update_status)
+        except RuntimeError:
+            pass  # Already disconnected
+        
+        # Disconnect state signals
+        try:
+            self.state.configuration_changed.disconnect(self._on_configuration_changed)
+            self.state.progress_changed.disconnect(self._on_progress_changed)
+            self.state.cleaning_started.disconnect(self._on_cleaning_started)
+            self.state.cleaning_finished.disconnect(self._on_cleaning_finished)
+            self.state.plugin_processed.disconnect(self._on_plugin_processed)
+            self.state.state_changed.disconnect(self._on_state_changed)
+        except RuntimeError:
+            pass  # Already disconnected
+        
+        # Disconnect button signals
+        if self.load_order_button:
+            try:
+                self.load_order_button.clicked.disconnect()
+            except RuntimeError:
+                pass
+        if self.mo2_button:
+            try:
+                self.mo2_button.clicked.disconnect()
+            except RuntimeError:
+                pass
+        if self.mo2_mode_button:
+            try:
+                self.mo2_mode_button.clicked.disconnect()
+            except RuntimeError:
+                pass
+        if self.xedit_button:
+            try:
+                self.xedit_button.clicked.disconnect()
+            except RuntimeError:
+                pass
+        if self.partial_forms_button:
+            try:
+                self.partial_forms_button.clicked.disconnect()
+            except RuntimeError:
+                pass
+        if self.start_button:
+            try:
+                self.start_button.clicked.disconnect()
+            except RuntimeError:
+                pass
+        if self.stop_button:
+            try:
+                self.stop_button.clicked.disconnect()
+            except RuntimeError:
+                pass
+        
+        # Disconnect timer
+        try:
+            self._update_timer.timeout.disconnect()
+        except RuntimeError:
+            pass
+
     def closeEvent(self, event: QCloseEvent) -> None:
         """Handle window close event with proper cleanup."""
         # If cleaning is in progress, ask user for confirmation
@@ -704,15 +775,30 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
 
-        # Stop any running cleaning process
-        if self.state.get("is_cleaning"):
-            self.controller.stop_cleaning()
+        # Stop update timer
+        if self._update_timer.isActive():
+            self._update_timer.stop()
+
+        # Disconnect all signals
+        self._disconnect_all_signals()
 
         # Close progress dialog if open
-        if self.progress_dialog and self.progress_dialog.isVisible():
-            self.progress_dialog.close()
+        if self.progress_dialog:
+            if self.progress_dialog.isVisible():
+                self.progress_dialog.close()
+            self.progress_dialog.cleanup()
+            self.progress_dialog.deleteLater()
+            self.progress_dialog = None
 
+        # Perform comprehensive cleanup
+        logger.info("Shutting down application")
+        self.controller.cleanup()
+        
+        # Ensure all events are processed
+        QCoreApplication.processEvents()
+        
         event.accept()
+        logger.info("Application shutdown complete")
 
 
 def create_application() -> tuple[QApplication, MainWindow]:

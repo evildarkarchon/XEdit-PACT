@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import QMutex, QMutexLocker, QObject, Signal
+from PySide6.QtCore import QMutex, QMutexLocker, QObject, QReadLocker, QReadWriteLock, QWriteLocker, Signal
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -50,6 +49,7 @@ class AppState:
     mo2_mode: bool = False
     partial_forms_enabled: bool = False
     game_type: str | None = None
+    max_concurrent_subprocesses: int = 3  # Resource limit for subprocesses
 
     @property
     def is_fully_configured(self) -> bool:
@@ -86,29 +86,32 @@ class StateManager(QObject):
         """Initialize the state manager."""
         super().__init__()
         self._state = AppState()
-        self._mutex = QMutex()
+        self._rw_lock = QReadWriteLock()
+        self._signal_mutex = QMutex()
 
     def update(self, **kwargs: Any) -> None:
         """
         Updates the internal state of the object with provided keyword arguments, emitting
         signals for state changes and handling specific state logic.
 
-        This method locks the internal state during updates to ensure thread safety. It
-        identifies changes to the state attributes and emits appropriate signals to notify
+        This method uses a write lock to ensure thread-safe updates and atomic signal emission.
+        It identifies changes to the state attributes and emits appropriate signals to notify
         listeners about the modifications. Aggregated signals are also emitted when certain
-        related states are altered. A small delay is introduced after state updates to
-        debounce rapid updates.
+        related states are altered.
 
         Args:
             **kwargs: Arbitrary keyword arguments representing the state attributes to be
                 updated and their new values. Attribute keys must correspond to existing
                 keys in the object's internal state.
         """
-        with QMutexLocker(self._mutex):
-            config_changed = False
-            progress_changed = False
-            state_changes: list[tuple[str, object]] = []
-
+        config_changed = False
+        progress_changed = False
+        state_changes: list[tuple[str, object]] = []
+        cleaning_started = False
+        cleaning_finished = False
+        
+        # Update state atomically
+        with QWriteLocker(self._rw_lock):
             for key, value in kwargs.items():
                 if hasattr(self._state, key):
                     old_value = getattr(self._state, key)
@@ -123,22 +126,40 @@ class StateManager(QObject):
                             progress_changed = True
                         elif key == "is_cleaning":
                             if value:
-                                self.cleaning_started.emit()
+                                cleaning_started = True
                             else:
-                                self.cleaning_finished.emit()
-
-        # Small delay to prevent rapid successive updates
-        time.sleep(0.01)
-
-        # Emit state changes outside of mutex lock to prevent deadlocks
-        for key, value in state_changes:
-            self.state_changed.emit(key, value)
-
-        # Emit aggregate signals
-        if config_changed:
-            self.configuration_changed.emit(self._state.is_fully_configured)
-        if progress_changed:
-            self.progress_changed.emit(self._state.progress, self._state.total_plugins)
+                                cleaning_finished = True
+        
+        # Emit signals in a thread-safe manner
+        with QMutexLocker(self._signal_mutex):
+            # Emit state changes
+            for key, value in state_changes:
+                self.state_changed.emit(key, value)
+            
+            # Emit special signals
+            if cleaning_started:
+                self.cleaning_started.emit()
+            elif cleaning_finished:
+                self.cleaning_finished.emit()
+            
+            # Emit aggregate signals
+            if config_changed:
+                self.configuration_changed.emit(self._state.is_fully_configured)
+            if progress_changed:
+                self.progress_changed.emit(self._state.progress, self._state.total_plugins)
+    
+    def update_multiple_properties(self, updates: dict[str, Any]) -> None:
+        """
+        Atomically updates multiple properties at once.
+        
+        This method ensures that all property updates happen together without
+        any intermediate state being visible to other threads. This is just a
+        wrapper around update() for clarity.
+        
+        Args:
+            updates: Dictionary of property names and their new values.
+        """
+        self.update(**updates)
 
     def get(self, property_name: str, default: Any = None) -> Any:
         """
@@ -157,13 +178,13 @@ class StateManager(QObject):
             Any: The value of the requested property, or the default value if the
             property does not exist.
         """
-        with QMutexLocker(self._mutex):
+        with QReadLocker(self._rw_lock):
             return getattr(self._state, property_name, default)
 
     @property
     def state(self) -> AppState:
         """Get a snapshot of the current state."""
-        with QMutexLocker(self._mutex):
+        with QReadLocker(self._rw_lock):
             return replace(self._state)
 
     def add_result(self, plugin: str, status: str, message: str = "") -> None:
@@ -180,7 +201,8 @@ class StateManager(QObject):
             message (str, optional): A message providing additional context about the
                 plugin processing. Defaults to an empty string.
         """
-        with QMutexLocker(self._mutex):
+        # Update state atomically
+        with QWriteLocker(self._rw_lock):
             if status == "cleaned":
                 self._state.cleaned_plugins.add(plugin)
             elif status == "failed":
@@ -189,8 +211,13 @@ class StateManager(QObject):
                 self._state.skipped_plugins.add(plugin)
 
             self._state.progress += 1
+            current_progress = self._state.progress
+            total_plugins = self._state.total_plugins
+        
+        # Emit signals outside of the write lock but in a thread-safe manner
+        with QMutexLocker(self._signal_mutex):
             self.plugin_processed.emit(plugin, status, message)
-            self.progress_changed.emit(self._state.progress, self._state.total_plugins)
+            self.progress_changed.emit(current_progress, total_plugins)
 
     def reset_cleaning_state(self) -> None:
         """
@@ -204,7 +231,7 @@ class StateManager(QObject):
         Returns:
             None
         """
-        with QMutexLocker(self._mutex):
+        with QWriteLocker(self._rw_lock):
             self._state.is_cleaning = False
             self._state.current_plugin = None
             self._state.current_operation = ""

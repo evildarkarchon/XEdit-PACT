@@ -231,6 +231,7 @@ class ConfigManager:
             "cleaning_timeout": self.get("PACT_Settings.Cleaning_Timeout", 300),
             "cpu_threshold": self.get("PACT_Settings.CPU_Threshold", 5),
             "mo2_mode": self.get("PACT_Settings.MO2Mode", False),
+            "max_concurrent_subprocesses": self.get("PACT_Settings.Max_Concurrent_Subprocesses", 3),
         }
 
     def validate_paths(self) -> dict[str, bool]:

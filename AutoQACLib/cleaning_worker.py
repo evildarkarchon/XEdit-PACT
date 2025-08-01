@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QThread, Signal
 
 from AutoQACLib.logging_config import get_logger
+from AutoQACLib.utils import set_max_concurrent_subprocesses
 
 if TYPE_CHECKING:
     from AutoQACLib.cleaning_service import CleaningService, CleanResult
@@ -59,6 +60,11 @@ class CleaningWorker(QThread):
             if not valid:
                 self.error.emit(message)
                 return
+            
+            # Set subprocess resource limit from state
+            state_snapshot = self.state.state
+            set_max_concurrent_subprocesses(state_snapshot.max_concurrent_subprocesses)
+            logger.info(f"Set max concurrent subprocesses to {state_snapshot.max_concurrent_subprocesses}")
 
             # Set up real-time callbacks for the cleaning service
             self.service.set_progress_callback(self._on_cleaning_progress)
