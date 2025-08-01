@@ -36,6 +36,11 @@ class TestCleaningWorker:
         mock_service: Mock = Mock()
         mock_state: Mock = Mock()
         plugins: list[str] = ["plugin1.esp", "plugin2.esp"]
+        
+        # Mock state properties
+        mock_state_snapshot: Mock = Mock()
+        mock_state_snapshot.max_concurrent_subprocesses = 2
+        mock_state.state = mock_state_snapshot
 
         # Mock validation success
         mock_service.validate_environment.return_value = (True, "Valid environment")
@@ -97,6 +102,11 @@ class TestCleaningWorker:
         mock_service: Mock = Mock()
         mock_state: Mock = Mock()
         plugins: list[str] = ["plugin1.esp"]
+        
+        # Mock state properties
+        mock_state_snapshot: Mock = Mock()
+        mock_state_snapshot.max_concurrent_subprocesses = 2
+        mock_state.state = mock_state_snapshot
 
         # Mock validation success
         mock_service.validate_environment.return_value = (True, "Valid environment")
@@ -171,10 +181,16 @@ class TestCleaningWorker:
         mock_service: Mock = Mock()
         mock_state: Mock = Mock()
         plugins: list[str] = ["plugin1.esp"]
+        
+        # Mock state properties
+        mock_state_snapshot: Mock = Mock()
+        mock_state_snapshot.max_concurrent_subprocesses = 2
+        mock_state.state = mock_state_snapshot
 
         # Mock validation success but service raises exception
         mock_service.validate_environment.return_value = (True, "Valid environment")
-        mock_service.set_progress_callback.side_effect = RuntimeError("Service error")
+        # Only raise on first call, allow the finally block to succeed
+        mock_state.update.side_effect = [RuntimeError("Service error"), None]
 
         worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
@@ -190,10 +206,16 @@ class TestCleaningWorker:
         mock_service: Mock = Mock()
         mock_state: Mock = Mock()
         plugins: list[str] = ["plugin1.esp"]
+        
+        # Mock state properties
+        mock_state_snapshot: Mock = Mock()
+        mock_state_snapshot.max_concurrent_subprocesses = 2
+        mock_state.state = mock_state_snapshot
 
         # Mock validation success but raise KeyboardInterrupt
         mock_service.validate_environment.return_value = (True, "Valid environment")
-        mock_service.set_progress_callback.side_effect = KeyboardInterrupt()
+        # Only raise on first call, allow the finally block to succeed
+        mock_state.update.side_effect = [KeyboardInterrupt(), None]
 
         worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
@@ -209,10 +231,16 @@ class TestCleaningWorker:
         mock_service: Mock = Mock()
         mock_state: Mock = Mock()
         plugins: list[str] = ["plugin1.esp"]
+        
+        # Mock state properties
+        mock_state_snapshot: Mock = Mock()
+        mock_state_snapshot.max_concurrent_subprocesses = 2
+        mock_state.state = mock_state_snapshot
 
         # Mock validation success but raise TypeError
         mock_service.validate_environment.return_value = (True, "Valid environment")
-        mock_service.set_progress_callback.side_effect = TypeError("Type error")
+        # Only raise on first call, allow the finally block to succeed
+        mock_state.update.side_effect = [TypeError("Type error"), None]
 
         worker: CleaningWorker = CleaningWorker(mock_service, mock_state, plugins)
 
@@ -231,6 +259,11 @@ class TestCleaningWorker:
         mock_service: Mock = Mock()
         mock_state: Mock = Mock()
         plugins: list[str] = ["plugin1.esp"]
+        
+        # Mock state properties
+        mock_state_snapshot: Mock = Mock()
+        mock_state_snapshot.max_concurrent_subprocesses = 2
+        mock_state.state = mock_state_snapshot
 
         # Mock validation success
         mock_service.validate_environment.return_value = (True, "Valid environment")

@@ -1,6 +1,5 @@
 """Tests for the utils module."""
 
-import tempfile
 import time
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -38,147 +37,115 @@ class TestYamlManager:
         keys2: list[str] = manager._parse_key_path(["level1", "level2", "level3"])  # noqa: SLF001
         assert keys2 == ["level1", "level2", "level3"]
 
-    def test_get_value_simple(self) -> None:
+    def test_get_value_simple(self, temp_test_config_file: Path) -> None:
         """Test getting a simple value from YAML."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("key: value\n")
-            yaml_path: str = f.name
+        yaml_path = str(temp_test_config_file)
+        temp_test_config_file.write_text("key: value\n")
+        
+        manager = YamlManager()
+        value = manager.get_value(yaml_path, "key")
+        assert value == "value"
 
-        try:
-            manager = YamlManager()
-            value = manager.get_value(yaml_path, "key")
-            assert value == "value"
-        finally:
-            Path(yaml_path).unlink(missing_ok=True)
-
-    def test_get_value_nested(self) -> None:
+    def test_get_value_nested(self, temp_test_config_file: Path) -> None:
         """Test getting a nested value from YAML."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("""
+        yaml_path = str(temp_test_config_file)
+        temp_test_config_file.write_text("""
 level1:
   level2:
     level3: nested_value
 """)
-            yaml_path: str = f.name
+        
+        manager = YamlManager()
+        value = manager.get_value(yaml_path, "level1.level2.level3")
+        assert value == "nested_value"
 
-        try:
-            manager = YamlManager()
-            value = manager.get_value(yaml_path, "level1.level2.level3")
-            assert value == "nested_value"
-        finally:
-            Path(yaml_path).unlink(missing_ok=True)
-
-    def test_get_value_nonexistent(self) -> None:
+    def test_get_value_nonexistent(self, temp_test_config_file: Path) -> None:
         """Test getting a non-existent value."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("key: value\n")
-            yaml_path: str = f.name
+        yaml_path = str(temp_test_config_file)
+        temp_test_config_file.write_text("key: value\n")
+        
+        manager = YamlManager()
+        value = manager.get_value(yaml_path, "nonexistent")
+        assert value is None
 
-        try:
-            manager = YamlManager()
-            value = manager.get_value(yaml_path, "nonexistent")
-            assert value is None
+        value = manager.get_value(yaml_path, "key.nonexistent")
+        assert value is None
 
-            value = manager.get_value(yaml_path, "key.nonexistent")
-            assert value is None
-        finally:
-            Path(yaml_path).unlink(missing_ok=True)
-
-    def test_set_value_simple(self) -> None:
+    def test_set_value_simple(self, temp_test_config_file: Path) -> None:
         """Test setting a simple value in YAML."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("key: old_value\n")
-            yaml_path: str = f.name
+        yaml_path = str(temp_test_config_file)
+        temp_test_config_file.write_text("key: old_value\n")
+        
+        manager = YamlManager()
+        manager.set_value(yaml_path, "key", "new_value")
 
-        try:
-            manager = YamlManager()
-            manager.set_value(yaml_path, "key", "new_value")
+        # Verify the value was set
+        value = manager.get_value(yaml_path, "key")
+        assert value == "new_value"
 
-            # Verify the value was set
-            value = manager.get_value(yaml_path, "key")
-            assert value == "new_value"
-        finally:
-            Path(yaml_path).unlink(missing_ok=True)
-
-    def test_set_value_nested(self) -> None:
+    def test_set_value_nested(self, temp_test_config_file: Path) -> None:
         """Test setting a nested value in YAML."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("level1: {}\n")
-            yaml_path: str = f.name
+        yaml_path = str(temp_test_config_file)
+        temp_test_config_file.write_text("level1: {}\n")
+        
+        manager = YamlManager()
+        manager.set_value(yaml_path, "level1.level2.level3", "nested_value")
 
-        try:
-            manager = YamlManager()
-            manager.set_value(yaml_path, "level1.level2.level3", "nested_value")
+        # Verify the value was set
+        value = manager.get_value(yaml_path, "level1.level2.level3")
+        assert value == "nested_value"
 
-            # Verify the value was set
-            value = manager.get_value(yaml_path, "level1.level2.level3")
-            assert value == "nested_value"
-        finally:
-            Path(yaml_path).unlink(missing_ok=True)
-
-    def test_set_value_create_intermediate(self) -> None:
+    def test_set_value_create_intermediate(self, temp_test_config_file: Path) -> None:
         """Test setting a value with non-existent intermediate keys."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("{}\n")
-            yaml_path: str = f.name
+        yaml_path = str(temp_test_config_file)
+        temp_test_config_file.write_text("{}\n")
+        
+        manager = YamlManager()
+        manager.set_value(yaml_path, "new.level1.level2", "value")
 
-        try:
-            manager = YamlManager()
-            manager.set_value(yaml_path, "new.level1.level2", "value")
+        # Verify the value was set and intermediate keys created
+        value = manager.get_value(yaml_path, "new.level1.level2")
+        assert value == "value"
 
-            # Verify the value was set and intermediate keys created
-            value = manager.get_value(yaml_path, "new.level1.level2")
-            assert value == "value"
+        # Check that intermediate structure exists
+        level1 = manager.get_value(yaml_path, "new.level1")
+        assert isinstance(level1, dict)
 
-            # Check that intermediate structure exists
-            level1 = manager.get_value(yaml_path, "new.level1")
-            assert isinstance(level1, dict)
-        finally:
-            Path(yaml_path).unlink(missing_ok=True)
-
-    def test_cache_functionality(self) -> None:
+    def test_cache_functionality(self, temp_test_config_file: Path) -> None:
         """Test that YAML files are cached."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("key: value\n")
-            yaml_path: str = f.name
+        yaml_path = str(temp_test_config_file)
+        temp_test_config_file.write_text("key: value\n")
+        
+        manager = YamlManager()
 
-        try:
-            manager = YamlManager()
+        # First read should load from file
+        value1 = manager.get_value(yaml_path, "key")
+        assert value1 == "value"
 
-            # First read should load from file
-            value1 = manager.get_value(yaml_path, "key")
-            assert value1 == "value"
+        # Second read should use cache
+        value2 = manager.get_value(yaml_path, "key")
+        assert value2 == "value"
 
-            # Second read should use cache
-            value2 = manager.get_value(yaml_path, "key")
-            assert value2 == "value"
+        # Cache should contain the file
+        assert yaml_path in manager._cache  # noqa: SLF001
 
-            # Cache should contain the file
-            assert yaml_path in manager._cache  # noqa: SLF001
-        finally:
-            Path(yaml_path).unlink(missing_ok=True)
-
-    def test_empty_file_handling(self) -> None:
+    def test_empty_file_handling(self, temp_test_config_file: Path) -> None:
         """Test handling of empty YAML files."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("")
-            yaml_path: str = f.name
+        yaml_path = str(temp_test_config_file)
+        temp_test_config_file.write_text("")
+        
+        manager = YamlManager()
+        value = manager.get_value(yaml_path, "key")
+        assert value is None
 
-        try:
-            manager = YamlManager()
-            value = manager.get_value(yaml_path, "key")
-            assert value is None
+        # Should be able to set values in empty file
+        manager.set_value(yaml_path, "new_key", "new_value")
+        value = manager.get_value(yaml_path, "new_key")
+        assert value == "new_value"
 
-            # Should be able to set values in empty file
-            manager.set_value(yaml_path, "new_key", "new_value")
-            value = manager.get_value(yaml_path, "new_key")
-            assert value == "new_value"
-        finally:
-            Path(yaml_path).unlink(missing_ok=True)
-
-    def test_nonexistent_file_handling(self) -> None:
+    def test_nonexistent_file_handling(self, test_output_dir: Path) -> None:
         """Test handling of non-existent YAML files."""
-        yaml_path: str = "/nonexistent/file.yaml"
+        yaml_path: str = str(test_output_dir / "nonexistent_file.yaml")
         manager = YamlManager()
 
         value = manager.get_value(yaml_path, "key")
@@ -192,17 +159,15 @@ level1:
         # Clean up created file
         Path(yaml_path).unlink(missing_ok=True)
 
-    def test_thread_safety(self) -> None:
+    def test_thread_safety(self, temp_test_config_file: Path) -> None:
         """Test thread safety of YAML operations."""
         import threading
         import time
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("{}\n")
-            yaml_path: str = f.name
-
-        try:
-            manager = YamlManager()
+        yaml_path = str(temp_test_config_file)
+        temp_test_config_file.write_text("{}\n")
+        
+        manager = YamlManager()
 
             def write_values(thread_id: int) -> None:
                 for i in range(10):
@@ -232,117 +197,87 @@ level1:
 
             # Should not have crashed
             assert True
-        finally:
-            Path(yaml_path).unlink(missing_ok=True)
 
 
 class TestYamlSettingsFunctions:
     """Test the yaml_settings and yaml_settings_write functions."""
 
-    def test_yaml_settings_simple(self) -> None:
+    def test_yaml_settings_simple(self, temp_test_config_file: Path) -> None:
         """Test yaml_settings function with simple value."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("key: value\n")
-            yaml_path: str = f.name
+        yaml_path = str(temp_test_config_file)
+        temp_test_config_file.write_text("key: value\n")
+        
+        value = yaml_settings(yaml_path, "key")
+        assert value == "value"
 
-        try:
-            value = yaml_settings(yaml_path, "key")
-            assert value == "value"
-        finally:
-            Path(yaml_path).unlink(missing_ok=True)
-
-    def test_yaml_settings_nested(self) -> None:
+    def test_yaml_settings_nested(self, temp_test_config_file: Path) -> None:
         """Test yaml_settings function with nested value."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("""
+        yaml_path = str(temp_test_config_file)
+        temp_test_config_file.write_text("""
 level1:
   level2:
     level3: nested_value
 """)
-            yaml_path: str = f.name
+        
+        value = yaml_settings(yaml_path, "level1.level2.level3")
+        assert value == "nested_value"
 
-        try:
-            value = yaml_settings(yaml_path, "level1.level2.level3")
-            assert value == "nested_value"
-        finally:
-            Path(yaml_path).unlink(missing_ok=True)
-
-    def test_yaml_settings_write_simple(self) -> None:
+    def test_yaml_settings_write_simple(self, temp_test_config_file: Path) -> None:
         """Test yaml_settings_write function with simple value."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("{}\n")
-            yaml_path: str = f.name
+        yaml_path = str(temp_test_config_file)
+        temp_test_config_file.write_text("{}\n")
+        
+        yaml_settings_write(yaml_path, "new_value", "key")
+        value = yaml_settings(yaml_path, "key")
+        assert value == "new_value"
 
-        try:
-            yaml_settings_write(yaml_path, "new_value", "key")
-            value = yaml_settings(yaml_path, "key")
-            assert value == "new_value"
-        finally:
-            Path(yaml_path).unlink(missing_ok=True)
-
-    def test_yaml_settings_write_nested(self) -> None:
+    def test_yaml_settings_write_nested(self, temp_test_config_file: Path) -> None:
         """Test yaml_settings_write function with nested value."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("{}\n")
-            yaml_path: str = f.name
+        yaml_path = str(temp_test_config_file)
+        temp_test_config_file.write_text("{}\n")
+        
+        yaml_settings_write(yaml_path, "nested_value", "level1.level2.level3")
+        value = yaml_settings(yaml_path, "level1.level2.level3")
+        assert value == "nested_value"
 
-        try:
-            yaml_settings_write(yaml_path, "nested_value", "level1.level2.level3")
-            value = yaml_settings(yaml_path, "level1.level2.level3")
-            assert value == "nested_value"
-        finally:
-            Path(yaml_path).unlink(missing_ok=True)
-
-    def test_yaml_settings_write_replace_data(self) -> None:
+    def test_yaml_settings_write_replace_data(self, temp_test_config_file: Path) -> None:
         """Test yaml_settings_write function replacing entire data."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("old_key: old_value\n")
-            yaml_path: str = f.name
+        yaml_path = str(temp_test_config_file)
+        temp_test_config_file.write_text("old_key: old_value\n")
+        
+        new_data = {"new_key": "new_value", "another_key": "another_value"}
+        yaml_settings_write(yaml_path, new_data)
 
-        try:
-            new_data = {"new_key": "new_value", "another_key": "another_value"}
-            yaml_settings_write(yaml_path, new_data)
+        # Should replace entire content
+        value1 = yaml_settings(yaml_path, "new_key")
+        value2 = yaml_settings(yaml_path, "another_key")
+        old_value = yaml_settings(yaml_path, "old_key")
 
-            # Should replace entire content
-            value1 = yaml_settings(yaml_path, "new_key")
-            value2 = yaml_settings(yaml_path, "another_key")
-            old_value = yaml_settings(yaml_path, "old_key")
+        assert value1 == "new_value"
+        assert value2 == "another_value"
+        assert old_value is None
 
-            assert value1 == "new_value"
-            assert value2 == "another_value"
-            assert old_value is None
-        finally:
-            Path(yaml_path).unlink(missing_ok=True)
-
-    def test_error_handling(self) -> None:
+    def test_error_handling(self, temp_test_config_file: Path) -> None:
         """Test error handling in YAML operations."""
         # Test with invalid YAML
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("invalid: yaml: content: [\n")
-            yaml_path: str = f.name
+        yaml_path = str(temp_test_config_file)
+        temp_test_config_file.write_text("invalid: yaml: content: [\n")
+        
+        # Should handle invalid YAML gracefully
+        value = yaml_settings(yaml_path, "key")
+        assert value is None
 
-        try:
-            # Should handle invalid YAML gracefully
-            value = yaml_settings(yaml_path, "key")
-            assert value is None
-        finally:
-            Path(yaml_path).unlink(missing_ok=True)
-
-    def test_path_object_handling(self) -> None:
+    def test_path_object_handling(self, temp_test_config_file: Path) -> None:
         """Test that functions handle Path objects correctly."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write("key: value\n")
-            yaml_path: Path = Path(f.name)
+        yaml_path: Path = temp_test_config_file
+        yaml_path.write_text("key: value\n")
+        
+        value = yaml_settings(yaml_path, "key")
+        assert value == "value"
 
-        try:
-            value = yaml_settings(yaml_path, "key")
-            assert value == "value"
-
-            yaml_settings_write(yaml_path, "new_value", "new_key")
-            value = yaml_settings(yaml_path, "new_key")
-            assert value == "new_value"
-        finally:
-            yaml_path.unlink(missing_ok=True)
+        yaml_settings_write(yaml_path, "new_value", "new_key")
+        value = yaml_settings(yaml_path, "new_key")
+        assert value == "new_value"
 
 
 class TestProcessFunctions:
@@ -400,95 +335,65 @@ class TestProcessFunctions:
 class TestGameDetectionFunctions:
     """Test game detection utility functions."""
 
-    def test_detect_game_from_load_order_skyrim(self) -> None:
+    def test_detect_game_from_load_order_skyrim(self, temp_test_file: Path) -> None:
         """Test detect_game_from_load_order with Skyrim."""
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-            f.write("Skyrim.esm\n")
-            f.write("SomeOtherPlugin.esp\n")
-            load_order_path: Path = Path(f.name)
+        load_order_path: Path = temp_test_file
+        load_order_path.write_text("Skyrim.esm\nSomeOtherPlugin.esp\n")
+        
+        from AutoQACLib.utils import detect_game_from_load_order
 
-        try:
-            from AutoQACLib.utils import detect_game_from_load_order
+        result = detect_game_from_load_order(load_order_path)
+        assert result == "SSE"
 
-            result = detect_game_from_load_order(load_order_path)
-            assert result == "SSE"
-        finally:
-            load_order_path.unlink(missing_ok=True)
-
-    def test_detect_game_from_load_order_fallout3(self) -> None:
+    def test_detect_game_from_load_order_fallout3(self, temp_test_file: Path) -> None:
         """Test detect_game_from_load_order with Fallout 3."""
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-            f.write("Fallout3.esm\n")
-            f.write("SomeOtherPlugin.esp\n")
-            load_order_path: Path = Path(f.name)
+        load_order_path: Path = temp_test_file
+        load_order_path.write_text("Fallout3.esm\nSomeOtherPlugin.esp\n")
+        
+        from AutoQACLib.utils import detect_game_from_load_order
 
-        try:
-            from AutoQACLib.utils import detect_game_from_load_order
+        result = detect_game_from_load_order(load_order_path)
+        assert result == "FO3"
 
-            result = detect_game_from_load_order(load_order_path)
-            assert result == "FO3"
-        finally:
-            load_order_path.unlink(missing_ok=True)
-
-    def test_detect_game_from_load_order_falloutnv(self) -> None:
+    def test_detect_game_from_load_order_falloutnv(self, temp_test_file: Path) -> None:
         """Test detect_game_from_load_order with Fallout New Vegas."""
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-            f.write("FalloutNV.esm\n")
-            f.write("SomeOtherPlugin.esp\n")
-            load_order_path: Path = Path(f.name)
+        load_order_path: Path = temp_test_file
+        load_order_path.write_text("FalloutNV.esm\nSomeOtherPlugin.esp\n")
+        
+        from AutoQACLib.utils import detect_game_from_load_order
 
-        try:
-            from AutoQACLib.utils import detect_game_from_load_order
+        result = detect_game_from_load_order(load_order_path)
+        assert result == "FNV"
 
-            result = detect_game_from_load_order(load_order_path)
-            assert result == "FNV"
-        finally:
-            load_order_path.unlink(missing_ok=True)
-
-    def test_detect_game_from_load_order_fallout4(self) -> None:
+    def test_detect_game_from_load_order_fallout4(self, temp_test_file: Path) -> None:
         """Test detect_game_from_load_order with Fallout 4."""
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-            f.write("Fallout4.esm\n")
-            f.write("SomeOtherPlugin.esp\n")
-            load_order_path: Path = Path(f.name)
+        load_order_path: Path = temp_test_file
+        load_order_path.write_text("Fallout4.esm\nSomeOtherPlugin.esp\n")
+        
+        from AutoQACLib.utils import detect_game_from_load_order
 
-        try:
-            from AutoQACLib.utils import detect_game_from_load_order
+        result = detect_game_from_load_order(load_order_path)
+        assert result == "FO4"
 
-            result = detect_game_from_load_order(load_order_path)
-            assert result == "FO4"
-        finally:
-            load_order_path.unlink(missing_ok=True)
-
-    def test_detect_game_from_load_order_with_prefix(self) -> None:
+    def test_detect_game_from_load_order_with_prefix(self, temp_test_file: Path) -> None:
         """Test detect_game_from_load_order with prefix characters."""
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-            f.write("*Skyrim.esm\n")
-            f.write("+SomeOtherPlugin.esp\n")
-            load_order_path: Path = Path(f.name)
+        load_order_path: Path = temp_test_file
+        load_order_path.write_text("*Skyrim.esm\n+SomeOtherPlugin.esp\n")
+        
+        from AutoQACLib.utils import detect_game_from_load_order
 
-        try:
-            from AutoQACLib.utils import detect_game_from_load_order
+        result = detect_game_from_load_order(load_order_path)
+        assert result == "SSE"
 
-            result = detect_game_from_load_order(load_order_path)
-            assert result == "SSE"
-        finally:
-            load_order_path.unlink(missing_ok=True)
-
-    def test_detect_game_from_load_order_no_match(self) -> None:
+    def test_detect_game_from_load_order_no_match(self, temp_test_file: Path) -> None:
         """Test detect_game_from_load_order with no matching game."""
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-            f.write("SomePlugin.esp\n")
-            f.write("AnotherPlugin.esp\n")
-            load_order_path: Path = Path(f.name)
+        load_order_path: Path = temp_test_file
+        load_order_path.write_text("SomePlugin.esp\nAnotherPlugin.esp\n")
+        
+        from AutoQACLib.utils import detect_game_from_load_order
 
-        try:
-            from AutoQACLib.utils import detect_game_from_load_order
-
-            result = detect_game_from_load_order(load_order_path)
-            assert result is None
-        finally:
-            load_order_path.unlink(missing_ok=True)
+        result = detect_game_from_load_order(load_order_path)
+        assert result is None
 
     def test_detect_game_from_load_order_file_not_found(self) -> None:
         """Test detect_game_from_load_order with non-existent file."""
@@ -524,19 +429,15 @@ class TestGameDetectionFunctions:
         result = detect_xedit_game("some_other_tool.exe")
         assert result is None
 
-    def test_detect_xedit_game_with_load_order_fallback(self) -> None:
+    def test_detect_xedit_game_with_load_order_fallback(self, temp_test_file: Path) -> None:
         """Test detect_xedit_game with load order fallback."""
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-            f.write("Skyrim.esm\n")
-            load_order_path: Path = Path(f.name)
+        load_order_path: Path = temp_test_file
+        load_order_path.write_text("Skyrim.esm\n")
+        
+        from AutoQACLib.utils import detect_xedit_game
 
-        try:
-            from AutoQACLib.utils import detect_xedit_game
-
-            result = detect_xedit_game("unknown_edit.exe", load_order_path)
-            assert result == "SSE"
-        finally:
-            load_order_path.unlink(missing_ok=True)
+        result = detect_xedit_game("unknown_edit.exe", load_order_path)
+        assert result == "SSE"
 
 
 class TestProcessExecutionFunctions:
@@ -607,16 +508,16 @@ class TestProcessExecutionFunctions:
         assert exit_code == 0
         assert "Test output" in stdout
     
-    def test_run_process_with_realtime_output_cwd(self, tmp_path: Path) -> None:
+    def test_run_process_with_realtime_output_cwd(self, test_output_dir: Path) -> None:
         """Test run_process_with_realtime_output with custom working directory."""
         # Create a test file in temp directory
-        test_file = tmp_path / "test.txt"
+        test_file = test_output_dir / "test.txt"
         test_file.write_text("test content")
         
         # Run command in the temp directory
         exit_code, stdout, stderr = run_process_with_realtime_output(
             ["python", "-c", "import os; print(os.listdir('.'))"],
-            working_dir=str(tmp_path)
+            working_dir=str(test_output_dir)
         )
         
         assert exit_code == 0
@@ -626,12 +527,12 @@ class TestProcessExecutionFunctions:
 class TestLogMonitoringFunctions:
     """Test log monitoring utility functions."""
 
-    def test_monitor_log_file_existing_file(self, tmp_path: Path) -> None:
+    def test_monitor_log_file_existing_file(self, test_output_dir: Path) -> None:
         """Test monitor_log_file with existing file."""
         import threading
         
         # Create a log file with initial content
-        log_file = tmp_path / "test.log"
+        log_file = test_output_dir / "test.log"
         log_file.write_text("Initial line\n")
         
         # Track lines read
@@ -669,11 +570,11 @@ class TestLogMonitoringFunctions:
         assert "Second new line" in lines_read
         assert "Initial line" not in lines_read  # This was written before monitoring started
     
-    def test_monitor_log_file_new_file(self, tmp_path: Path) -> None:
+    def test_monitor_log_file_new_file(self, test_output_dir: Path) -> None:
         """Test monitor_log_file with file created after monitoring starts."""
         import threading
         
-        log_file = tmp_path / "new_test.log"
+        log_file = test_output_dir / "new_test.log"
         lines_read = []
         stop_event = threading.Event()
         

@@ -39,9 +39,9 @@ class DeadlockDetector:
 class TestDeadlockScenarios:
     """Test various deadlock scenarios and verify they're prevented."""
 
-    def test_state_config_circular_dependency(self, tmp_path: Path) -> None:
+    def test_state_config_circular_dependency(self, test_output_dir: Path) -> None:
         """Test that state updates and config saves don't create circular wait."""
-        config_path = tmp_path / "test_config.yaml"
+        config_path = test_output_dir / "test_config.yaml"
         main_config = ConfigManager(config_path)
         user_config = ConfigManager(config_path)
         state = StateManager()
@@ -89,12 +89,12 @@ class TestDeadlockScenarios:
         # Clean up
         controller.cleanup()
 
-    def test_yaml_manager_nested_locks(self, tmp_path: Path) -> None:
+    def test_yaml_manager_nested_locks(self, test_output_dir: Path) -> None:
         """Test that nested YAML operations don't deadlock."""
         from AutoQACLib.utils import yaml_settings, yaml_settings_write
         
-        yaml_path1 = tmp_path / "file1.yaml"
-        yaml_path2 = tmp_path / "file2.yaml"
+        yaml_path1 = test_output_dir / "file1.yaml"
+        yaml_path2 = test_output_dir / "file2.yaml"
         
         # Initialize files
         yaml_settings_write(yaml_path1, {"initial": "value1"})
@@ -163,7 +163,7 @@ class TestDeadlockScenarios:
         stuck_lock.unlock()  # Force unlock
         holder.join(timeout=1.0)
 
-    def test_qt_signal_deadlock_prevention(self, qtbot: Any) -> None:
+    def test_qt_signal_deadlock_prevention(self, qt_app: Any) -> None:
         """Test that Qt signal emission doesn't cause deadlocks."""
         from PySide6.QtCore import QObject, Signal
         
@@ -210,7 +210,7 @@ class TestDeadlockScenarios:
         assert detector.run_with_timeout(emit_signals)
         assert not detector.detected_deadlock
 
-    def test_cleaning_worker_state_deadlock(self, qtbot: Any) -> None:
+    def test_cleaning_worker_state_deadlock(self, qt_app: Any) -> None:
         """Test that cleaning worker and state updates don't deadlock."""
         from AutoQACLib.cleaning_service import CleaningService
         from AutoQACLib.cleaning_worker import CleaningWorker
@@ -253,9 +253,9 @@ class TestDeadlockScenarios:
         assert detector.run_with_timeout(concurrent_state_updates)
         assert not detector.detected_deadlock
 
-    def test_deferred_save_timer_deadlock(self, tmp_path: Path) -> None:
+    def test_deferred_save_timer_deadlock(self, test_output_dir: Path) -> None:
         """Test that deferred save timer doesn't create deadlocks."""
-        config_path = tmp_path / "test_config.yaml"
+        config_path = test_output_dir / "test_config.yaml"
         main_config = ConfigManager(config_path)
         user_config = ConfigManager(config_path)
         state = StateManager()
@@ -328,9 +328,9 @@ class TestDeadlockScenarios:
         assert not detector.detected_deadlock
         assert shared_counter["value"] == 400  # 4 workers * 100 iterations
 
-    def test_gui_controller_cleanup_deadlock(self, tmp_path: Path) -> None:
+    def test_gui_controller_cleanup_deadlock(self, test_output_dir: Path) -> None:
         """Test that cleanup operations don't deadlock."""
-        config_path = tmp_path / "test_config.yaml"
+        config_path = test_output_dir / "test_config.yaml"
         main_config = ConfigManager(config_path)
         user_config = ConfigManager(config_path)
         state = StateManager()

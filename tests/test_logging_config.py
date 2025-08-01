@@ -60,7 +60,7 @@ class TestTestLoggingConfigClass:
         """Test TestLoggingConfig default values."""
         config: TestLoggingConfig = TestLoggingConfig()
 
-        assert config.log_dir == "logs"
+        assert config.log_dir == "tests/test_output"
         assert config.log_file == "test_autoqac.log"
         assert config.max_bytes == 1 * 1024 * 1024  # 1MB
         assert config.backup_count == 3
@@ -86,10 +86,10 @@ class TestTestLoggingConfigClass:
 class TestSetupLogging:
     """Test the setup_logging function."""
 
-    def test_setup_logging_default_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_setup_logging_default_config(self, test_output_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test setup_logging with default configuration."""
         # Use temporary directory for logs
-        log_dir = tmp_path / "logs"
+        log_dir = test_output_dir / "logs"
         monkeypatch.setattr("AutoQACLib.logging_config.Path", lambda x: log_dir if x == "logs" else Path(x))
         
         # Clear any existing handlers
@@ -124,11 +124,11 @@ class TestSetupLogging:
         assert log_file.exists()
         assert "Test message" in log_file.read_text()
     
-    def test_setup_logging_custom_config(self, tmp_path: Path) -> None:
+    def test_setup_logging_custom_config(self, test_output_dir: Path) -> None:
         """Test setup_logging with custom configuration."""
         # Create custom config
         custom_config = LoggingConfig(
-            log_dir=str(tmp_path / "custom_logs"),
+            log_dir=str(test_output_dir / "custom_logs"),
             log_file="custom.log",
             file_level=logging.WARNING,
             console_level=logging.ERROR,
@@ -163,7 +163,7 @@ class TestSetupLogging:
 class TestSetupTestLogging:
     """Test the setup_test_logging function."""
 
-    def test_setup_test_logging_default_config(self, tmp_path: Path) -> None:
+    def test_setup_test_logging_default_config(self, test_output_dir: Path) -> None:
         """Test setup_test_logging with default configuration."""
         # Clear any existing handlers
         root_logger = logging.getLogger()
@@ -171,7 +171,7 @@ class TestSetupTestLogging:
             root_logger.removeHandler(handler)
         
         # Create test config with temp directory
-        test_config = TestLoggingConfig(log_dir=str(tmp_path / "test_logs"))
+        test_config = TestLoggingConfig(log_dir=str(test_output_dir / "test_logs"))
         
         # Call setup_test_logging
         setup_test_logging(test_config)
@@ -192,13 +192,13 @@ class TestSetupTestLogging:
         test_logger.info("Info test message")
         
         # Verify log file was created
-        log_file = tmp_path / "test_logs" / "test_autoqac.log"
+        log_file = test_output_dir / "test_logs" / "test_autoqac.log"
         assert log_file.exists()
         log_content = log_file.read_text()
         assert "Debug test message" in log_content
         assert "Info test message" in log_content
     
-    def test_setup_test_logging_no_console_output(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_setup_test_logging_no_console_output(self, test_output_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that setup_test_logging doesn't create console output."""
         # Clear any existing handlers
         root_logger = logging.getLogger()
@@ -206,7 +206,7 @@ class TestSetupTestLogging:
             root_logger.removeHandler(handler)
         
         # Create test config
-        test_config = TestLoggingConfig(log_dir=str(tmp_path / "test_logs"))
+        test_config = TestLoggingConfig(log_dir=str(test_output_dir / "test_logs"))
         
         # Call setup_test_logging
         setup_test_logging(test_config)
@@ -222,7 +222,7 @@ class TestSetupTestLogging:
         assert captured.err == ""
         
         # But verify it was written to file
-        log_file = tmp_path / "test_logs" / "test_autoqac.log"
+        log_file = test_output_dir / "test_logs" / "test_autoqac.log"
         log_content = log_file.read_text()
         assert "This should not go to console" in log_content
         assert "This also should not go to console" in log_content

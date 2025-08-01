@@ -20,11 +20,11 @@ poetry run ruff format .
 poetry run mypy AutoQAC_Interface.py state_manager.py config_manager.py
 
 # Run tests
-pytest                                    # All tests
-pytest --cov=AutoQACLib --cov=AutoQAC_Interface --cov-report=html  # With coverage
-pytest -m unit                           # Unit tests only
-pytest -m integration                    # Integration tests only
-python run_tests.py                      # Custom test runner
+poetry run pytest                                    # All tests
+poetry run pytest --cov=AutoQACLib --cov=AutoQAC_Interface --cov-report=html  # With coverage
+poetry run pytest -m unit                           # Unit tests only
+poetry run pytest -m integration                    # Integration tests only
+poetry run run_tests.py                      # Custom test runner
 ```
 
 ## Architecture
@@ -76,13 +76,13 @@ poetry run ruff check . --diff
 poetry run ruff check . --fix
 
 # Run a single test file
-pytest tests/test_state_manager.py
+poetry run pytest tests/test_state_manager.py
 
 # Run tests with verbose output
-pytest -v
+poetry run pytest -v
 
 # Generate HTML coverage report
-pytest --cov=AutoQACLib --cov-report=html
+poetry run pytest --cov=AutoQACLib --cov-report=html
 # Open htmlcov/index.html to view
 ```
 
@@ -100,3 +100,8 @@ pytest --cov=AutoQACLib --cov-report=html
 4. For each plugin: check skip list → build command → execute → parse output
 5. Progress updates via Qt signals → UI updates
 6. Final summary displayed on completion
+```
+
+### Testing Best Practices
+
+- For creating temporary files in tests, use the `test_output_dir` fixture instead of `tmp_path`

@@ -43,6 +43,19 @@ def temp_test_config_file(test_output_dir: Path) -> Generator[Path, None, None]:
     temp_file.unlink(missing_ok=True)
 
 
+@pytest.fixture
+def temp_test_config_files(test_output_dir: Path) -> Generator[tuple[Path, Path], None, None]:
+    """Create two temporary YAML config files in the test output directory."""
+    import uuid
+
+    temp_file1 = test_output_dir / f"temp_config_{uuid.uuid4().hex}.yaml"
+    temp_file2 = test_output_dir / f"temp_config_{uuid.uuid4().hex}.yaml"
+    yield (temp_file1, temp_file2)
+    # Cleanup
+    temp_file1.unlink(missing_ok=True)
+    temp_file2.unlink(missing_ok=True)
+
+
 @pytest.fixture(scope="session")
 def qt_app() -> Generator[QCoreApplication, None, None]:
     """Create a Qt application for testing."""
@@ -51,6 +64,8 @@ def qt_app() -> Generator[QCoreApplication, None, None]:
         app = QCoreApplication([])
     yield app
     app.quit()
+
+
 
 
 @pytest.fixture

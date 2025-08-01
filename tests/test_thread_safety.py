@@ -103,9 +103,9 @@ class TestThreadSafety:
         assert isinstance(final_state.current_operation, str)
         assert isinstance(final_state.is_cleaning, bool)
 
-    def test_config_manager_concurrent_operations(self, tmp_path: Path) -> None:
+    def test_config_manager_concurrent_operations(self, test_output_dir: Path) -> None:
         """Test concurrent read/write operations on ConfigManager."""
-        config_path = tmp_path / "test_config.yaml"
+        config_path = test_output_dir / "test_config.yaml"
         config = ConfigManager(config_path)
         
         num_threads = 10
@@ -139,11 +139,11 @@ class TestThreadSafety:
         all_config = config.get_all()
         assert len(all_config) > 0
 
-    def test_yaml_manager_cache_consistency(self, tmp_path: Path) -> None:
+    def test_yaml_manager_cache_consistency(self, test_output_dir: Path) -> None:
         """Test YAML manager cache remains consistent under concurrent access."""
         from AutoQACLib.utils import yaml_settings, yaml_settings_write
         
-        yaml_path = tmp_path / "test_cache.yaml"
+        yaml_path = test_output_dir / "test_cache.yaml"
         yaml_settings_write(yaml_path, {"initial": "value"})
         
         num_threads = 10
@@ -172,14 +172,14 @@ class TestThreadSafety:
             for future in as_completed(futures):
                 future.result()
 
-    def test_cleaning_worker_thread_safety(self, qtbot: Any, state_manager: StateManager) -> None:
+    def test_cleaning_worker_thread_safety(self, qt_app: Any, state_manager: StateManager, test_output_dir: Path) -> None:
         """Test cleaning worker thread interactions are safe."""
         from AutoQACLib.cleaning_service import CleaningService
         from AutoQACLib.cleaning_worker import CleaningWorker
         from AutoQACLib.config_manager import ConfigManager
         
         # Create temporary configs
-        tmp_path = Path("temp_test_data")
+        tmp_path = test_output_dir / "temp_test_data"
         tmp_path.mkdir(exist_ok=True)
         
         main_config = ConfigManager(tmp_path / "main.yaml")
@@ -220,8 +220,12 @@ class TestThreadSafety:
             future = executor.submit(update_state_repeatedly)
             
             # Wait for worker to finish
-            with qtbot.waitSignal(worker.finished, timeout=5000):
-                pass
+            timeout = 5.0  # 5 seconds
+            start_time = time.time()
+            while worker.isRunning() and time.time() - start_time < timeout:
+                QCoreApplication.processEvents()
+                time.sleep(0.01)
+            assert not worker.isRunning(), "Worker did not finish within timeout"
             
             future.result()
         
@@ -229,12 +233,8 @@ class TestThreadSafety:
         assert signal_count["progress"] >= 0
         assert signal_count["started"] >= 0
         assert signal_count["completed"] >= 0
-        
-        # Clean up
-        import shutil
-        shutil.rmtree(tmp_path, ignore_errors=True)
 
-    def test_qt_signal_thread_safety(self, qtbot: Any) -> None:
+    def test_qt_signal_thread_safety(self, qt_app: Any) -> None:
         """Test Qt signal emission across threads is safe."""
         from PySide6.QtCore import QObject, Signal
         
@@ -271,17 +271,18 @@ class TestThreadSafety:
                 future.result()
             
             # Give time for all signals to be processed
-            qtbot.wait(100)
+            time.sleep(0.1)
+            QCoreApplication.processEvents()
             timer.stop()
         
         # Verify all signals were received
         assert len(received_values) == num_threads * signals_per_thread
 
-    def test_config_state_deadlock_prevention(self, tmp_path: Path) -> None:
+    def test_config_state_deadlock_prevention(self, test_output_dir: Path) -> None:
         """Test that config saves and state updates don't deadlock."""
         from AutoQACLib.gui_controller import GuiController
         
-        config_path = tmp_path / "test_config.yaml" 
+        config_path = test_output_dir / "test_config.yaml" 
         main_config = ConfigManager(config_path)
         user_config = ConfigManager(config_path)
         state_manager = StateManager()

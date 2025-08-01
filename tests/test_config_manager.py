@@ -1,6 +1,5 @@
 """Tests for the ConfigManager class."""
 
-import tempfile
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch  # noqa: F401
@@ -13,37 +12,29 @@ from AutoQACLib.config_manager import ConfigManager
 class TestConfigManager:
     """Test the ConfigManager class."""
 
-    def test_initialization_with_new_file(self) -> None:
+    def test_initialization_with_new_file(self, temp_test_config_file: Path) -> None:
         """Test ConfigManager initialization with a new config file."""
-        with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
-            config_path: Path = Path(f.name)
+        config_path: Path = temp_test_config_file
+        
+        config: ConfigManager = ConfigManager(config_path)
+        assert config._path == config_path  # noqa: SLF001
+        assert config_path.exists()
 
-        try:
-            config: ConfigManager = ConfigManager(config_path)
-            assert config._path == config_path  # noqa: SLF001
-            assert config_path.exists()
+        # Should create empty config
+        all_config: dict[str, Any] = config.get_all()
+        assert all_config == {}
 
-            # Should create empty config
-            all_config: dict[str, Any] = config.get_all()
-            assert all_config == {}
-        finally:
-            config_path.unlink(missing_ok=True)
-
-    def test_initialization_with_existing_file(self) -> None:
+    def test_initialization_with_existing_file(self, temp_test_config_file: Path) -> None:
         """Test ConfigManager initialization with existing config file."""
-        with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
-            config_path: Path = Path(f.name)
-            f.write(b"test_key: test_value\n")
+        config_path: Path = temp_test_config_file
+        config_path.write_text("test_key: test_value\n")
+        
+        config: ConfigManager = ConfigManager(config_path)
+        assert config._path == config_path  # noqa: SLF001
 
-        try:
-            config: ConfigManager = ConfigManager(config_path)
-            assert config._path == config_path  # noqa: SLF001
-
-            # Should read existing config
-            value: Any = config.get("test_key")
-            assert value == "test_value"
-        finally:
-            config_path.unlink(missing_ok=True)
+        # Should read existing config
+        value: Any = config.get("test_key")
+        assert value == "test_value"
 
     def test_get_method(self, config_manager: ConfigManager) -> None:
         """Test the get method."""
@@ -220,22 +211,18 @@ class TestConfigManager:
         assert new_config.get("persistent_key") == "persistent_value"
         assert new_config.get("nested.persistent") == "nested_persistent_value"
 
-    def test_empty_file_handling(self) -> None:
+    def test_empty_file_handling(self, temp_test_config_file: Path) -> None:
         """Test handling of empty config files."""
-        with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
-            config_path: Path = Path(f.name)
-            # Create empty file
-            f.write(b"")
+        config_path: Path = temp_test_config_file
+        # Create empty file
+        config_path.write_text("")
+        
+        config: ConfigManager = ConfigManager(config_path)
 
-        try:
-            config: ConfigManager = ConfigManager(config_path)
+        # Should handle empty file gracefully
+        all_config: dict[str, Any] = config.get_all()
+        assert all_config == {}
 
-            # Should handle empty file gracefully
-            all_config: dict[str, Any] = config.get_all()
-            assert all_config == {}
-
-            # Should be able to set values
-            config.set("test_key", "test_value")
-            assert config.get("test_key") == "test_value"
-        finally:
-            config_path.unlink(missing_ok=True)
+        # Should be able to set values
+        config.set("test_key", "test_value")
+        assert config.get("test_key") == "test_value"
