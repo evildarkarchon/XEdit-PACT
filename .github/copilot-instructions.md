@@ -1,6 +1,6 @@
 # AutoQAC Development Guide
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents when working with code in this repository.
 
 ## Overview
 
@@ -12,19 +12,23 @@ AutoQAC is a PySide6 (Qt) application for batch cleaning Bethesda game plugins u
 # Install dependencies
 poetry install --with dev
 
-# Run linting
-poetry run ruff check .
-poetry run ruff format .
+# Run linting and formatting
+poetry run ruff check .                  # Check for issues
+poetry run ruff check . --fix           # Auto-fix issues
+poetry run ruff format .                # Format code
 
 # Run type checking
-poetry run mypy AutoQAC_Interface.py state_manager.py config_manager.py
+poetry run mypy AutoQAC_Interface.py AutoQACLib/*.py
 
 # Run tests
-pytest                                    # All tests
+pytest                                   # All tests  
+pytest -m unit                          # Unit tests only
+pytest -m integration                   # Integration tests only
 pytest --cov=AutoQACLib --cov=AutoQAC_Interface --cov-report=html  # With coverage
-pytest -m unit                           # Unit tests only
-pytest -m integration                    # Integration tests only
-python run_tests.py                      # Custom test runner
+pytest -v                               # Verbose output
+
+# Run the application
+python AutoQAC_Interface.py
 ```
 
 ## Architecture
@@ -49,6 +53,26 @@ python run_tests.py                      # Custom test runner
 - NEVER use: Python's `threading`, `asyncio`, or `concurrent.futures`
 - All inter-thread communication through Qt signals/slots only
 - All shared data access must be synchronized
+
+### Configuration Architecture
+
+Two separate YAML configs managed by `ConfigManager`:
+- **Main Config** (`AutoQAC Data/AutoQAC Main.yaml`): Game configurations, skip lists by game
+- **User Config** (`AutoQAC Data/AutoQAC Config.yaml`): User settings, tool paths
+
+Game-specific skip lists follow pattern: `{GAME}_skip_list = ["official.esm", "dlc.esm", ...]`
+
+### Game Integration Pattern
+
+xEdit command building follows this pattern:
+```python
+# With MO2: run through MO2's virtual filesystem
+f'"{mo2_path}" run "{xedit_path}" -a "-{game_mode} -QAC -autoexit -autoload \\"{plugin}\\""'
+# Without MO2: direct execution
+f'"{xedit_path}" -a -{game_mode} -QAC -autoexit -autoload "{plugin}"'
+```
+
+Game detection via load order file parsing: look for `Skyrim.esm` → `sse`, `Fallout4.esm` → `fo4`, etc.
 
 ### Test Coverage Requirements
 
@@ -78,25 +102,23 @@ poetry run ruff check . --fix
 # Run a single test file
 pytest tests/test_state_manager.py
 
-# Run tests with verbose output
-pytest -v
-
 # Generate HTML coverage report
 pytest --cov=AutoQACLib --cov-report=html
 # Open htmlcov/index.html to view
 ```
 
-### Configuration Files
+### Data Flow
 
-- **Main Config** (`PACT Main.yaml`): Game configurations, skip lists
-- **User Config** (`PACT Config.yaml`): User settings, paths
-- Both handled by `ConfigManager` with thread-safe operations
+1. **Initialization**: `AutoQAC_Interface.py` → creates `StateManager`, two `ConfigManager` instances → `GuiController` coordinates
+2. **Configuration**: User sets paths → `GuiController` validates → saves to YAML via `ConfigManager`
+3. **Cleaning Process**: `GuiController` → spawns `CleaningWorker` QThread → calls `CleaningService` → subprocess execution
+4. **Progress Updates**: Worker emits Qt signals → GUI updates via signal/slot connections
+5. **Results**: Parsed from xEdit logs → stored in `AppState` → displayed in `CleaningProgressDialog`
 
-### Workflow Overview
+### Testing Patterns
 
-1. User configures paths → saved to YAML configs
-2. GuiController validates environment
-3. CleaningWorker (QThread) processes plugins sequentially
-4. For each plugin: check skip list → build command → execute → parse output
-5. Progress updates via Qt signals → UI updates
-6. Final summary displayed on completion
+Use `tests/conftest.py` fixtures:
+- `test_output_dir`: For temporary files
+- `temp_test_file`: Auto-cleanup temp files
+- Mock Qt components with `pytest-qt`
+- Thread safety tests use `QMutex`/`QReadWriteLock` patterns
