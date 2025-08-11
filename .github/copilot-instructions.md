@@ -1,6 +1,6 @@
 # AutoQAC Development Guide
 
-This file provides guidance for AI coding agents working with the AutoQAC codebase.
+This file provides guidance to AI coding agents when working with code in this repository.
 
 ## Overview
 
@@ -13,116 +13,112 @@ AutoQAC is a PySide6 (Qt) application for batch cleaning Bethesda game plugins u
 poetry install --with dev
 
 # Run linting and formatting
-poetry run ruff check .
-poetry run ruff format .
+poetry run ruff check .                  # Check for issues
+poetry run ruff check . --fix           # Auto-fix issues
+poetry run ruff format .                # Format code
 
-# Type checking (critical files only)
-poetry run mypy AutoQAC_Interface.py state_manager.py config_manager.py
+# Run type checking
+poetry run mypy AutoQAC_Interface.py AutoQACLib/*.py
 
-# Testing with coverage
-poetry run pytest                        # All tests
-poetry run pytest --cov=AutoQACLib --cov=AutoQAC_Interface --cov-report=html
-poetry run pytest -m unit               # Unit tests only  
-poetry run pytest -m integration        # Integration tests only
+# Run tests
+pytest                                   # All tests  
+pytest -m unit                          # Unit tests only
+pytest -m integration                   # Integration tests only
+pytest --cov=AutoQACLib --cov=AutoQAC_Interface --cov-report=html  # With coverage
+pytest -v                               # Verbose output
+
+# Run the application
+python AutoQAC_Interface.py
 ```
 
 ## Architecture
 
-### Centralized State Management Pattern
+### Core Design Principles
 
-**Core Principle**: All application state lives in `StateManager` with the `AppState` dataclass. This is the single source of truth.
+1. **Centralized State Management**: All application state lives in `StateManager` with the `AppState` dataclass. Thread-safe access via QMutex with Qt signals for state changes.
 
+2. **Layer Separation**:
+   - `state_manager.py`: Pure state management (no business logic)
+   - `config_manager.py`: Configuration file handling only
+   - `cleaning_service.py`: Business logic (no Qt dependencies)
+   - `gui_controller.py`: Mediator between GUI and business logic
+   - `cleaning_worker.py`: Thread management for background operations
+
+3. **Dependency Injection**: Components receive dependencies through constructors. No direct coupling between layers.
+
+### Critical Threading Rules
+
+**MUST use PySide6 threading only**:
+- Use: `QThread`, `QThreadPool`, `QMutex`, `QReadWriteLock`, `QWaitCondition`
+- NEVER use: Python's `threading`, `asyncio`, or `concurrent.futures`
+- All inter-thread communication through Qt signals/slots only
+- All shared data access must be synchronized
+
+### Configuration Architecture
+
+Two separate YAML configs managed by `ConfigManager`:
+- **Main Config** (`AutoQAC Data/AutoQAC Main.yaml`): Game configurations, skip lists by game
+- **User Config** (`AutoQAC Data/AutoQAC Config.yaml`): User settings, tool paths
+
+Game-specific skip lists follow pattern: `{GAME}_skip_list = ["official.esm", "dlc.esm", ...]`
+
+### Game Integration Pattern
+
+xEdit command building follows this pattern:
 ```python
-# ✅ CORRECT: Update state through StateManager
-self.state.update(is_cleaning=True, current_plugin="example.esp")
-
-# ❌ WRONG: Never modify state directly
-self.state._state.is_cleaning = True
+# With MO2: run through MO2's virtual filesystem
+f'"{mo2_path}" run "{xedit_path}" -a "-{game_mode} -QAC -autoexit -autoload \\"{plugin}\\""'
+# Without MO2: direct execution
+f'"{xedit_path}" -a -{game_mode} -QAC -autoexit -autoload "{plugin}"'
 ```
 
-The `AppState` dataclass tracks configuration paths, runtime state, progress, and results. Use `state.update(**kwargs)` for atomic updates with signal emission.
+Game detection via load order file parsing: look for `Skyrim.esm` → `sse`, `Fallout4.esm` → `fo4`, etc.
 
-### Layer Separation (Strict Boundaries)
+### Test Coverage Requirements
 
-1. **`state_manager.py`**: Pure state management, no business logic, thread-safe with QMutex/QReadWriteLock
-2. **`config_manager.py`**: YAML file I/O only, no Qt dependencies, UTF-8 encoding
-3. **`cleaning_service.py`**: Business logic for plugin cleaning, no Qt dependencies, pure Python
-4. **`gui_controller.py`**: Mediator between GUI and business logic, handles Qt signals
-5. **`cleaning_worker.py`**: QThread worker for background operations, emits progress signals
-6. **`AutoQAC_Interface.py`**: PySide6 GUI, connects to controller via signals/slots
+- **Unit Tests**: Minimum 90% line coverage
+- **Integration Tests**: Minimum 80% line coverage
+- **Critical Paths**: 100% coverage (error handling, thread safety, file I/O)
+- All new functionality MUST have tests
+- All bug fixes MUST include regression tests
 
-### Threading (PySide6 Only)
+### Key Technical Constraints
 
-**CRITICAL**: Use only PySide6 threading primitives:
-```python
-from PySide6.QtCore import QThread, QMutex, QReadWriteLock, QWaitCondition
+1. **File Operations**: UTF-8 encoding always
+2. **Logging**: Use rotating file logs in `logs/` directory, not console output
+3. **Type Annotations**: Required for all new code (Python 3.12+)
+4. **Line Length**: 120 characters maximum
+5. **State Updates**: Only through `StateManager`, never direct manipulation
 
-# ✅ CORRECT: QThread worker pattern
-class CleaningWorker(QThread):
-    progress = Signal(int, int)  # current, total
-    def run(self):
-        # Worker logic here
-        
-# ❌ WRONG: Never use Python threading
-import threading  # Don't do this
-```
+### Common Development Tasks
 
-All inter-thread communication through Qt signals/slots. All shared data access must be synchronized with Qt locks.
-
-## Critical Workflows
-
-### xEdit Integration Pattern
-
-The app launches xEdit subprocesses with specific command patterns:
 ```bash
-# MO2 Mode
-"ModOrganizer.exe" run "SSEEdit.exe" -a "-QAC -autoexit -autoload \"plugin.esp\""
+# Check what needs linting/formatting
+poetry run ruff check . --diff
 
-# Standalone Mode  
-"SSEEdit.exe" -a -QAC -autoexit -autoload "plugin.esp"
+# Auto-fix linting issues
+poetry run ruff check . --fix
+
+# Run a single test file
+pytest tests/test_state_manager.py
+
+# Generate HTML coverage report
+pytest --cov=AutoQACLib --cov-report=html
+# Open htmlcov/index.html to view
 ```
 
-Game detection via loadorder.txt master files: `Fallout4.esm`, `Skyrim.esm`, etc.
+### Data Flow
 
-### Subprocess Management
+1. **Initialization**: `AutoQAC_Interface.py` → creates `StateManager`, two `ConfigManager` instances → `GuiController` coordinates
+2. **Configuration**: User sets paths → `GuiController` validates → saves to YAML via `ConfigManager`
+3. **Cleaning Process**: `GuiController` → spawns `CleaningWorker` QThread → calls `CleaningService` → subprocess execution
+4. **Progress Updates**: Worker emits Qt signals → GUI updates via signal/slot connections
+5. **Results**: Parsed from xEdit logs → stored in `AppState` → displayed in `CleaningProgressDialog`
 
-- One plugin cleaned at a time sequentially
-- 5-minute timeout per plugin (configurable)
-- CPU monitoring to detect hangs (0% usage = error)
-- Log parsing for ITM/UDR detection patterns
-- Automatic skip list management in `PACT Ignore.txt`
+### Testing Patterns
 
-### Configuration System
-
-Two YAML configs with different purposes:
-- **Main Config** (`AutoQAC Main.yaml`): Game-specific settings, skip lists
-- **User Config** (`AutoQAC Config.yaml`): User paths, preferences
-
-Both use `ruamel.yaml` for preservation of comments and formatting.
-
-## Testing Requirements
-
-- **Unit Tests**: 90% minimum line coverage
-- **Integration Tests**: 80% minimum line coverage  
-- **Critical Paths**: 100% coverage (threading, file I/O, error handling)
-- Use `test_output_dir` fixture instead of `tmp_path` for temporary files
-- All Qt code requires `pytest-qt` for proper signal testing
-
-## Project-Specific Patterns
-
-### Error Handling
-- Log to rotating files in `logs/` directory, not console
-- Use Qt message boxes for user-facing errors
-- Subprocess errors trigger automatic skip list updates
-
-### File Operations
-- Always UTF-8 encoding with error handling
-- Path objects preferred over strings
-- Atomic file operations for configs
-
-### State Updates
-- Only through `StateManager.update()` method
-- Emit specific signals for UI updates
-- Batch related updates in single call
-
-This codebase prioritizes thread safety, maintainability, and robust subprocess management for external tool integration.
+Use `tests/conftest.py` fixtures:
+- `test_output_dir`: For temporary files
+- `temp_test_file`: Auto-cleanup temp files
+- Mock Qt components with `pytest-qt`
+- Thread safety tests use `QMutex`/`QReadWriteLock` patterns
