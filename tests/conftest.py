@@ -66,8 +66,6 @@ def qt_app() -> Generator[QCoreApplication, None, None]:
     app.quit()
 
 
-
-
 @pytest.fixture
 def temp_config_file(temp_test_config_file: Path) -> Path:
     """Create a temporary configuration file for testing."""

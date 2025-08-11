@@ -91,39 +91,48 @@ class TestSetupLogging:
         # Use temporary directory for logs
         log_dir = test_output_dir / "logs"
         monkeypatch.setattr("AutoQACLib.logging_config.Path", lambda x: log_dir if x == "logs" else Path(x))
-        
+
         # Clear any existing handlers
         root_logger = logging.getLogger()
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
-        
+
         # Call setup_logging with default config
         setup_logging()
-        
+
         # Verify logger configuration
         assert len(root_logger.handlers) == 2
-        
+
         # Check file handler
-        file_handler = next((h for h in root_logger.handlers if isinstance(h, logging.handlers.RotatingFileHandler)), None)
+        file_handler = next(
+            (h for h in root_logger.handlers if isinstance(h, logging.handlers.RotatingFileHandler)), None
+        )
         assert file_handler is not None
         assert file_handler.level == logging.DEBUG
         assert file_handler.maxBytes == 5 * 1024 * 1024  # 5MB
         assert file_handler.backupCount == 5
-        
+
         # Check console handler
-        console_handler = next((h for h in root_logger.handlers if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.handlers.RotatingFileHandler)), None)
+        console_handler = next(
+            (
+                h
+                for h in root_logger.handlers
+                if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.handlers.RotatingFileHandler)
+            ),
+            None,
+        )
         assert console_handler is not None
         assert console_handler.level == logging.WARNING
-        
+
         # Test that logging works
         test_logger = logging.getLogger("test")
         test_logger.info("Test message")
-        
+
         # Verify log file was created
         log_file = log_dir / "autoqac.log"
         assert log_file.exists()
         assert "Test message" in log_file.read_text()
-    
+
     def test_setup_logging_custom_config(self, test_output_dir: Path) -> None:
         """Test setup_logging with custom configuration."""
         # Create custom config
@@ -134,28 +143,37 @@ class TestSetupLogging:
             console_level=logging.ERROR,
             max_bytes=1024 * 1024,  # 1MB
             backup_count=3,
-            encoding="utf-16"
+            encoding="utf-16",
         )
-        
+
         # Clear any existing handlers
         root_logger = logging.getLogger()
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
-        
+
         # Call setup_logging with custom config
         setup_logging(custom_config)
-        
+
         # Verify custom configuration
-        file_handler = next((h for h in root_logger.handlers if isinstance(h, logging.handlers.RotatingFileHandler)), None)
+        file_handler = next(
+            (h for h in root_logger.handlers if isinstance(h, logging.handlers.RotatingFileHandler)), None
+        )
         assert file_handler is not None
         assert file_handler.level == logging.WARNING
         assert file_handler.maxBytes == 1024 * 1024
         assert file_handler.backupCount == 3
-        
-        console_handler = next((h for h in root_logger.handlers if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.handlers.RotatingFileHandler)), None)
+
+        console_handler = next(
+            (
+                h
+                for h in root_logger.handlers
+                if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.handlers.RotatingFileHandler)
+            ),
+            None,
+        )
         assert console_handler is not None
         assert console_handler.level == logging.ERROR
-        
+
         # Verify log directory was created
         assert Path(custom_config.log_dir).exists()
 
@@ -169,58 +187,62 @@ class TestSetupTestLogging:
         root_logger = logging.getLogger()
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
-        
+
         # Create test config with temp directory
         test_config = TestLoggingConfig(log_dir=str(test_output_dir / "test_logs"))
-        
+
         # Call setup_test_logging
         setup_test_logging(test_config)
-        
+
         # Verify logger configuration
         assert len(root_logger.handlers) == 1
-        
+
         # Check file handler
-        file_handler = next((h for h in root_logger.handlers if isinstance(h, logging.handlers.RotatingFileHandler)), None)
+        file_handler = next(
+            (h for h in root_logger.handlers if isinstance(h, logging.handlers.RotatingFileHandler)), None
+        )
         assert file_handler is not None
         assert file_handler.level == logging.DEBUG
         assert file_handler.maxBytes == 1024 * 1024  # 1MB default
         assert file_handler.backupCount == 3
-        
+
         # Test that logging works
         test_logger = logging.getLogger("test")
         test_logger.debug("Debug test message")
         test_logger.info("Info test message")
-        
+
         # Verify log file was created
         log_file = test_output_dir / "test_logs" / "test_autoqac.log"
         assert log_file.exists()
         log_content = log_file.read_text()
         assert "Debug test message" in log_content
         assert "Info test message" in log_content
-    
-    def test_setup_test_logging_no_console_output(self, test_output_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+
+    def test_setup_test_logging_no_console_output(
+        self, test_output_dir: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that setup_test_logging doesn't create console output."""
         # Clear any existing handlers
         root_logger = logging.getLogger()
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
-        
+
         # Create test config
         test_config = TestLoggingConfig(log_dir=str(test_output_dir / "test_logs"))
-        
+
         # Call setup_test_logging
         setup_test_logging(test_config)
-        
+
         # Log some messages
         logger = logging.getLogger("test")
         logger.info("This should not go to console")
         logger.error("This also should not go to console")
-        
+
         # Check that nothing was printed to console
         captured = capsys.readouterr()
         assert captured.out == ""
         assert captured.err == ""
-        
+
         # But verify it was written to file
         log_file = test_output_dir / "test_logs" / "test_autoqac.log"
         log_content = log_file.read_text()

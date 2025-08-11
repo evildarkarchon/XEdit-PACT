@@ -139,12 +139,12 @@ class YamlManager:
         with QMutexLocker(self._cache_mutex):
             if yaml_path in self._cache:
                 return self._cache[yaml_path]
-        
+
         # Load file outside of mutex
         warning_msg = None
         error_msg = None
         data = {}
-        
+
         try:
             path: Path = Path(yaml_path)
             if not path.exists():
@@ -157,17 +157,17 @@ class YamlManager:
         except (OSError, ruamel.yaml.YAMLError, ValueError) as e:
             error_msg = f"Failed to load YAML file '{yaml_path}': {e}"
             data = {}
-        
+
         # Update cache with loaded data
         with QMutexLocker(self._cache_mutex):
             self._cache[yaml_path] = data
-        
+
         # Log messages outside of mutex
         if warning_msg:
             logger.warning(warning_msg)
         if error_msg:
             logger.error(error_msg)
-            
+
         return data
 
     def _save_yaml(self, yaml_path: str, data: Any) -> None:
@@ -424,7 +424,7 @@ def run_process(command: list[str] | str, timeout: int | None = None) -> tuple[i
 def set_max_concurrent_subprocesses(limit: int) -> None:
     """
     Set the maximum number of concurrent subprocesses.
-    
+
     Args:
         limit: Maximum number of subprocesses allowed to run concurrently.
                Must be greater than 0.
@@ -447,31 +447,31 @@ def get_active_subprocess_count() -> int:
 def _subprocess_resource_manager():
     """
     Context manager to track and limit subprocess resources.
-    
+
     Raises:
         RuntimeError: If subprocess limit is exceeded.
     """
     global _active_subprocesses
-    
+
     # Wait for available slot
     acquired = False
     wait_count = 0
     max_wait_cycles = 600  # 60 seconds with 0.1s sleep
-    
+
     while not acquired and wait_count < max_wait_cycles:
         with QMutexLocker(_subprocess_semaphore):
             if _active_subprocesses < _max_concurrent_subprocesses:
                 _active_subprocesses += 1
                 acquired = True
                 logger.debug(f"Acquired subprocess slot ({_active_subprocesses}/{_max_concurrent_subprocesses})")
-        
+
         if not acquired:
             QThread.msleep(100)  # Wait 100ms
             wait_count += 1
-    
+
     if not acquired:
         raise RuntimeError(f"Subprocess limit exceeded: maximum {_max_concurrent_subprocesses} concurrent processes")
-    
+
     try:
         yield
     finally:
@@ -484,14 +484,14 @@ def _subprocess_resource_manager():
 def safe_popen(*args: Any, **kwargs: Any) -> Any:
     """
     Context manager for safe subprocess handling with guaranteed cleanup.
-    
+
     Ensures that:
     - Process is terminated/killed on exit
     - All pipes are properly closed
     - Resources are freed even on exceptions
     """
     import subprocess
-    
+
     with _subprocess_resource_manager():
         process = None
         try:
@@ -506,7 +506,7 @@ def safe_popen(*args: Any, **kwargs: Any) -> Any:
                             pipe.close()
                         except (OSError, ValueError):
                             pass
-                
+
                 # Terminate process if still running
                 if process.poll() is None:
                     try:
@@ -629,7 +629,7 @@ def run_process_with_realtime_output(
                     # Timeout reached - terminate process and threads
                     logger.info("Process timeout reached, terminating...")
                     # Process termination is handled by safe_popen
-                    
+
                     # Stop threads
                     if stdout_thread and stdout_thread.isRunning():
                         stdout_thread.stop()
@@ -654,7 +654,7 @@ def run_process_with_realtime_output(
     except KeyboardInterrupt:
         logger.info("Process interrupted by user")
         # Process cleanup is handled by safe_popen
-        
+
         # Stop threads
         if stdout_thread and stdout_thread.isRunning():
             stdout_thread.stop()

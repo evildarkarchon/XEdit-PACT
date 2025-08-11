@@ -30,13 +30,17 @@ class TestCleaningWorker:
     @patch.object(CleaningWorker, "plugin_completed")
     @patch.object(CleaningWorker, "error")
     def test_run_successful_cleaning(
-        self, mock_error: Mock, mock_plugin_completed: Mock, mock_plugin_started: Mock, mock_progress: Mock  # noqa: ARG002
+        self,
+        mock_error: Mock,
+        mock_plugin_completed: Mock,
+        mock_plugin_started: Mock,
+        mock_progress: Mock,
     ) -> None:
         """Test successful cleaning process."""
         mock_service: Mock = Mock()
         mock_state: Mock = Mock()
         plugins: list[str] = ["plugin1.esp", "plugin2.esp"]
-        
+
         # Mock state properties
         mock_state_snapshot: Mock = Mock()
         mock_state_snapshot.max_concurrent_subprocesses = 2
@@ -96,13 +100,17 @@ class TestCleaningWorker:
     @patch.object(CleaningWorker, "plugin_completed")
     @patch.object(CleaningWorker, "error")
     def test_run_plugin_cleaning_failure(
-        self, mock_error: Mock, mock_plugin_completed: Mock, mock_plugin_started: Mock, mock_progress: Mock  # noqa: ARG002
+        self,
+        mock_error: Mock,
+        mock_plugin_completed: Mock,
+        mock_plugin_started: Mock,
+        mock_progress: Mock,  # noqa: ARG002
     ) -> None:
         """Test cleaning process when a plugin fails to clean."""
         mock_service: Mock = Mock()
         mock_state: Mock = Mock()
         plugins: list[str] = ["plugin1.esp"]
-        
+
         # Mock state properties
         mock_state_snapshot: Mock = Mock()
         mock_state_snapshot.max_concurrent_subprocesses = 2
@@ -131,7 +139,9 @@ class TestCleaningWorker:
     @patch.object(CleaningWorker, "plugin_started")
     @patch.object(CleaningWorker, "plugin_completed")
     @patch.object(CleaningWorker, "error")
-    def test_run_with_stop_request(self, mock_error: Mock, mock_plugin_completed: Mock, mock_plugin_started: Mock, mock_progress: Mock) -> None:  # noqa: ARG002
+    def test_run_with_stop_request(
+        self, mock_error: Mock, mock_plugin_completed: Mock, mock_plugin_started: Mock, mock_progress: Mock
+    ) -> None:
         """Test cleaning process when stop is requested."""
         mock_service: Mock = Mock()
         mock_state: Mock = Mock()
@@ -156,7 +166,11 @@ class TestCleaningWorker:
     @patch.object(CleaningWorker, "plugin_completed")
     @patch.object(CleaningWorker, "error")
     def test_run_with_interruption_request(
-        self, mock_error: Mock, mock_plugin_completed: Mock, mock_plugin_started: Mock, mock_progress: Mock  # noqa: ARG002
+        self,
+        mock_error: Mock,
+        mock_plugin_completed: Mock,
+        mock_plugin_started: Mock,
+        mock_progress: Mock,  # noqa: ARG002
     ) -> None:
         """Test cleaning process when interruption is requested."""
         mock_service: Mock = Mock()
@@ -181,7 +195,7 @@ class TestCleaningWorker:
         mock_service: Mock = Mock()
         mock_state: Mock = Mock()
         plugins: list[str] = ["plugin1.esp"]
-        
+
         # Mock state properties
         mock_state_snapshot: Mock = Mock()
         mock_state_snapshot.max_concurrent_subprocesses = 2
@@ -206,7 +220,7 @@ class TestCleaningWorker:
         mock_service: Mock = Mock()
         mock_state: Mock = Mock()
         plugins: list[str] = ["plugin1.esp"]
-        
+
         # Mock state properties
         mock_state_snapshot: Mock = Mock()
         mock_state_snapshot.max_concurrent_subprocesses = 2
@@ -231,7 +245,7 @@ class TestCleaningWorker:
         mock_service: Mock = Mock()
         mock_state: Mock = Mock()
         plugins: list[str] = ["plugin1.esp"]
-        
+
         # Mock state properties
         mock_state_snapshot: Mock = Mock()
         mock_state_snapshot.max_concurrent_subprocesses = 2
@@ -254,12 +268,14 @@ class TestCleaningWorker:
     @patch.object(CleaningWorker, "plugin_started")
     @patch.object(CleaningWorker, "plugin_completed")
     @patch.object(CleaningWorker, "error")
-    def test_run_final_state_reset(self, mock_error: Mock, mock_plugin_completed: Mock, mock_plugin_started: Mock, mock_progress: Mock) -> None:  # noqa: ARG002
+    def test_run_final_state_reset(
+        self, mock_error: Mock, mock_plugin_completed: Mock, mock_plugin_started: Mock, mock_progress: Mock
+    ) -> None:
         """Test that cleaning state is reset in finally block."""
         mock_service: Mock = Mock()
         mock_state: Mock = Mock()
         plugins: list[str] = ["plugin1.esp"]
-        
+
         # Mock state properties
         mock_state_snapshot: Mock = Mock()
         mock_state_snapshot.max_concurrent_subprocesses = 2

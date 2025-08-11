@@ -60,7 +60,7 @@ class CleaningWorker(QThread):
             if not valid:
                 self.error.emit(message)
                 return
-            
+
             # Set subprocess resource limit from state
             state_snapshot = self.state.state
             set_max_concurrent_subprocesses(state_snapshot.max_concurrent_subprocesses)

@@ -109,7 +109,7 @@ class StateManager(QObject):
         state_changes: list[tuple[str, object]] = []
         cleaning_started = False
         cleaning_finished = False
-        
+
         # Update state atomically
         with QWriteLocker(self._rw_lock):
             for key, value in kwargs.items():
@@ -129,33 +129,33 @@ class StateManager(QObject):
                                 cleaning_started = True
                             else:
                                 cleaning_finished = True
-        
+
         # Emit signals in a thread-safe manner
         with QMutexLocker(self._signal_mutex):
             # Emit state changes
             for key, value in state_changes:
                 self.state_changed.emit(key, value)
-            
+
             # Emit special signals
             if cleaning_started:
                 self.cleaning_started.emit()
             elif cleaning_finished:
                 self.cleaning_finished.emit()
-            
+
             # Emit aggregate signals
             if config_changed:
                 self.configuration_changed.emit(self._state.is_fully_configured)
             if progress_changed:
                 self.progress_changed.emit(self._state.progress, self._state.total_plugins)
-    
+
     def update_multiple_properties(self, updates: dict[str, Any]) -> None:
         """
         Atomically updates multiple properties at once.
-        
+
         This method ensures that all property updates happen together without
         any intermediate state being visible to other threads. This is just a
         wrapper around update() for clarity.
-        
+
         Args:
             updates: Dictionary of property names and their new values.
         """
@@ -213,7 +213,7 @@ class StateManager(QObject):
             self._state.progress += 1
             current_progress = self._state.progress
             total_plugins = self._state.total_plugins
-        
+
         # Emit signals outside of the write lock but in a thread-safe manner
         with QMutexLocker(self._signal_mutex):
             self.plugin_processed.emit(plugin, status, message)

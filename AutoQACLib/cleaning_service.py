@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable
 
 from AutoQACLib.logging_config import get_logger
-from AutoQACLib.utils import detect_xedit_game, run_process_with_realtime_output, set_max_concurrent_subprocesses
+from AutoQACLib.utils import detect_xedit_game, run_process_with_realtime_output
 
 if TYPE_CHECKING:
     from logging import Logger

@@ -15,7 +15,7 @@ class TestConfigManager:
     def test_initialization_with_new_file(self, temp_test_config_file: Path) -> None:
         """Test ConfigManager initialization with a new config file."""
         config_path: Path = temp_test_config_file
-        
+
         config: ConfigManager = ConfigManager(config_path)
         assert config._path == config_path  # noqa: SLF001
         assert config_path.exists()
@@ -28,7 +28,7 @@ class TestConfigManager:
         """Test ConfigManager initialization with existing config file."""
         config_path: Path = temp_test_config_file
         config_path.write_text("test_key: test_value\n")
-        
+
         config: ConfigManager = ConfigManager(config_path)
         assert config._path == config_path  # noqa: SLF001
 
@@ -216,7 +216,7 @@ class TestConfigManager:
         config_path: Path = temp_test_config_file
         # Create empty file
         config_path.write_text("")
-        
+
         config: ConfigManager = ConfigManager(config_path)
 
         # Should handle empty file gracefully

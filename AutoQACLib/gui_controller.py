@@ -42,7 +42,7 @@ class GuiController(QObject):
         self.user_config: ConfigManager = user_config  # For user settings
         self.worker: CleaningWorker | None = None
         self._cleaning_finished_handled: bool = False  # Flag to prevent duplicate dialogs
-        
+
         # Deferred configuration saves to avoid deadlocks
         self._pending_config_saves: list[tuple[str, Any]] = []
         self._config_save_timer = QTimer(self)
@@ -487,38 +487,38 @@ class GuiController(QObject):
             logger.info("Stopping cleaning process")
             self.worker.stop()
             self.update_status.emit("Stopping cleaning...")
-    
+
     def cleanup(self) -> None:
         """
         Performs comprehensive cleanup of all resources and threads.
-        
+
         This method ensures that:
         - All worker threads are properly stopped and joined
         - Signal connections are disconnected
         - Resources are freed
         - State is properly reset
-        
+
         This should be called during application shutdown.
         """
         logger.info("Starting GuiController cleanup")
-        
+
         # Stop config save timer and process any pending saves
         if self._config_save_timer.isActive():
             self._config_save_timer.stop()
         self._process_pending_config_saves()
-        
+
         # Stop any running cleaning process
         if self.worker is not None:
             if self.worker.isRunning():
                 logger.info("Stopping cleaning worker thread")
                 self.worker.stop()
-                
+
                 # Wait for worker to finish (max 10 seconds)
                 if not self.worker.wait(10000):
                     logger.warning("Cleaning worker did not stop gracefully within 10 seconds")
                     self.worker.terminate()
                     self.worker.wait(2000)  # Wait 2 more seconds after termination
-            
+
             # Disconnect all worker signals
             try:
                 self.worker.progress.disconnect()
@@ -531,14 +531,14 @@ class GuiController(QObject):
             except RuntimeError:
                 # Signal might not be connected, that's okay
                 pass
-            
+
             # Delete the worker
             self.worker.deleteLater()
             self.worker = None
-        
+
         # Reset cleaning state
         self.state.reset_cleaning_state()
-        
+
         # Disconnect our own signals
         try:
             self.show_message.disconnect()
@@ -547,37 +547,37 @@ class GuiController(QObject):
         except RuntimeError:
             # Signals might not be connected
             pass
-        
+
         logger.info("GuiController cleanup completed")
-    
+
     def _defer_config_save(self, key: str, value: Any) -> None:
         """
         Defers a configuration save to avoid holding locks across StateManager and ConfigManager.
-        
+
         This method queues configuration updates and processes them after a short delay,
         ensuring that state locks are released before config file operations occur.
-        
+
         Args:
             key: Configuration key to save
             value: Value to save
         """
         self._pending_config_saves.append((key, value))
         self._config_save_timer.start()
-    
+
     def _process_pending_config_saves(self) -> None:
         """
         Processes all pending configuration saves.
-        
+
         This method is called by a timer after state updates are complete,
         avoiding potential deadlocks between StateManager and ConfigManager.
         """
         if not self._pending_config_saves:
             return
-        
+
         # Process all pending saves
         saves_to_process = self._pending_config_saves.copy()
         self._pending_config_saves.clear()
-        
+
         for key, value in saves_to_process:
             try:
                 if not self.user_config.set(key, value):

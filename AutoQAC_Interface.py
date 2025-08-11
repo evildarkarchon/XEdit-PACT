@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -227,11 +228,8 @@ class CleaningProgressDialog(QDialog):
 
     def cleanup(self) -> None:
         """Clean up signal connections."""
-        try:
+        with suppress(RuntimeError):
             self.button_box.rejected.disconnect()
-        except RuntimeError:
-            pass  # Already disconnected
-
     def closeEvent(self, event: QCloseEvent) -> None:
         """Handle close event."""
         if self._cleaning_in_progress:
@@ -704,7 +702,7 @@ class MainWindow(QMainWindow):
             self.controller.update_status.disconnect(self._update_status)
         except RuntimeError:
             pass  # Already disconnected
-        
+
         # Disconnect state signals
         try:
             self.state.configuration_changed.disconnect(self._on_configuration_changed)
@@ -715,49 +713,33 @@ class MainWindow(QMainWindow):
             self.state.state_changed.disconnect(self._on_state_changed)
         except RuntimeError:
             pass  # Already disconnected
-        
+
         # Disconnect button signals
         if self.load_order_button:
-            try:
+            with suppress(RuntimeError):
                 self.load_order_button.clicked.disconnect()
-            except RuntimeError:
-                pass
         if self.mo2_button:
-            try:
+            with suppress(RuntimeError):
                 self.mo2_button.clicked.disconnect()
-            except RuntimeError:
-                pass
         if self.mo2_mode_button:
-            try:
+            with suppress(RuntimeError):
                 self.mo2_mode_button.clicked.disconnect()
-            except RuntimeError:
-                pass
         if self.xedit_button:
-            try:
+            with suppress(RuntimeError):
                 self.xedit_button.clicked.disconnect()
-            except RuntimeError:
-                pass
         if self.partial_forms_button:
-            try:
+            with suppress(RuntimeError):
                 self.partial_forms_button.clicked.disconnect()
-            except RuntimeError:
-                pass
         if self.start_button:
-            try:
+            with suppress(RuntimeError):
                 self.start_button.clicked.disconnect()
-            except RuntimeError:
-                pass
         if self.stop_button:
-            try:
+            with suppress(RuntimeError):
                 self.stop_button.clicked.disconnect()
-            except RuntimeError:
-                pass
-        
+
         # Disconnect timer
-        try:
+        with suppress(RuntimeError):
             self._update_timer.timeout.disconnect()
-        except RuntimeError:
-            pass
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Handle window close event with proper cleanup."""
@@ -793,10 +775,10 @@ class MainWindow(QMainWindow):
         # Perform comprehensive cleanup
         logger.info("Shutting down application")
         self.controller.cleanup()
-        
+
         # Ensure all events are processed
         QCoreApplication.processEvents()
-        
+
         event.accept()
         logger.info("Application shutdown complete")
 

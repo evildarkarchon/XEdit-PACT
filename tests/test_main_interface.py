@@ -1,11 +1,10 @@
 """Tests for the main interface components."""
 
 from typing import TYPE_CHECKING, Any
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QLabel, QProgressBar, QPushButton
+from PySide6.QtWidgets import QLabel, QProgressBar, QPushButton
 
 from AutoQAC_Interface import CleaningProgressDialog, MainWindow, create_application
 from AutoQACLib.config_manager import ConfigManager
@@ -18,13 +17,13 @@ if TYPE_CHECKING:
 @pytest.fixture
 def mock_cleaning_dialog(qt_app: Any) -> Any:
     """Create a mock CleaningProgressDialog for testing."""
-    with patch('AutoQAC_Interface.QDialog.__init__', return_value=None):
+    with patch("AutoQAC_Interface.QDialog.__init__", return_value=None):
         dialog = CleaningProgressDialog.__new__(CleaningProgressDialog)
-        
+
         # Set up basic attributes
         dialog._current_plugin_name = None
         dialog._cleaning_in_progress = True
-        
+
         # Mock Qt widget methods
         dialog.setWindowTitle = Mock()
         dialog.setMinimumSize = Mock()
@@ -34,74 +33,74 @@ def mock_cleaning_dialog(qt_app: Any) -> Any:
         dialog.show = Mock()
         dialog.close = Mock()
         dialog.closeEvent = Mock()
-        
+
         # Mock UI elements
         dialog.current_plugin_label = Mock(spec=QLabel)
         dialog.current_plugin_label.text = Mock(return_value="")
         dialog.current_plugin_label.setText = Mock()
-        
+
         dialog.progress_bar = Mock(spec=QProgressBar)
         dialog.progress_bar.value = Mock(return_value=0)
         dialog.progress_bar.setValue = Mock()
         dialog.progress_bar.format = Mock(return_value="%p%")
         dialog.progress_bar.setFormat = Mock()
-        
+
         dialog.progress_label = Mock(spec=QLabel)
         dialog.progress_label.text = Mock(return_value="0 / 0 plugins")
         dialog.progress_label.setText = Mock()
-        
+
         dialog.stats_labels = {
             "cleaned": Mock(spec=QLabel),
             "failed": Mock(spec=QLabel),
             "skipped": Mock(spec=QLabel),
-            "total": Mock(spec=QLabel)
+            "total": Mock(spec=QLabel),
         }
         for label in dialog.stats_labels.values():
             label.setText = Mock()
             label.text = Mock(return_value="0")
-        
+
         dialog.stop_button = Mock(spec=QPushButton)
         dialog.stop_button.isVisible = Mock(return_value=True)
         dialog.stop_button.setVisible = Mock()
-        
+
         dialog.close_button = Mock(spec=QPushButton)
         dialog.close_button.isEnabled = Mock(return_value=False)
         dialog.close_button.setEnabled = Mock()
-        
+
         # Mock button_box for cleanup
         dialog.button_box = Mock()
         dialog.button_box.rejected = Mock()
         dialog.button_box.rejected.disconnect = Mock()
-        
+
         # Mock cleanup method
         dialog.cleanup = Mock()
-        
+
         # Mock the _setup_ui method
         dialog._setup_ui = Mock()
-        
+
         # Mock methods that tests might call
         dialog.show = Mock()
         dialog.update_progress = Mock()
         dialog.update_statistics = Mock()
         dialog.set_cleaning_finished = Mock()
         dialog.update_current_plugin = Mock()
-        
+
         return dialog
 
 
 @pytest.fixture
 def mock_main_window(state_manager: StateManager, qt_app: Any) -> Any:
     """Create a mock MainWindow for testing."""
-    with patch('AutoQAC_Interface.QMainWindow.__init__', return_value=None):
+    with patch("AutoQAC_Interface.QMainWindow.__init__", return_value=None):
         window = MainWindow.__new__(MainWindow)
-        
+
         # Set up basic attributes
         window.state = state_manager
         window.controller = Mock()
         window._updating_ui = False
         window.progress_dialog = None
         window._cleaning_finished_handled = False
-        
+
         # Mock Qt methods
         window.setWindowTitle = Mock()
         window.setMinimumSize = Mock()
@@ -110,7 +109,7 @@ def mock_main_window(state_manager: StateManager, qt_app: Any) -> Any:
         window.menuBar = Mock(return_value=Mock())
         window.show = Mock()
         window.close = Mock()
-        
+
         # Mock UI elements
         window.load_order_button = Mock(spec=QPushButton)
         window.load_order_button.setText = Mock()
@@ -139,7 +138,7 @@ def mock_main_window(state_manager: StateManager, qt_app: Any) -> Any:
         window.status_bar = Mock()
         window.status_bar.showMessage = Mock()
         window.status_bar.currentMessage = Mock(return_value="")
-        
+
         # Mock timer
         window._update_timer = Mock()
         window._update_timer.setSingleShot = Mock()
@@ -149,13 +148,13 @@ def mock_main_window(state_manager: StateManager, qt_app: Any) -> Any:
         window._update_timer.start = Mock()
         window._update_timer.stop = Mock()
         window._update_timer.isActive = Mock(return_value=False)
-        
+
         # Mock methods
         window._setup_ui = Mock()
         window._update_ui_from_state = Mock()
         window._perform_ui_update = Mock()
         window._create_menu_bar = Mock()
-        
+
         return window
 
 
@@ -165,7 +164,7 @@ class TestCleaningProgressDialog:
     def test_initialization(self, mock_cleaning_dialog: Any) -> None:
         """Test CleaningProgressDialog initialization."""
         dialog = mock_cleaning_dialog
-        
+
         assert dialog._current_plugin_name is None  # noqa: SLF001
         assert dialog._cleaning_in_progress is True  # noqa: SLF001
         assert dialog.windowTitle() == "Cleaning Progress"
@@ -194,7 +193,9 @@ class TestCleaningProgressDialog:
     def test_update_current_plugin(self, mock_cleaning_dialog: Any) -> None:
         """Test update_current_plugin method."""
         dialog = mock_cleaning_dialog
-        dialog.update_current_plugin = CleaningProgressDialog.update_current_plugin.__get__(dialog, CleaningProgressDialog)
+        dialog.update_current_plugin = CleaningProgressDialog.update_current_plugin.__get__(
+            dialog, CleaningProgressDialog
+        )
 
         dialog.update_current_plugin("test.esp")
         dialog.current_plugin_label.setText.assert_called_with("Processing: test.esp")
@@ -222,7 +223,9 @@ class TestCleaningProgressDialog:
     def test_set_cleaning_finished(self, mock_cleaning_dialog: Any) -> None:
         """Test set_cleaning_finished method."""
         dialog = mock_cleaning_dialog
-        dialog.set_cleaning_finished = CleaningProgressDialog.set_cleaning_finished.__get__(dialog, CleaningProgressDialog)
+        dialog.set_cleaning_finished = CleaningProgressDialog.set_cleaning_finished.__get__(
+            dialog, CleaningProgressDialog
+        )
 
         # Set some progress first
         dialog.progress_bar.value.return_value = 100
@@ -252,7 +255,7 @@ class TestCleaningProgressDialog:
             mock_no = Mock()
             mock_yes = Mock()
             mock_yes.__or__ = Mock(return_value=Mock())  # Support Yes | No operation
-            
+
             mock_qmb.StandardButton.No = mock_no
             mock_qmb.StandardButton.Yes = mock_yes
             mock_qmb.question.return_value = mock_no  # Return No to cancel
@@ -271,9 +274,11 @@ class TestCleaningProgressDialog:
         """Test closeEvent after cleaning is finished."""
         dialog = mock_cleaning_dialog
         # Bind the actual methods
-        dialog.set_cleaning_finished = CleaningProgressDialog.set_cleaning_finished.__get__(dialog, CleaningProgressDialog)
+        dialog.set_cleaning_finished = CleaningProgressDialog.set_cleaning_finished.__get__(
+            dialog, CleaningProgressDialog
+        )
         dialog.closeEvent = CleaningProgressDialog.closeEvent.__get__(dialog, CleaningProgressDialog)
-        
+
         dialog.set_cleaning_finished()
 
         event: Mock = Mock()
@@ -286,7 +291,9 @@ class TestCleaningProgressDialog:
 class TestMainWindow:
     """Test the MainWindow class."""
 
-    def test_initialization(self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager) -> None:  # noqa: ARG002
+    def test_initialization(
+        self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager
+    ) -> None:
         """Test MainWindow initialization."""
         window = mock_main_window
 
@@ -312,7 +319,9 @@ class TestMainWindow:
         assert window.setWindowTitle is not None
         assert window.setMinimumSize is not None
 
-    def test_button_connections(self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager) -> None:  # noqa: ARG002
+    def test_button_connections(
+        self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager
+    ) -> None:
         """Test that buttons are properly connected."""
         window = mock_main_window
         # Bind actual methods for testing
@@ -338,7 +347,9 @@ class TestMainWindow:
         window._stop_cleaning()
         window.controller.stop_cleaning.assert_called_once()
 
-    def test_mo2_mode_toggle(self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager) -> None:  # noqa: ARG002
+    def test_mo2_mode_toggle(
+        self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager
+    ) -> None:
         """Test MO2 mode toggle functionality."""
         window = mock_main_window
         window._toggle_mo2_mode = MainWindow._toggle_mo2_mode.__get__(window, MainWindow)
@@ -355,7 +366,9 @@ class TestMainWindow:
         window._toggle_mo2_mode()
         window.controller.toggle_mo2_mode.assert_called_with(False)
 
-    def test_ui_update_from_state(self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager) -> None:  # noqa: ARG002
+    def test_ui_update_from_state(
+        self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager
+    ) -> None:
         """Test UI updates based on state changes."""
         window = mock_main_window
         window._update_ui_from_state = MainWindow._update_ui_from_state.__get__(window, MainWindow)
@@ -380,11 +393,13 @@ class TestMainWindow:
         assert window.mo2_button is not None
         assert window.xedit_button is not None
 
-    def test_cleaning_started_handler(self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager) -> None:  # noqa: ARG002
+    def test_cleaning_started_handler(
+        self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager
+    ) -> None:
         """Test handling of cleaning started event."""
         window = mock_main_window
         # Mock the CleaningProgressDialog creation
-        with patch('AutoQAC_Interface.CleaningProgressDialog') as mock_dialog_class:
+        with patch("AutoQAC_Interface.CleaningProgressDialog") as mock_dialog_class:
             mock_dialog_instance = Mock()
             mock_dialog_instance.show = Mock()
             mock_dialog_instance.stop_button = Mock()
@@ -392,7 +407,7 @@ class TestMainWindow:
             mock_dialog_instance.stop_button.clicked.connect = Mock()
             mock_dialog_instance.update_statistics = Mock()
             mock_dialog_class.return_value = mock_dialog_instance
-            
+
             window._on_cleaning_started = MainWindow._on_cleaning_started.__get__(window, MainWindow)
 
             # Simulate cleaning started
@@ -406,7 +421,13 @@ class TestMainWindow:
             window.start_button.setEnabled.assert_called_with(False)
             window.stop_button.setEnabled.assert_called_with(True)
 
-    def test_cleaning_finished_handler(self, mock_main_window: Any, mock_cleaning_dialog: Any, state_manager: StateManager, config_manager: ConfigManager) -> None:  # noqa: ARG002
+    def test_cleaning_finished_handler(
+        self,
+        mock_main_window: Any,
+        mock_cleaning_dialog: Any,
+        state_manager: StateManager,
+        config_manager: ConfigManager,
+    ) -> None:
         """Test handling of cleaning finished event."""
         window = mock_main_window
         window._on_cleaning_finished = MainWindow._on_cleaning_finished.__get__(window, MainWindow)
@@ -424,7 +445,13 @@ class TestMainWindow:
         # Check progress dialog state update was called
         mock_cleaning_dialog.set_cleaning_finished.assert_called()
 
-    def test_progress_update_handler(self, mock_main_window: Any, mock_cleaning_dialog: Any, state_manager: StateManager, config_manager: ConfigManager) -> None:  # noqa: ARG002
+    def test_progress_update_handler(
+        self,
+        mock_main_window: Any,
+        mock_cleaning_dialog: Any,
+        state_manager: StateManager,
+        config_manager: ConfigManager,
+    ) -> None:
         """Test handling of progress updates."""
         window = mock_main_window
         window._on_progress_changed = MainWindow._on_progress_changed.__get__(window, MainWindow)
@@ -435,7 +462,7 @@ class TestMainWindow:
 
         # Mock isVisible to return True
         mock_cleaning_dialog.isVisible = Mock(return_value=True)
-        
+
         # Simulate progress update
         window._on_progress_changed(3, 10)
 
@@ -446,7 +473,13 @@ class TestMainWindow:
 
         # Progress dialog update is verified above
 
-    def test_plugin_processed_handler(self, mock_main_window: Any, mock_cleaning_dialog: Any, state_manager: StateManager, config_manager: ConfigManager) -> None:  # noqa: ARG002
+    def test_plugin_processed_handler(
+        self,
+        mock_main_window: Any,
+        mock_cleaning_dialog: Any,
+        state_manager: StateManager,
+        config_manager: ConfigManager,
+    ) -> None:
         """Test handling of plugin processing events."""
         window = mock_main_window
         window._on_plugin_processed = MainWindow._on_plugin_processed.__get__(window, MainWindow)
@@ -457,17 +490,19 @@ class TestMainWindow:
 
         # Mock isVisible to return True
         mock_cleaning_dialog.isVisible = Mock(return_value=True)
-        
+
         # Set current plugin in state
         state_manager.update(current_plugin="test.esp")
-        
+
         # Simulate plugin processing
         window._on_plugin_processed("test.esp", "cleaned", "Successfully cleaned")
 
         # Check that current plugin was updated
         mock_cleaning_dialog.update_current_plugin.assert_called_with("test.esp")
 
-    def test_menu_bar_creation(self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager) -> None:  # noqa: ARG002
+    def test_menu_bar_creation(
+        self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager
+    ) -> None:
         """Test menu bar creation."""
         window = mock_main_window
 
@@ -481,7 +516,9 @@ class TestMainWindow:
         # Note: In a real test, we'd check for actual menu items
         # This is a simplified check
 
-    def test_about_dialog(self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager) -> None:  # noqa: ARG002
+    def test_about_dialog(
+        self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager
+    ) -> None:
         """Test about dialog."""
         window = mock_main_window
         window._show_about = MainWindow._show_about.__get__(window, MainWindow)
@@ -496,7 +533,9 @@ class TestMainWindow:
             assert args[0][1] == "About AutoQAC"  # title
             assert "AutoQAC" in args[0][2]  # message
 
-    def test_message_handlers(self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager) -> None:  # noqa: ARG002
+    def test_message_handlers(
+        self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager
+    ) -> None:
         """Test message and error handlers."""
         window = mock_main_window
         window._show_message = MainWindow._show_message.__get__(window, MainWindow)
@@ -510,7 +549,9 @@ class TestMainWindow:
             window._show_error("Error Title", "Error Message")  # noqa: SLF001
             mock_critical.assert_called_once_with(window, "Error Title", "Error Message")
 
-    def test_status_update(self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager) -> None:  # noqa: ARG002
+    def test_status_update(
+        self, mock_main_window: Any, state_manager: StateManager, config_manager: ConfigManager
+    ) -> None:
         """Test status bar updates."""
         window = mock_main_window
         window._update_status = MainWindow._update_status.__get__(window, MainWindow)
