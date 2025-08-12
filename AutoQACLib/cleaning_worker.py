@@ -125,8 +125,8 @@ class CleaningWorker(QThread):
         Stops the process by setting a flag and requesting interruption.
 
         This method sets an internal flag to indicate that the process should
-        stop and calls the `requestInterruption` method to ensure an orderly
-        shutdown.
+        stop, attempts to stop any running subprocess through the service,
+        and waits for the thread to complete gracefully.
 
         Returns:
             None
@@ -134,12 +134,20 @@ class CleaningWorker(QThread):
         logger.info("Stopping cleaning worker...")
         self._should_stop = True
         self.requestInterruption()
+        
+        # First try to stop any running subprocess through the service
+        if hasattr(self, 'service') and self.service:
+            try:
+                self.service.stop_current_operation()
+            except (AttributeError, RuntimeError) as e:
+                logger.error(f"Error stopping service operation: {e}")
 
         # Wait for the thread to finish gracefully
-        if self.isRunning() and not self.wait(5000):  # Wait up to 5 seconds
-            logger.warning("Cleaning worker did not stop gracefully, terminating...")
-            self.terminate()
-            self.wait(2000)  # Wait up to 2 seconds for termination
+        if self.isRunning() and not self.wait(10000):  # Wait up to 10 seconds
+            logger.error("Cleaning worker did not stop gracefully after 10 seconds")
+            # Don't use terminate() - it's dangerous and can leave resources in inconsistent state
+            # Let the thread continue running or wait for it to finish on its own
+            # The stop flag and service stop should cause it to exit soon
 
     def _on_cleaning_progress(self, progress_info: dict) -> None:
         """Handle real-time progress updates from cleaning service."""

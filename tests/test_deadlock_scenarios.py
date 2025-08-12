@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any, Callable
 from unittest.mock import MagicMock
 
+import pytest
+
 from PySide6.QtCore import QCoreApplication, QMutex, QMutexLocker
 
 from AutoQACLib.config_manager import ConfigManager
@@ -152,14 +154,16 @@ class TestDeadlockScenarios:
         # Give it time to acquire the lock
         time.sleep(0.1)
 
-        # Try to get value - should timeout and return None instead of deadlocking
+        # Try to get value - should timeout and raise exception instead of deadlocking
         start_time = time.time()
-        result = _yaml_manager.get_value(yaml_path, "test_key")
+        from AutoQACLib.utils import YAMLLockTimeoutError
+        
+        with pytest.raises(YAMLLockTimeoutError):
+            _yaml_manager.get_value(yaml_path, "test_key")
         elapsed = time.time() - start_time
 
         # Should timeout in ~5 seconds (not deadlock forever)
         assert elapsed < 6.0
-        assert result is None  # Returns None on timeout
 
         # Clean up
         stuck_lock.unlock()  # Force unlock

@@ -201,7 +201,7 @@ class StateManager(QObject):
             message (str, optional): A message providing additional context about the
                 plugin processing. Defaults to an empty string.
         """
-        # Update state atomically
+        # Update state and emit signals atomically to prevent race conditions
         with QWriteLocker(self._rw_lock):
             if status == "cleaned":
                 self._state.cleaned_plugins.add(plugin)
@@ -214,10 +214,12 @@ class StateManager(QObject):
             current_progress = self._state.progress
             total_plugins = self._state.total_plugins
 
-        # Emit signals outside of the write lock but in a thread-safe manner
-        with QMutexLocker(self._signal_mutex):
-            self.plugin_processed.emit(plugin, status, message)
-            self.progress_changed.emit(current_progress, total_plugins)
+            # Emit signals while still holding the write lock to ensure consistency
+            # This prevents race conditions where another thread could modify state
+            # between capturing values and emitting signals
+            with QMutexLocker(self._signal_mutex):
+                self.plugin_processed.emit(plugin, status, message)
+                self.progress_changed.emit(current_progress, total_plugins)
 
     def reset_cleaning_state(self) -> None:
         """

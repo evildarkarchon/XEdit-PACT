@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QMutex, QMutexLocker, QObject, QTimer, Signal
 from PySide6.QtWidgets import QFileDialog, QWidget
 
 from AutoQACLib.cleaning_service import CleaningService
@@ -45,6 +45,7 @@ class GuiController(QObject):
 
         # Deferred configuration saves to avoid deadlocks
         self._pending_config_saves: list[tuple[str, Any]] = []
+        self._pending_saves_mutex = QMutex()  # Mutex to protect the pending saves list
         self._config_save_timer = QTimer(self)
         self._config_save_timer.setSingleShot(True)
         self._config_save_timer.timeout.connect(self._process_pending_config_saves)
@@ -513,13 +514,15 @@ class GuiController(QObject):
                 logger.info("Stopping cleaning worker thread")
                 self.worker.stop()
 
-                # Wait for worker to finish (max 10 seconds)
-                if not self.worker.wait(10000):
-                    logger.warning("Cleaning worker did not stop gracefully within 10 seconds")
-                    self.worker.terminate()
-                    self.worker.wait(2000)  # Wait 2 more seconds after termination
+                # Wait for worker to finish (max 15 seconds)
+                if not self.worker.wait(15000):
+                    logger.error("Cleaning worker did not stop gracefully within 15 seconds")
+                    # Don't use terminate() - it's dangerous and can leave resources in inconsistent state
+                    # The worker should eventually finish on its own after stop() was called
+                    # Mark it for cleanup but don't forcefully terminate
+                    self.worker.setParent(None)
 
-            # Disconnect all worker signals
+            # Disconnect all worker signals safely
             try:
                 self.worker.progress.disconnect()
                 self.worker.plugin_started.disconnect()
@@ -528,12 +531,15 @@ class GuiController(QObject):
                 self.worker.log_output.disconnect()
                 self.worker.error.disconnect()
                 self.worker.finished.disconnect()
-            except RuntimeError:
-                # Signal might not be connected, that's okay
+            except (RuntimeError, TypeError):
+                # Signal might not be connected or already disconnected, that's okay
                 pass
 
-            # Delete the worker
+            # Schedule the worker for deletion
             self.worker.deleteLater()
+            # Process events to ensure deletion happens
+            from PySide6.QtCore import QCoreApplication
+            QCoreApplication.processEvents()
             self.worker = None
 
         # Reset cleaning state
@@ -561,7 +567,8 @@ class GuiController(QObject):
             key: Configuration key to save
             value: Value to save
         """
-        self._pending_config_saves.append((key, value))
+        with QMutexLocker(self._pending_saves_mutex):
+            self._pending_config_saves.append((key, value))
         self._config_save_timer.start()
 
     def _process_pending_config_saves(self) -> None:
@@ -571,13 +578,16 @@ class GuiController(QObject):
         This method is called by a timer after state updates are complete,
         avoiding potential deadlocks between StateManager and ConfigManager.
         """
-        if not self._pending_config_saves:
-            return
+        # Get pending saves under mutex protection
+        with QMutexLocker(self._pending_saves_mutex):
+            if not self._pending_config_saves:
+                return
+            
+            # Copy and clear the list under mutex protection
+            saves_to_process = self._pending_config_saves.copy()
+            self._pending_config_saves.clear()
 
-        # Process all pending saves
-        saves_to_process = self._pending_config_saves.copy()
-        self._pending_config_saves.clear()
-
+        # Process saves outside the mutex to avoid holding lock during I/O
         for key, value in saves_to_process:
             try:
                 if not self.user_config.set(key, value):

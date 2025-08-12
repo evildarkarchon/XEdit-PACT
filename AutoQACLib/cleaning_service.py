@@ -41,6 +41,8 @@ class CleaningService:
         self.state = state
         self.progress_callback: Callable | None = None
         self.log_callback: Callable | None = None
+        self._current_process: Any = None  # Track current subprocess for cleanup
+        self._stop_requested: bool = False  # Flag to indicate stop was requested
 
     def set_progress_callback(self, callback: Callable | None) -> None:
         """
@@ -68,6 +70,34 @@ class CleaningService:
         """
         self.log_callback = callback
 
+    def stop_current_operation(self) -> None:
+        """
+        Stop the currently running cleaning operation gracefully.
+        
+        This method sets a flag to request stopping and attempts to terminate
+        the current subprocess if one is running.
+        """
+        logger.info("Requesting stop of current cleaning operation")
+        self._stop_requested = True
+        
+        if self._current_process:
+            try:
+                # Attempt to terminate the subprocess gracefully
+                logger.info("Terminating current subprocess")
+                self._current_process.terminate()
+                # Give it a moment to terminate
+                import time
+                time.sleep(0.5)
+                
+                # If still running, kill it
+                if self._current_process.poll() is None:
+                    logger.warning("Subprocess did not terminate gracefully, killing")
+                    self._current_process.kill()
+            except (OSError, AttributeError) as e:
+                logger.error(f"Error stopping subprocess: {e}")
+            finally:
+                self._current_process = None
+
     def clean_plugin(self, plugin_name: str) -> CleanResult:
         """
         Cleans a specified plugin by always performing Quick Auto Clean (QAC).
@@ -77,8 +107,20 @@ class CleaningService:
             CleanResult: An object representing the result of the cleaning operation.
         """
         start_time: float = time.time()
+        
+        # Reset stop flag at the beginning of each cleaning operation
+        self._stop_requested = False
+        self._current_process = None
 
         try:
+            # Check if stop was requested before starting
+            if self._stop_requested:
+                return CleanResult(
+                    success=False,
+                    message=f"Cleaning of {plugin_name} was cancelled",
+                    status="failed",
+                    duration=time.time() - start_time,
+                )
             # Get current state
             state_snapshot: AppState = self.state.state
 

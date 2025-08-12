@@ -21,6 +21,11 @@ if TYPE_CHECKING:
 
 logger: Logger = get_logger(__name__)
 
+
+class YAMLLockTimeoutError(Exception):
+    """Raised when a YAML file lock cannot be acquired within the timeout period."""
+
+
 # Thread-safe file operations
 _yaml_mutexes: dict[str, QMutex] = {}
 
@@ -70,8 +75,9 @@ class YamlManager:
 
         # Use Qt mutex with timeout to prevent deadlocks
         if not file_mutex.tryLock(5000):  # 5 second timeout
-            logger.error(f"Timeout acquiring lock for file: {yaml_path}")
-            return None
+            error_msg = f"Timeout acquiring lock for file: {yaml_path}"
+            logger.error(error_msg)
+            raise YAMLLockTimeoutError(error_msg)
 
         try:
             data = self._load_yaml(yaml_path)
@@ -106,8 +112,9 @@ class YamlManager:
 
         # Use Qt mutex with timeout to prevent deadlocks
         if not file_mutex.tryLock(5000):  # 5 second timeout
-            logger.error(f"Timeout acquiring lock for file: {yaml_path}")
-            return
+            error_msg = f"Timeout acquiring lock for file: {yaml_path}"
+            logger.error(error_msg)
+            raise YAMLLockTimeoutError(error_msg)
 
         try:
             data: Any = self._load_yaml(yaml_path)
@@ -143,7 +150,7 @@ class YamlManager:
         # Load file outside of mutex
         warning_msg = None
         error_msg = None
-        data = {}
+        data: dict[str, Any] = {}
 
         try:
             path: Path = Path(yaml_path)
@@ -602,19 +609,32 @@ def run_process_with_realtime_output(
                     self._stop_flag = False
 
                 def run(self) -> None:
+                    """Read output from pipe and call callback for each line, checking stop flag."""
                     try:
-                        read_output(self.pipe, self.line_list, self.callback)
+                        if self.pipe is None:
+                            return
+                        for line in iter(self.pipe.readline, ""):
+                            # Check stop flag before processing each line
+                            if self._stop_flag:
+                                logger.debug("Output reader thread stop flag detected, exiting")
+                                break
+                            line = line.rstrip("\n\r")
+                            if line:
+                                self.line_list.append(line)
+                                if self.callback:
+                                    self.callback(line)
                     except (OSError, ValueError) as e:
-                        logger.error(f"Error in output reader thread: {e}")
+                        if not self._stop_flag:  # Only log error if not intentionally stopped
+                            logger.error(f"Error in output reader thread: {e}")
 
                 def stop(self) -> None:
                     """Stop the thread gracefully."""
                     self._stop_flag = True
                     self.quit()
-                    if not self.wait(2000):  # Wait up to 2 seconds
-                        logger.warning("Output reader thread did not stop gracefully, terminating...")
-                        self.terminate()
-                        self.wait(1000)  # Wait up to 1 second for termination
+                    if not self.wait(3000):  # Wait up to 3 seconds
+                        logger.warning("Output reader thread did not stop gracefully within 3 seconds")
+                        # Don't use terminate() - the stop flag should cause it to exit soon
+                        # The pipe will close when the process ends, which will also cause the thread to exit
 
             # Start threads to read stdout and stderr
             stdout_thread = OutputReaderThread(process.stdout, stdout_lines, output_callback)
