@@ -5,14 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 from PySide6.QtCore import Slot
-from PySide6.QtWidgets import QWidget
 
 from AutoQACLib.logging_config import get_logger
 
 if TYPE_CHECKING:
     from logging import Logger
 
-    from PySide6.QtWidgets import QPushButton
+    from PySide6.QtWidgets import QPushButton, QWidget
 
     from AutoQACLib.gui_controller import GuiController
     from AutoQACLib.state_manager import StateManager
@@ -60,7 +59,7 @@ class CleaningControlMixin:
         from AutoQACLib.ui.dialogs.cleaning_progress import CleaningProgressDialog
 
         # Create and show progress dialog
-        self.progress_dialog = CleaningProgressDialog(cast(QWidget, self))
+        self.progress_dialog = CleaningProgressDialog(cast("QWidget", self))
         self.progress_dialog.stop_button.clicked.connect(self._stop_cleaning)
 
         # Update progress with current state

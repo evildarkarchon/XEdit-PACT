@@ -6,7 +6,6 @@ import contextlib
 import subprocess
 import sys
 import time
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 import psutil
@@ -17,6 +16,7 @@ from AutoQACLib.logging_config import get_logger
 if TYPE_CHECKING:
     from collections.abc import Generator
     from logging import Logger
+    from pathlib import Path
     from subprocess import CompletedProcess
 
 logger: Logger = get_logger(__name__)

@@ -14,7 +14,6 @@ from AutoQACLib.logging_config import get_logger
 if TYPE_CHECKING:
     from logging import Logger
 
-    from ruamel.yaml.main import YAML
 
 logger: Logger = get_logger(__name__)
 

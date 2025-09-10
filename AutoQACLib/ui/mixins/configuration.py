@@ -76,17 +76,17 @@ class ConfigurationMixin:
     @Slot()
     def _configure_load_order(self) -> None:
         """Configure load order file."""
-        self.controller.configure_load_order(cast(QWidget, self))
+        self.controller.configure_load_order(cast("QWidget", self))
 
     @Slot()
     def _configure_mo2(self) -> None:
         """Configure MO2."""
-        self.controller.configure_mo2(cast(QWidget, self))
+        self.controller.configure_mo2(cast("QWidget", self))
 
     @Slot()
     def _configure_xedit(self) -> None:
         """Configure xEdit."""
-        self.controller.configure_xedit(cast(QWidget, self))
+        self.controller.configure_xedit(cast("QWidget", self))
 
     @Slot()
     def _toggle_mo2_mode(self) -> None:
@@ -104,7 +104,7 @@ class ConfigurationMixin:
         enabled: bool = self.partial_forms_button.isChecked()
         if enabled:
             # Show warning dialog if enabling
-            confirmed: bool = show_partial_forms_warning(cast(QWidget, self))
+            confirmed: bool = show_partial_forms_warning(cast("QWidget", self))
             if not confirmed:
                 # User cancelled or closed dialog, revert button
                 self.partial_forms_button.setChecked(False)

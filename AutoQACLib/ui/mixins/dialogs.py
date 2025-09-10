@@ -22,12 +22,12 @@ class DialogMixin:
     @Slot(str, str)
     def _show_message(self, title: str, message: str) -> None:
         """Show an information message."""
-        QMessageBox.information(cast(QWidget, self), title, message)
+        QMessageBox.information(cast("QWidget", self), title, message)
 
     @Slot(str, str)
     def _show_error(self, title: str, message: str) -> None:
         """Show an error message."""
-        QMessageBox.critical(cast(QWidget, self), title, message)
+        QMessageBox.critical(cast("QWidget", self), title, message)
 
     @Slot(str)
     def _update_status(self, message: str) -> None:
@@ -45,7 +45,7 @@ class DialogMixin:
     def _show_about(self) -> None:
         """Show the about dialog."""
         QMessageBox.about(
-            cast(QWidget, self),
+            cast("QWidget", self),
             "About AutoQAC",
             "AutoQAC - Automated Quick Auto Clean\n\n"
             "A PySide6 application for batch cleaning Bethesda game plugins "

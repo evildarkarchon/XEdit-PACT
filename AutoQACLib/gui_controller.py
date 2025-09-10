@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QMutex, QMutexLocker, QObject, QTimer, Signal
-from PySide6.QtWidgets import QWidget
 
 from AutoQACLib.cleaning_service import CleaningService
 from AutoQACLib.cleaning_worker import CleaningWorker
-from AutoQACLib.logging_config import get_logger
 from AutoQACLib.configuration_dialogs import ConfigurationDialogs
+from AutoQACLib.logging_config import get_logger
 from AutoQACLib.plugin_validator import PluginValidator
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
+    from PySide6.QtWidgets import QWidget
+
     from AutoQACLib.config_manager import ConfigManager
     from AutoQACLib.state_manager import AppState, StateManager
 
@@ -255,7 +257,7 @@ class GuiController(QObject):
 
         logger.info("GuiController cleanup completed")
 
-    def _defer_config_save(self, key: str, value: Any) -> None:
+    def defer_config_save(self, key: str, value: Any) -> None:
         """
         Defers a configuration save to avoid holding locks across StateManager and ConfigManager.
 
@@ -287,12 +289,19 @@ class GuiController(QObject):
             self._pending_config_saves.clear()
 
         # Process saves outside the mutex to avoid holding lock during I/O
-        for key, value in saves_to_process:
-            try:
+        errors = []
+        try:
+            for key, value in saves_to_process:
                 if not self.user_config.set(key, value):
-                    logger.error(f"Failed to save config key: {key}")
-            except (OSError, ValueError, TypeError) as e:
-                logger.error(f"Error saving config key {key}: {e}")
+                    errors.append(f"Failed to save config key: {key}")
+        except (OSError, ValueError, TypeError) as e:
+            # If we get an exception during the loop, log it and stop processing
+            logger.error(f"Error during config save processing: {e}")
+            return
+        
+        # Log all errors after the loop
+        for error in errors:
+            logger.error(error)
 
     @staticmethod
     def _on_plugin_completed(plugin: str, success: bool, message: str) -> None:

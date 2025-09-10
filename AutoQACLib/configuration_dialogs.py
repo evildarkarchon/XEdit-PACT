@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import QFileDialog, QWidget
 
@@ -59,7 +59,7 @@ class ConfigurationDialogs:
                     self.state.update_configuration_paths(load_order_path=path)
 
                     # Defer config save to avoid deadlock
-                    self.controller._defer_config_save("Load_Order.File", str(path))
+                    self.controller.defer_config_save("Load_Order.File", str(path))
 
                     self.controller.update_status.emit(f"Load order configured: {path.name}")
                     return True
@@ -107,8 +107,8 @@ class ConfigurationDialogs:
                     )
 
                     # Defer config saves to avoid deadlock
-                    self.controller._defer_config_save("Mod_Organizer.Binary", str(path))
-                    self.controller._defer_config_save("Mod_Organizer.Install_Path", str(install_path))
+                    self.controller.defer_config_save("Mod_Organizer.Binary", str(path))
+                    self.controller.defer_config_save("Mod_Organizer.Install_Path", str(install_path))
 
                     self.controller.update_status.emit("Mod Organizer 2 configured")
                     return True
@@ -183,8 +183,8 @@ class ConfigurationDialogs:
                         logger.info(f"Detected game type: {game_type}")
 
                     # Defer config saves to avoid deadlock
-                    self.controller._defer_config_save("xEdit.Binary", str(path))
-                    self.controller._defer_config_save("xEdit.Install_Path", str(install_path))
+                    self.controller.defer_config_save("xEdit.Binary", str(path))
+                    self.controller.defer_config_save("xEdit.Install_Path", str(install_path))
 
                     self.controller.update_status.emit(f"xEdit configured: {path.name}")
                     return True
@@ -214,7 +214,7 @@ class ConfigurationDialogs:
             # Update state immediately
             self.state.update(mo2_mode=enabled)
             # Defer config save to avoid deadlock
-            self.controller._defer_config_save("Settings.MO2_Mode", enabled)
+            self.controller.defer_config_save("Settings.MO2_Mode", enabled)
             self.controller.update_status.emit(f"MO2 Mode {'enabled' if enabled else 'disabled'}")
         except (OSError, ValueError, TypeError) as e:
             logger.error(f"Error toggling MO2 mode: {e}")

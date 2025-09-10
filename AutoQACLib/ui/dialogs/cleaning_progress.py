@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 if TYPE_CHECKING:
-    from PySide6.QtGui import QCloseEvent, QFont
+    from PySide6.QtGui import QCloseEvent
 
 
 class CleaningProgressDialog(QDialog):
@@ -51,7 +51,6 @@ class CleaningProgressDialog(QDialog):
         # Current plugin label
         self.current_plugin_label: QLabel = QLabel("Waiting to start...")
         self.current_plugin_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        from PySide6.QtGui import QFont
         font = self.current_plugin_label.font()
         font.setPointSize(font.pointSize() + 2)
         self.current_plugin_label.setFont(font)

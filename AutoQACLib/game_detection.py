@@ -186,7 +186,6 @@ def monitor_log_file(
         poll_interval: Interval in seconds at which to check for new lines
             in the log file or the existence of the file. Defaults to 0.1.
     """
-    from typing import Callable
 
     log_path: Path = Path(log_file_path)
 
