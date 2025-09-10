@@ -152,24 +152,24 @@ class TestGuiController:
     def test_validate_plugin_line_valid(self, controller: GuiController) -> None:
         """Test validation of valid plugin lines."""
         # Test valid plugin names
-        assert controller._validate_plugin_line("plugin1.esp", 1, "plugin1.esp") == "plugin1.esp"  # noqa: SLF001
-        assert controller._validate_plugin_line("plugin2.esm", 2, "plugin2.esm") == "plugin2.esm"  # noqa: SLF001
-        assert controller._validate_plugin_line("plugin3.esl", 3, "plugin3.esl") == "plugin3.esl"  # noqa: SLF001
+        assert controller.plugin_validator._validate_plugin_line("plugin1.esp", 1, "plugin1.esp") == "plugin1.esp"  # noqa: SLF001
+        assert controller.plugin_validator._validate_plugin_line("plugin2.esm", 2, "plugin2.esm") == "plugin2.esm"  # noqa: SLF001
+        assert controller.plugin_validator._validate_plugin_line("plugin3.esl", 3, "plugin3.esl") == "plugin3.esl"  # noqa: SLF001
 
         # Test with prefix characters
-        assert controller._validate_plugin_line("plugin4.esp", 4, "*plugin4.esp") == "plugin4.esp"  # noqa: SLF001
-        assert controller._validate_plugin_line("plugin5.esm", 5, "+plugin5.esm") == "plugin5.esm"  # noqa: SLF001
+        assert controller.plugin_validator._validate_plugin_line("plugin4.esp", 4, "*plugin4.esp") == "plugin4.esp"  # noqa: SLF001
+        assert controller.plugin_validator._validate_plugin_line("plugin5.esm", 5, "+plugin5.esm") == "plugin5.esm"  # noqa: SLF001
 
     def test_validate_plugin_line_invalid_extension_position(self, controller: GuiController) -> None:
         """Test validation of plugin lines with content after extension."""
         # Test with content after extension
-        result1: str | None = controller._validate_plugin_line("plugin1.esp,plugin2.esp", 1, "plugin1.esp,plugin2.esp")  # noqa: SLF001
+        result1: str | None = controller.plugin_validator._validate_plugin_line("plugin1.esp,plugin2.esp", 1, "plugin1.esp,plugin2.esp")  # noqa: SLF001
         assert result1 == "plugin1.esp"
 
-        result2: str | None = controller._validate_plugin_line("plugin1.esm;plugin2.esm", 2, "plugin1.esm;plugin2.esm")  # noqa: SLF001
+        result2: str | None = controller.plugin_validator._validate_plugin_line("plugin1.esm;plugin2.esm", 2, "plugin1.esm;plugin2.esm")  # noqa: SLF001
         assert result2 == "plugin1.esm"
 
-        result3: str | None = controller._validate_plugin_line(  # noqa: SLF001
+        result3: str | None = controller.plugin_validator._validate_plugin_line(  # noqa: SLF001
             "plugin1.esl extra content", 3, "plugin1.esl extra content"
         )
         assert result3 == "plugin1.esl"
@@ -177,9 +177,9 @@ class TestGuiController:
     def test_validate_plugin_line_no_extension(self, controller: GuiController) -> None:
         """Test validation of lines without valid extensions."""
         # Test lines without valid extensions
-        assert controller._validate_plugin_line("plugin1.txt", 1, "plugin1.txt") is None  # noqa: SLF001
-        assert controller._validate_plugin_line("plugin1", 2, "plugin1") is None  # noqa: SLF001
-        assert controller._validate_plugin_line("plugin1.esp.bak", 3, "plugin1.esp.bak") is None  # noqa: SLF001
+        assert controller.plugin_validator._validate_plugin_line("plugin1.txt", 1, "plugin1.txt") is None  # noqa: SLF001
+        assert controller.plugin_validator._validate_plugin_line("plugin1", 2, "plugin1") is None  # noqa: SLF001
+        assert controller.plugin_validator._validate_plugin_line("plugin1.esp.bak", 3, "plugin1.esp.bak") is None  # noqa: SLF001
 
     def test_get_plugins_to_clean_with_malformed_lines(self, controller: GuiController) -> None:
         """Test getting plugins from load order file with malformed lines."""

@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable
 
 from AutoQACLib.logging_config import get_logger
-from AutoQACLib.utils import detect_xedit_game, run_process_with_realtime_output
+from AutoQACLib.game_detection import detect_xedit_game
+from AutoQACLib.process_utils import run_process_with_realtime_output
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -146,7 +147,7 @@ class CleaningService:
                     state_snapshot = self.state.state
                 # For universal xEdit executables, try to detect from load order
                 elif state_snapshot.load_order_path and state_snapshot.load_order_path.exists():
-                    from AutoQACLib.utils import detect_game_from_load_order
+                    from AutoQACLib.game_detection import detect_game_from_load_order
 
                     game_type = detect_game_from_load_order(state_snapshot.load_order_path)
                     if game_type:
