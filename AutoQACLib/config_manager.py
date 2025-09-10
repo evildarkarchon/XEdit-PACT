@@ -9,7 +9,7 @@ from ruamel import yaml
 from ruamel.yaml import YAML
 
 from AutoQACLib.logging_config import get_logger
-from AutoQACLib.utils import yaml_settings, yaml_settings_write
+from AutoQACLib.game_detection import yaml_settings, yaml_settings_write
 
 logger = get_logger(__name__)
 

@@ -33,6 +33,20 @@ pytest --cov=AutoQACLib --cov=AutoQAC_Interface --cov-report=html  # With covera
 python AutoQAC_Interface.py
 ```
 
+## Code Organization Rules
+
+### File Size Limits
+- **Soft limit**: 500 lines per file (prefer refactoring when approaching this limit)
+- **Hard limit**: 550 lines per file (must refactor if exceeded)
+- **One class per file**: Each file should contain only one class
+  - Exception: Small, closely related helper classes can be in the same file
+
+### GUI Development Guidelines
+- **New GUI functionality**: Create as MixIn classes in `AutoQACLib/ui/mixins/`
+- **Dialog components**: Define in `AutoQACLib/ui/dialogs/`
+- **MixIn pattern**: Compose MainWindow functionality through multiple focused mixins
+- **Separation of concerns**: Each mixin should handle a single responsibility
+
 ## Architecture
 
 ### Core Components
@@ -49,7 +63,9 @@ python AutoQAC_Interface.py
 
 5. **CleaningWorker** (`cleaning_worker.py`): QThread for background cleaning operations. Communicates via Qt signals only.
 
-6. **AutoQAC_Interface.py**: Main entry point and GUI implementation using PySide6.
+6. **MainWindow** (`ui/main_window.py`): Main application window composed of multiple mixins for separation of concerns.
+
+7. **AutoQAC_Interface.py**: Slim entry point that creates the application and window instances.
 
 ### Critical Threading Rules
 
@@ -106,7 +122,7 @@ python AutoQAC_Interface.py
 
 ```
 XEdit-PACT/
-├── AutoQAC_Interface.py       # Main GUI application entry point
+├── AutoQAC_Interface.py       # Main GUI application entry point (slim ~84 lines)
 ├── AutoQACLib/                # Core library modules
 │   ├── state_manager.py       # Centralized state management
 │   ├── config_manager.py      # Configuration file handling
@@ -114,7 +130,19 @@ XEdit-PACT/
 │   ├── gui_controller.py      # GUI-business logic mediator
 │   ├── cleaning_worker.py     # QThread for cleaning operations
 │   ├── logging_config.py      # Logging setup and configuration
-│   └── utils.py               # Utility functions
+│   ├── utils.py               # Utility functions
+│   └── ui/                    # GUI components
+│       ├── main_window.py     # Main window using mixins
+│       ├── dialogs/           # Dialog components
+│       │   ├── cleaning_progress.py  # Progress dialog
+│       │   └── partial_forms.py      # Warning dialogs
+│       └── mixins/            # MainWindow functionality mixins
+│           ├── configuration.py       # Configuration UI
+│           ├── signals.py            # Signal connections
+│           ├── ui_updates.py         # UI state sync
+│           ├── cleaning_control.py   # Cleaning operations
+│           ├── dialogs.py           # Dialog handling
+│           └── state_handlers.py     # State event handlers
 ├── tests/                     # Test suite
 │   ├── conftest.py           # Pytest fixtures
 │   ├── test_output/          # Test artifacts directory
@@ -133,3 +161,21 @@ def __init__(self, state: StateManager, config: ConfigManager):
 ```
 
 No global variables or direct imports between layers.
+
+### xEdit Integration
+
+The application interfaces with xEdit (SSEEdit/FO4Edit) via subprocess:
+- Commands built with `-QAC` flag for Quick Auto Clean
+- Supports MO2 integration via `ModOrganizer.exe run` command wrapper
+- Optional `-iknowwhatimdoing -allowmakepartial` flags for experimental Partial Forms feature
+- Timeout handling (default 300s per plugin)
+- Output parsing for ITMs, UDRs, and deleted navmeshes
+
+### Supported Games
+
+- Fallout 3
+- Fallout New Vegas  
+- Fallout 4
+- Skyrim Special Edition
+
+Each game has specific configuration in `AutoQAC Data/AutoQAC Main.yaml`.

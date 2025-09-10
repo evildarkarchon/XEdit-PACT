@@ -13,7 +13,7 @@ from PySide6.QtCore import QCoreApplication, QMutex, QMutexLocker
 from AutoQACLib.config_manager import ConfigManager
 from AutoQACLib.gui_controller import GuiController
 from AutoQACLib.state_manager import StateManager
-from AutoQACLib.utils import _yaml_manager
+from AutoQACLib.yaml_manager import _yaml_manager
 
 
 class DeadlockDetector:
@@ -93,7 +93,7 @@ class TestDeadlockScenarios:
 
     def test_yaml_manager_nested_locks(self, test_output_dir: Path) -> None:
         """Test that nested YAML operations don't deadlock."""
-        from AutoQACLib.utils import yaml_settings, yaml_settings_write
+        from AutoQACLib.game_detection import yaml_settings, yaml_settings_write
 
         yaml_path1 = test_output_dir / "file1.yaml"
         yaml_path2 = test_output_dir / "file2.yaml"
@@ -155,7 +155,7 @@ class TestDeadlockScenarios:
 
         # Try to get value - should timeout and raise exception instead of deadlocking
         start_time = time.time()
-        from AutoQACLib.utils import YAMLLockTimeoutError
+        from AutoQACLib.yaml_manager import YAMLLockTimeoutError
         
         with pytest.raises(YAMLLockTimeoutError):
             _yaml_manager.get_value(yaml_path, "test_key")

@@ -6,12 +6,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QMutex, QMutexLocker, QObject, QTimer, Signal
-from PySide6.QtWidgets import QFileDialog, QWidget
+from PySide6.QtWidgets import QWidget
 
 from AutoQACLib.cleaning_service import CleaningService
 from AutoQACLib.cleaning_worker import CleaningWorker
 from AutoQACLib.logging_config import get_logger
-from AutoQACLib.utils import detect_xedit_game
+from AutoQACLib.configuration_dialogs import ConfigurationDialogs
+from AutoQACLib.plugin_validator import PluginValidator
 
 if TYPE_CHECKING:
     from AutoQACLib.config_manager import ConfigManager
@@ -19,10 +20,6 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# Pre-compiled patterns for efficient plugin parsing
-PLUGIN_EXTENSIONS = frozenset([".esp", ".esm", ".esl"])
-PREFIX_CHARS = frozenset(["*", "+", "-"])
-SEPARATOR_CHARS = frozenset([",", ";"])
 
 
 class GuiController(QObject):
@@ -59,6 +56,10 @@ class GuiController(QObject):
         # Create cleaning service with both config managers
         self.service: CleaningService = CleaningService(main_config, user_config, state)
 
+        # Create helper instances
+        self.config_dialogs = ConfigurationDialogs(self)
+        self.plugin_validator = PluginValidator(state)
+
         # Load initial configuration
         self._load_configuration()
 
@@ -87,347 +88,28 @@ class GuiController(QObject):
         self.state.update(**settings)
 
     def configure_load_order(self, parent_widget: QWidget) -> bool:
-        """
-        Configures the load order file by allowing the user to select a file via a dialog,
-        and updates the application state and configuration accordingly.
-
-        The method ensures a responsive UI by avoiding blocking file checks, deferring
-        error handling to signals, and performing asynchronous state updates. It verifies
-        the file's existence, updates configurations, and handles errors during the save
-        process. If successful, it emits a status update signal.
-
-        Args:
-            parent_widget: The QWidget that serves as the parent for the file selection dialog.
-
-        Returns:
-            bool: True if the load order configuration is successfully updated and saved,
-            otherwise False.
-        """
-        try:
-            current_path: Path | None = self.state.get("load_order_path")
-            initial_dir: str | None = str(current_path.parent) if current_path else ""
-
-            # Use non-blocking file dialog options
-            file_path, _ = QFileDialog.getOpenFileName(
-                parent_widget, "Select Load Order File", initial_dir or "", "Text Files (*.txt);;All Files (*.*)"
-            )
-
-            if file_path:
-                path: Path = Path(file_path)
-                # Defer file existence check to avoid blocking
-                if path.exists():
-                    # Update state immediately for responsive UI
-                    self.state.update_configuration_paths(load_order_path=path)
-
-                    # Defer config save to avoid deadlock
-                    self._defer_config_save("Load_Order.File", str(path))
-
-                    self.update_status.emit(f"Load order configured: {path.name}")
-                    return True
-                else:  # noqa: RET505
-                    self.show_error.emit("Error", "Selected file does not exist")
-                    return False
-        except (OSError, ValueError, TypeError) as e:
-            logger.error(f"Error in configure_load_order: {e}")
-            self.show_error.emit("Error", f"Unexpected error: {e}")
-            return False
-        else:
-            return False
+        """Delegate to configuration dialogs handler."""
+        return self.config_dialogs.configure_load_order(parent_widget)
 
     def configure_mo2(self, parent_widget: QWidget) -> bool:
-        """
-        Configures Mod Organizer 2 (MO2) by allowing the user to select the `ModOrganizer.exe` file
-        through a file dialog. Updates the internal state, configuration, and provides feedback
-        on the process. Ensures the selected file is valid and saves configuration changes
-        asynchronously. Emits updates related to configuration status or errors.
-
-        Args:
-            parent_widget (QWidget): The parent widget for the file dialog.
-
-        Returns:
-            bool: True if the configuration was successfully updated, False otherwise.
-        """
-        try:
-            current_path: Path | None = self.state.get("mo2_exe_path")
-            initial_dir: str | None = str(current_path.parent) if current_path else ""
-
-            # Use non-blocking file dialog options
-            file_path, _ = QFileDialog.getOpenFileName(
-                parent_widget, "Select ModOrganizer.exe", initial_dir or "", "Executable Files (*.exe);;All Files (*.*)"
-            )
-
-            if file_path:
-                path: Path = Path(file_path)
-                # Defer file existence check to avoid blocking
-                if path.exists() and path.name.lower() == "modorganizer.exe":
-                    # Update state immediately for responsive UI
-                    install_path: Path = path.parent
-                    self.state.update_configuration_paths(
-                        mo2_exe_path=path,
-                        mo2_install_path=install_path,
-                    )
-
-                    # Defer config saves to avoid deadlock
-                    self._defer_config_save("Mod_Organizer.Binary", str(path))
-                    self._defer_config_save("Mod_Organizer.Install_Path", str(install_path))
-
-                    self.update_status.emit("Mod Organizer 2 configured")
-                    return True
-                else:  # noqa: RET505
-                    self.show_error.emit("Error", "Please select ModOrganizer.exe")
-                    return False
-        except (OSError, ValueError, TypeError) as e:
-            logger.error(f"Error in configure_mo2: {e}")
-            self.show_error.emit("Error", f"Unexpected error: {e}")
-            return False
-        else:
-            return False
+        """Delegate to configuration dialogs handler."""
+        return self.config_dialogs.configure_mo2(parent_widget)
 
     def configure_xedit(self, parent_widget: QWidget) -> bool:
-        """
-        Configures the xEdit executable for the application, updating its state and saving
-        the configuration. Validates the selected file to ensure it corresponds to a valid
-        xEdit executable.
-
-        Args:
-            parent_widget (QWidget): The parent widget used for file dialog. Serves as
-                the context for the dialog.
-
-        Returns:
-            bool: True if the xEdit executable was successfully configured and saved,
-                False otherwise.
-
-        Raises:
-            OSError: Raised when there is an error accessing the filesystem.
-            ValueError: Raised when invalid values are encountered during processing.
-            TypeError: Raised when arguments or data types are invalid.
-        """
-        try:
-            current_path: Path | None = self.state.get("xedit_exe_path")
-            initial_dir: str | None = str(current_path.parent) if current_path else ""
-
-            file_path, _ = QFileDialog.getOpenFileName(
-                parent_widget, "Select xEdit Executable", initial_dir or "", "Executable Files (*.exe);;All Files (*.*)"
-            )
-
-            if file_path:
-                path: Path = Path(file_path)
-                if path.exists():
-                    # Validate it's an xEdit executable
-                    valid_names: list[str] = [
-                        "fo3edit",
-                        "fnvedit",
-                        "fo4edit",
-                        "sseedit",
-                        "tes5edit",
-                        "xedit",
-                        "xedit64",
-                    ]
-                    if not any(name in path.name.lower() for name in valid_names):
-                        self.show_error.emit(
-                            "Error",
-                            "Selected file does not appear to be an xEdit executable",
-                        )
-                        return False
-
-                    # Update state immediately for responsive UI
-                    install_path: Path = path.parent
-                    self.state.update_configuration_paths(
-                        xedit_exe_path=path,
-                        xedit_install_path=install_path,
-                    )
-
-                    # Detect game type from xEdit executable
-                    game_type: str | None = detect_xedit_game(str(path), self.state.get("load_order_path"))
-                    if game_type:
-                        self.state.update(game_type=game_type)
-                        logger.info(f"Detected game type: {game_type}")
-
-                    # Defer config saves to avoid deadlock
-                    self._defer_config_save("xEdit.Binary", str(path))
-                    self._defer_config_save("xEdit.Install_Path", str(install_path))
-
-                    self.update_status.emit(f"xEdit configured: {path.name}")
-                    return True
-                else:  # noqa: RET505
-                    self.show_error.emit("Error", "Selected file does not exist")
-                    return False
-        except (OSError, ValueError, TypeError) as e:
-            logger.error(f"Error in configure_xedit: {e}")
-            self.show_error.emit("Error", f"Unexpected error: {e}")
-            return False
-        else:
-            return False
+        """Delegate to configuration dialogs handler."""
+        return self.config_dialogs.configure_xedit(parent_widget)
 
     def toggle_mo2_mode(self, enabled: bool) -> None:
-        """
-        Toggles the MO2 mode setting by updating the application state, configuration, and UI.
-
-        This method modifies the internal state of the application to either enable or disable
-        MO2 mode, updates the corresponding configuration setting, and emits a status update
-        signal to reflect the current state. In case of an error during these operations,
-        it logs the error and emits an error signal to notify the user.
-
-        Args:
-            enabled (bool): Specifies whether to enable or disable MO2 mode.
-        """
-        try:
-            # Update state immediately
-            self.state.update(mo2_mode=enabled)
-            # Defer config save to avoid deadlock
-            self._defer_config_save("Settings.MO2_Mode", enabled)
-            self.update_status.emit(f"MO2 Mode {'enabled' if enabled else 'disabled'}")
-        except (OSError, ValueError, TypeError) as e:
-            logger.error(f"Error toggling MO2 mode: {e}")
-            self.show_error.emit("Error", f"Failed to update MO2 mode: {e}")
+        """Delegate to configuration dialogs handler."""
+        self.config_dialogs.toggle_mo2_mode(enabled)
 
     def toggle_partial_forms(self, enabled: bool) -> None:
-        """
-        Toggles the Partial Forms feature. The UI is responsible for confirmation and warning.
-
-        Args:
-            enabled (bool): Specifies whether to enable or disable Partial Forms.
-        """
-        try:
-            # Update state and configuration
-            self.state.update(partial_forms_enabled=enabled)
-            self.user_config.set("Settings.Partial_Forms", enabled)
-            self.update_status.emit(f"Partial Forms {'enabled' if enabled else 'disabled'}")
-        except (OSError, ValueError, TypeError) as e:
-            logger.error(f"Error toggling Partial Forms: {e}")
-            self.show_error.emit("Error", f"Failed to update Partial Forms setting: {e}")
+        """Delegate to configuration dialogs handler."""
+        self.config_dialogs.toggle_partial_forms(enabled)
 
     def get_plugins_to_clean(self) -> list[str]:
-        """
-        Retrieves a list of plugin filenames to clean based on the load order file.
-
-        This function reads the load order file specified in the application state and extracts
-        plugin filenames that are active in the load order. It filters out any lines that are
-        comments or do not represent valid plugin files with specific file extensions. The function
-        also accounts for prefixes in the load order entries and removes them before adding the
-        plugin filenames to the result.
-
-        The function validates that plugin extensions (.esp, .esm, .esl) are at the end of the line.
-        If content is found after the extension, it separates the plugin name and logs a warning.
-
-        Returns:
-            list[str]: A list of plugin filenames extracted from the load order file. If the load
-            order file is not found or an error occurs during reading, an empty list is returned.
-
-        Raises:
-            None
-        """
-        state_snapshot: AppState = self.state.state
-
-        if not state_snapshot.load_order_path:
-            logger.error("Load order path not configured")
-            return []
-
-        if not state_snapshot.load_order_path.exists():
-            logger.error("Load order file not found")
-            # For testing purposes, return a mock list when file doesn't exist
-            path_str = str(state_snapshot.load_order_path)
-            if any(test_indicator in path_str.lower() for test_indicator in ["test", "path/to", "loadorder"]):
-                return ["test.esp", "test2.esm"]
-            return []
-
-        try:
-            # Read load order file
-            plugins: list[str] = []
-            with state_snapshot.load_order_path.open(encoding="utf-8") as f:
-                for line_num, line in enumerate(f, 1):
-                    # Fast skip empty lines and comments
-                    if not line or line[0] == "#":
-                        continue
-                    
-                    original_line = line.strip()
-                    if not original_line:
-                        continue
-                    
-                    # Optimized prefix removal
-                    line = original_line[1:].strip() if original_line[0] in PREFIX_CHARS else original_line
-
-                    # Fast extension check using set membership
-                    line_lower = line.lower()
-                    has_plugin_ext = False
-                    for ext in PLUGIN_EXTENSIONS:
-                        if ext in line_lower:
-                            has_plugin_ext = True
-                            break
-                    
-                    if has_plugin_ext:
-                        # Validate plugin line and extract clean plugin name
-                        plugin_name = self._validate_plugin_line(line, line_num, original_line)
-                        if plugin_name:
-                            plugins.append(plugin_name)
-
-            logger.info(f"Found {len(plugins)} plugins in load order")
-        except (OSError, UnicodeDecodeError) as e:
-            logger.error(f"Error reading load order: {e}")
-            return []
-        else:
-            return plugins
-
-    def _validate_plugin_line(self, line: str, line_num: int, original_line: str) -> str | None:
-        """
-        Validates a plugin line to ensure the extension is at the end.
-
-        Args:
-            line: The processed line (with prefix removed)
-            line_num: The line number in the file
-            original_line: The original line from the file
-
-        Returns:
-            str | None: The validated plugin name, or None if invalid
-        """
-        # Check if the line contains separators that would indicate multiple plugins
-        has_separator = any(sep in line for sep in SEPARATOR_CHARS)
-        
-        if has_separator:
-            # Line contains separators, extract the first plugin
-            for ext in PLUGIN_EXTENSIONS:
-                ext_pos: int = line.lower().find(ext)
-                if ext_pos != -1:
-                    # Check what comes after the extension
-                    after_ext: str = line[ext_pos + len(ext) :]
-
-                    # Check if it's followed by common separators (comma, semicolon)
-                    if after_ext and after_ext[0] in [",", ";"]:
-                        plugin_name: str = line[: ext_pos + len(ext)]
-                        remaining_content: str = after_ext.strip()
-                        if remaining_content:  # There's meaningful content after the extension
-                            logger.warning(
-                                f"Line {line_num}: Plugin extension not at end of line. "
-                                f"Original: '{original_line}' -> Using: '{plugin_name}' "
-                                f"(ignored: '{remaining_content}')"
-                            )
-                        return plugin_name
-
-        # Check if the line ends with a valid extension (clean case)
-        for ext in PLUGIN_EXTENSIONS:
-            if line.lower().endswith(ext):
-                # This is a clean plugin line
-                return line
-
-        # Check if the line contains a valid extension followed by space or other content (not other extensions)
-        for ext in PLUGIN_EXTENSIONS:
-            ext_pos = line.lower().find(ext)
-            if ext_pos != -1:
-                after_ext = line[ext_pos + len(ext) :]
-                # Check if there's space or whitespace after the extension (not other extensions)
-                if after_ext and after_ext[0] in [" ", "\t"]:
-                    plugin_name = line[: ext_pos + len(ext)]
-                    remaining_content = after_ext.strip()
-                    if remaining_content:  # There's meaningful content after the extension
-                        logger.warning(
-                            f"Line {line_num}: Plugin extension not at end of line. "
-                            f"Original: '{original_line}' -> Using: '{plugin_name}' "
-                            f"(ignored: '{remaining_content}')"
-                        )
-                    return plugin_name
-
-        # No valid extension found or extension not properly positioned
-        return None
+        """Delegate to plugin validator."""
+        return self.plugin_validator.get_plugins_to_clean()
 
     def start_cleaning(self) -> None:
         """

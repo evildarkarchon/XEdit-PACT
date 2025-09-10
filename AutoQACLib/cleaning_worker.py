@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QThread, Signal
 
 from AutoQACLib.logging_config import get_logger
-from AutoQACLib.utils import set_max_concurrent_subprocesses
+from AutoQACLib.process_utils import set_max_concurrent_subprocesses
 
 if TYPE_CHECKING:
     from AutoQACLib.cleaning_service import CleaningService, CleanResult
