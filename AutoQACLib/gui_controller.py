@@ -19,6 +19,11 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# Pre-compiled patterns for efficient plugin parsing
+PLUGIN_EXTENSIONS = frozenset([".esp", ".esm", ".esl"])
+PREFIX_CHARS = frozenset(["*", "+", "-"])
+SEPARATOR_CHARS = frozenset([",", ";"])
+
 
 class GuiController(QObject):
     """Mediates between GUI and business logic."""
@@ -331,17 +336,30 @@ class GuiController(QObject):
             plugins: list[str] = []
             with state_snapshot.load_order_path.open(encoding="utf-8") as f:
                 for line_num, line in enumerate(f, 1):
+                    # Fast skip empty lines and comments
+                    if not line or line[0] == "#":
+                        continue
+                    
                     original_line = line.strip()
-                    if original_line and not original_line.startswith("#"):
-                        # Remove any prefix characters (*, +, etc.)
-                        line = original_line[1:].strip() if original_line[0] in ["*", "+", "-"] else original_line
+                    if not original_line:
+                        continue
+                    
+                    # Optimized prefix removal
+                    line = original_line[1:].strip() if original_line[0] in PREFIX_CHARS else original_line
 
-                        # Check if line contains a valid plugin extension
-                        if any(ext in line.lower() for ext in [".esp", ".esm", ".esl"]):
-                            # Validate plugin line and extract clean plugin name
-                            plugin_name = self._validate_plugin_line(line, line_num, original_line)
-                            if plugin_name:
-                                plugins.append(plugin_name)
+                    # Fast extension check using set membership
+                    line_lower = line.lower()
+                    has_plugin_ext = False
+                    for ext in PLUGIN_EXTENSIONS:
+                        if ext in line_lower:
+                            has_plugin_ext = True
+                            break
+                    
+                    if has_plugin_ext:
+                        # Validate plugin line and extract clean plugin name
+                        plugin_name = self._validate_plugin_line(line, line_num, original_line)
+                        if plugin_name:
+                            plugins.append(plugin_name)
 
             logger.info(f"Found {len(plugins)} plugins in load order")
         except (OSError, UnicodeDecodeError) as e:
@@ -362,13 +380,12 @@ class GuiController(QObject):
         Returns:
             str | None: The validated plugin name, or None if invalid
         """
-        # Check for valid plugin extensions
-        valid_extensions = (".esp", ".esm", ".esl")
-
         # Check if the line contains separators that would indicate multiple plugins
-        if any(sep in line for sep in [",", ";"]):
+        has_separator = any(sep in line for sep in SEPARATOR_CHARS)
+        
+        if has_separator:
             # Line contains separators, extract the first plugin
-            for ext in valid_extensions:
+            for ext in PLUGIN_EXTENSIONS:
                 ext_pos: int = line.lower().find(ext)
                 if ext_pos != -1:
                     # Check what comes after the extension
@@ -387,13 +404,13 @@ class GuiController(QObject):
                         return plugin_name
 
         # Check if the line ends with a valid extension (clean case)
-        for ext in valid_extensions:
+        for ext in PLUGIN_EXTENSIONS:
             if line.lower().endswith(ext):
                 # This is a clean plugin line
                 return line
 
         # Check if the line contains a valid extension followed by space or other content (not other extensions)
-        for ext in valid_extensions:
+        for ext in PLUGIN_EXTENSIONS:
             ext_pos = line.lower().find(ext)
             if ext_pos != -1:
                 after_ext = line[ext_pos + len(ext) :]

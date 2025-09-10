@@ -14,6 +14,7 @@ from AutoQACLib.logging_config import get_logger
 
 if TYPE_CHECKING:
     import subprocess
+    from collections.abc import Generator
     from logging import Logger
     from subprocess import CompletedProcess
 
@@ -40,6 +41,7 @@ class YamlManager:
 
     def __init__(self) -> None:
         self._cache: dict[str, Any] = {}
+        self._cache_mtimes: dict[str, float] = {}  # Track file modification times
         self._cache_mutex = QMutex()
         self._file_mutexes: dict[str, QMutex] = {}
         self._file_mutexes_mutex = QMutex()
@@ -141,22 +143,36 @@ class YamlManager:
         return key_path.split(".") if isinstance(key_path, str) else key_path
 
     def _load_yaml(self, yaml_path: str) -> Any:
-        """Load YAML file, using cache if available."""
-        # First check cache without loading
+        """Load YAML file with intelligent caching based on modification time."""
+        path = Path(yaml_path)
+        
+        # Quick cache check with modification time validation
         with QMutexLocker(self._cache_mutex):
             if yaml_path in self._cache:
-                return self._cache[yaml_path]
+                # Check if file has been modified since cached
+                try:
+                    current_mtime = path.stat().st_mtime if path.exists() else 0
+                    cached_mtime = self._cache_mtimes.get(yaml_path, 0)
+                    if cached_mtime >= current_mtime:
+                        # Cache is still valid
+                        return self._cache[yaml_path]
+                except OSError:
+                    # Fall through to reload on error
+                    pass
 
-        # Load file outside of mutex
+        # Load file outside of cache mutex to minimize lock time
         warning_msg = None
         error_msg = None
         data: dict[str, Any] = {}
+        file_mtime: float = 0
 
         try:
-            path: Path = Path(yaml_path)
             if not path.exists():
                 warning_msg = f"YAML file not found: {yaml_path}"
             else:
+                # Get modification time for cache tracking
+                file_mtime = path.stat().st_mtime
+                
                 with path.open(encoding="utf-8") as yaml_file:
                     content: str = yaml_file.read().strip()
                     # Handle empty file
@@ -165,9 +181,11 @@ class YamlManager:
             error_msg = f"Failed to load YAML file '{yaml_path}': {e}"
             data = {}
 
-        # Update cache with loaded data
+        # Update cache with loaded data and modification time
         with QMutexLocker(self._cache_mutex):
             self._cache[yaml_path] = data
+            if file_mtime > 0:
+                self._cache_mtimes[yaml_path] = file_mtime
 
         # Log messages outside of mutex
         if warning_msg:
@@ -178,7 +196,7 @@ class YamlManager:
         return data
 
     def _save_yaml(self, yaml_path: str, data: Any) -> None:
-        """Save data to YAML file with atomic write."""
+        """Save data to YAML file with atomic write and cache update."""
         try:
             path: Path = Path(yaml_path)
             temp_path: Path = path.with_suffix(".tmp")
@@ -192,10 +210,14 @@ class YamlManager:
 
             # Atomic rename
             temp_path.replace(path)
+            
+            # Get new modification time after save
+            file_mtime = path.stat().st_mtime
 
-            # Update cache
+            # Update cache with new data and modification time
             with QMutexLocker(self._cache_mutex):
                 self._cache[yaml_path] = data
+                self._cache_mtimes[yaml_path] = file_mtime
         except (OSError, ruamel.yaml.YAMLError, ValueError) as e:
             logger.error(f"Failed to save YAML file '{yaml_path}': {e}")
             # Clean up temp file if it exists
@@ -436,7 +458,7 @@ def set_max_concurrent_subprocesses(limit: int) -> None:
         limit: Maximum number of subprocesses allowed to run concurrently.
                Must be greater than 0.
     """
-    global _max_concurrent_subprocesses
+    global _max_concurrent_subprocesses  # noqa: PLW0603
     if limit <= 0:
         raise ValueError("Subprocess limit must be greater than 0")
     with QMutexLocker(_subprocess_semaphore):
@@ -451,14 +473,14 @@ def get_active_subprocess_count() -> int:
 
 
 @contextlib.contextmanager
-def _subprocess_resource_manager():
+def _subprocess_resource_manager() -> Generator[None, None, None]:
     """
     Context manager to track and limit subprocess resources.
 
     Raises:
         RuntimeError: If subprocess limit is exceeded.
     """
-    global _active_subprocesses
+    global _active_subprocesses  # noqa: PLW0603
 
     # Wait for available slot
     acquired = False
@@ -509,10 +531,8 @@ def safe_popen(*args: Any, **kwargs: Any) -> Any:
                 # Close pipes first to prevent deadlock
                 for pipe in [process.stdin, process.stdout, process.stderr]:
                     if pipe is not None:
-                        try:
+                        with contextlib.suppress(OSError, ValueError):
                             pipe.close()
-                        except (OSError, ValueError):
-                            pass
 
                 # Terminate process if still running
                 if process.poll() is None:
@@ -534,6 +554,7 @@ def run_process_with_realtime_output(
     output_callback: Callable[[str], None] | None = None,
     timeout: int | None = None,
     working_dir: str | Path | None = None,
+    startup_info: Any = None,
 ) -> tuple[int, str, str]:
     """
     Runs a subprocess command with real-time output streaming and optional timeout handling.
@@ -554,6 +575,8 @@ def run_process_with_realtime_output(
             applied.
         working_dir (str | Path | None): The directory in which to execute the command.
             If None, the current working directory is used.
+        startup_info (Any): Windows-specific STARTUPINFO structure for optimized process creation.
+            If None on Windows, a default optimized configuration is used.
 
     Returns:
         tuple[int, str, str]: A tuple containing three elements:
@@ -563,6 +586,7 @@ def run_process_with_realtime_output(
             - A string with all the concatenated lines from the standard error.
     """
     import subprocess
+    import sys
     import time
 
     start_time: float = time.time()
@@ -571,6 +595,12 @@ def run_process_with_realtime_output(
     process: subprocess.Popen | None = None
     stdout_thread: OutputReaderThread | None = None
     stderr_thread: OutputReaderThread | None = None
+    
+    # Optimize subprocess creation for Windows
+    if startup_info is None and sys.platform == "win32":
+        startup_info = subprocess.STARTUPINFO()
+        startup_info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startup_info.wShowWindow = subprocess.SW_HIDE
 
     try:
         with safe_popen(
@@ -583,6 +613,8 @@ def run_process_with_realtime_output(
             bufsize=1,  # Line buffered
             universal_newlines=True,
             cwd=str(working_dir) if working_dir else None,
+            startupinfo=startup_info if sys.platform == "win32" else None,
+            close_fds=sys.platform != "win32",  # Faster on Windows
         ) as process:
 
             def read_output(pipe: Any, line_list: list[str], callback: Callable[[str], None] | None) -> None:

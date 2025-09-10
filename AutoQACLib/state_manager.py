@@ -76,6 +76,7 @@ class StateManager(QObject):
 
     # Signals for state changes
     state_changed: Signal = Signal(str, object)  # (property_name, new_value)
+    bulk_state_changed: Signal = Signal(dict)  # dict of multiple state changes
     configuration_changed: Signal = Signal(bool)  # is_fully_configured
     progress_changed: Signal = Signal(int, int)  # current, total
     cleaning_started: Signal = Signal()
@@ -109,8 +110,11 @@ class StateManager(QObject):
         state_changes: list[tuple[str, object]] = []
         cleaning_started = False
         cleaning_finished = False
+        is_fully_configured = False
+        current_progress = 0
+        total_plugins = 0
 
-        # Update state atomically
+        # Update state atomically - minimize lock time
         with QWriteLocker(self._rw_lock):
             for key, value in kwargs.items():
                 if hasattr(self._state, key):
@@ -129,24 +133,38 @@ class StateManager(QObject):
                                 cleaning_started = True
                             else:
                                 cleaning_finished = True
-
-        # Emit signals in a thread-safe manner
-        with QMutexLocker(self._signal_mutex):
-            # Emit state changes
-            for key, value in state_changes:
-                self.state_changed.emit(key, value)
-
-            # Emit special signals
-            if cleaning_started:
-                self.cleaning_started.emit()
-            elif cleaning_finished:
-                self.cleaning_finished.emit()
-
-            # Emit aggregate signals
+            
+            # Capture values needed for signals while still holding lock
             if config_changed:
-                self.configuration_changed.emit(self._state.is_fully_configured)
+                is_fully_configured = self._state.is_fully_configured
             if progress_changed:
-                self.progress_changed.emit(self._state.progress, self._state.total_plugins)
+                current_progress = self._state.progress
+                total_plugins = self._state.total_plugins
+
+        # Emit signals OUTSIDE the write lock to prevent blocking
+        if state_changes:
+            with QMutexLocker(self._signal_mutex):
+                # Use bulk signal for multiple changes to reduce overhead
+                if len(state_changes) > 3:
+                    # Convert to dict for bulk signal
+                    changes_dict = dict(state_changes)
+                    self.bulk_state_changed.emit(changes_dict)
+                else:
+                    # Emit individual signals for small number of changes
+                    for key, value in state_changes:
+                        self.state_changed.emit(key, value)
+
+                # Emit special signals
+                if cleaning_started:
+                    self.cleaning_started.emit()
+                elif cleaning_finished:
+                    self.cleaning_finished.emit()
+
+                # Emit aggregate signals with cached values
+                if config_changed:
+                    self.configuration_changed.emit(is_fully_configured)
+                if progress_changed:
+                    self.progress_changed.emit(current_progress, total_plugins)
 
     def update_multiple_properties(self, updates: dict[str, Any]) -> None:
         """
@@ -201,7 +219,11 @@ class StateManager(QObject):
             message (str, optional): A message providing additional context about the
                 plugin processing. Defaults to an empty string.
         """
-        # Update state and emit signals atomically to prevent race conditions
+        # Capture values for signals - minimize lock time
+        current_progress = 0
+        total_plugins = 0
+        
+        # Update state atomically
         with QWriteLocker(self._rw_lock):
             if status == "cleaned":
                 self._state.cleaned_plugins.add(plugin)
@@ -214,12 +236,10 @@ class StateManager(QObject):
             current_progress = self._state.progress
             total_plugins = self._state.total_plugins
 
-            # Emit signals while still holding the write lock to ensure consistency
-            # This prevents race conditions where another thread could modify state
-            # between capturing values and emitting signals
-            with QMutexLocker(self._signal_mutex):
-                self.plugin_processed.emit(plugin, status, message)
-                self.progress_changed.emit(current_progress, total_plugins)
+        # Emit signals OUTSIDE the write lock to prevent blocking other threads
+        with QMutexLocker(self._signal_mutex):
+            self.plugin_processed.emit(plugin, status, message)
+            self.progress_changed.emit(current_progress, total_plugins)
 
     def reset_cleaning_state(self) -> None:
         """

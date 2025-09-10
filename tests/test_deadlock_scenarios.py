@@ -8,7 +8,6 @@ from typing import Any, Callable
 from unittest.mock import MagicMock
 
 import pytest
-
 from PySide6.QtCore import QCoreApplication, QMutex, QMutexLocker
 
 from AutoQACLib.config_manager import ConfigManager

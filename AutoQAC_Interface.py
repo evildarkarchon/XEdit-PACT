@@ -261,6 +261,7 @@ class MainWindow(QMainWindow):
         self._update_timer.setSingleShot(True)
         self._update_timer.setInterval(50)  # 50ms delay
         self._update_timer.timeout.connect(self._perform_ui_update)
+        self._update_priority: str = "normal"  # Track update priority
 
         # UI elements
         self.progress_dialog: CleaningProgressDialog | None = None
@@ -298,6 +299,7 @@ class MainWindow(QMainWindow):
         self.state.cleaning_finished.connect(self._on_cleaning_finished)
         self.state.plugin_processed.connect(self._on_plugin_processed)
         self.state.state_changed.connect(self._on_state_changed)
+        self.state.bulk_state_changed.connect(self._on_bulk_state_changed)
 
     def _setup_ui(self) -> None:
         """Setup the main window UI."""
@@ -419,12 +421,29 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
 
-    def _update_ui_from_state(self) -> None:
-        """Update UI elements based on current state."""
-        # Use timer to debounce rapid updates
-        if self._update_timer.isActive():
-            self._update_timer.stop()
-        self._update_timer.start()
+    def _update_ui_from_state(self, priority: str = "normal") -> None:
+        """Update UI elements based on current state with priority-based debouncing.
+        
+        Args:
+            priority: Update priority - "immediate", "high", or "normal"
+        """
+        # Immediate updates bypass debouncing
+        if priority == "immediate":
+            self._perform_ui_update()
+            return
+        
+        # Set appropriate debounce interval based on priority
+        interval = 50 if priority == "high" else 200  # Longer delay for normal updates
+        
+        # Update priority if this is a higher priority update
+        if priority == "high" and self._update_priority == "normal":
+            self._update_priority = priority
+            self._update_timer.setInterval(interval)
+        
+        # Start or restart timer with appropriate interval
+        if not self._update_timer.isActive() or priority == "high":
+            self._update_timer.setInterval(interval)
+            self._update_timer.start()
 
     def _perform_ui_update(self) -> None:
         """Perform the actual UI update with debouncing."""
@@ -432,6 +451,7 @@ class MainWindow(QMainWindow):
             return  # Prevent recursive updates
 
         self._updating_ui = True
+        self._update_priority = "normal"  # Reset priority after update
         try:
             state_snapshot: AppState = self.state.state
 
@@ -636,10 +656,61 @@ class MainWindow(QMainWindow):
             if current_plugin:
                 self.progress_dialog.update_current_plugin(current_plugin)
 
+    @Slot(dict)
+    def _on_bulk_state_changed(self, changes: dict[str, object]) -> None:
+        """Handle multiple state changes at once for better performance."""
+        # Check if any changes require immediate update
+        immediate_update = False
+        high_priority_update = False
+        
+        for property_name, value in changes.items():
+            if property_name == "is_cleaning":
+                immediate_update = True
+                if value:
+                    self._on_cleaning_started()
+                else:
+                    self._on_cleaning_finished()
+            elif property_name in ["current_plugin", "current_operation"]:
+                high_priority_update = True
+                if (
+                    property_name == "current_plugin"
+                    and self.progress_dialog
+                    and self.progress_dialog.isVisible()
+                    and isinstance(value, str)
+                ):
+                    self.progress_dialog.update_current_plugin(value)
+        
+        # Update UI with appropriate priority
+        if immediate_update:
+            self._update_ui_from_state("immediate")
+        elif high_priority_update:
+            self._update_ui_from_state("high")
+        else:
+            self._update_ui_from_state("normal")
+    
     @Slot(str, object)
     def _on_state_changed(self, property_name: str, value: object) -> None:
-        """Handle individual state property changes."""
-        # Update specific UI elements based on property
+        """Handle individual state property changes with appropriate priority."""
+        # Determine update priority based on property type
+        priority = "normal"
+        
+        # High priority for user-facing state changes
+        if property_name == "is_cleaning":
+            priority = "immediate"  # Cleaning state changes need immediate feedback
+        elif property_name in ["current_plugin", "current_operation"]:
+            priority = "high"  # Plugin progress updates
+            # Update current plugin in progress dialog immediately
+            if (
+                property_name == "current_plugin"
+                and self.progress_dialog
+                and self.progress_dialog.isVisible()
+                and isinstance(value, str)
+            ):
+                self.progress_dialog.update_current_plugin(value)
+        elif property_name in ["mo2_mode", "partial_forms_enabled"]:
+            priority = "normal"  # Settings changes
+        
+        # Update UI with appropriate priority
         if property_name in [
             "is_load_order_configured",
             "is_mo2_configured",
@@ -648,15 +719,7 @@ class MainWindow(QMainWindow):
             "partial_forms_enabled",
             "is_cleaning",
         ]:
-            self._update_ui_from_state()
-        elif (
-            property_name == "current_plugin"
-            and self.progress_dialog
-            and self.progress_dialog.isVisible()
-            and isinstance(value, str)
-        ):
-            # Update current plugin in progress dialog
-            self.progress_dialog.update_current_plugin(value)
+            self._update_ui_from_state(priority)
 
     @Slot(str, str)
     def _show_message(self, title: str, message: str) -> None:

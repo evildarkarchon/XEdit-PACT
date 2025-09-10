@@ -53,7 +53,7 @@ class TestComponentIntegration:
     @patch.object(Path, "exists", return_value=True)
     def test_gui_controller_state_manager_integration(
         self, mock_exists: Mock, temp_test_config_files: tuple[Path, Path]
-    ) -> None:  # noqa: ARG002
+    ) -> None:
         """Test integration between GUI controller and state manager."""
         main_config_path, user_config_path = temp_test_config_files
 
@@ -293,7 +293,7 @@ class TestComponentIntegration:
     @patch.object(Path, "exists", return_value=True)
     def test_configuration_persistence_integration(
         self, mock_exists: Mock, temp_test_config_files: tuple[Path, Path]
-    ) -> None:  # noqa: ARG002
+    ) -> None:
         """Test configuration persistence across component restarts."""
         main_config_path, user_config_path = temp_test_config_files
 
