@@ -141,7 +141,7 @@ class TestThreadSafety:
 
     def test_yaml_manager_cache_consistency(self, test_output_dir: Path) -> None:
         """Test YAML manager cache remains consistent under concurrent access."""
-        from AutoQACLib.utils import yaml_settings, yaml_settings_write
+        from AutoQACLib.game_detection import yaml_settings, yaml_settings_write
 
         yaml_path = test_output_dir / "test_cache.yaml"
         yaml_settings_write(yaml_path, {"initial": "value"})

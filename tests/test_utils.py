@@ -6,14 +6,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from AutoQACLib.utils import (
-    YamlManager,
-    monitor_log_file,
-    run_process,
-    run_process_with_realtime_output,
-    yaml_settings,
-    yaml_settings_write,
-)
+from AutoQACLib.game_detection import monitor_log_file, yaml_settings, yaml_settings_write
+from AutoQACLib.process_utils import run_process, run_process_with_realtime_output
+from AutoQACLib.yaml_manager import YamlManager
 
 
 class TestYamlManager:
@@ -283,50 +278,50 @@ level1:
 class TestProcessFunctions:
     """Test process-related utility functions."""
 
-    @patch("AutoQACLib.utils.psutil.Process")
+    @patch("AutoQACLib.process_utils.psutil.Process")
     def test_check_process_below_threshold(self, mock_process: Mock) -> None:
         """Test check_process when CPU usage is below threshold."""
         mock_process_instance: Mock = Mock()
         mock_process_instance.cpu_percent.return_value = 3.0
         mock_process.return_value = mock_process_instance
 
-        from AutoQACLib.utils import check_process
+        from AutoQACLib.process_utils import check_process
 
         result: bool = check_process(12345, threshold=5)
         assert result is False
 
-    @patch("AutoQACLib.utils.psutil.Process")
+    @patch("AutoQACLib.process_utils.psutil.Process")
     def test_check_process_above_threshold(self, mock_process: Mock) -> None:
         """Test check_process when CPU usage is above threshold."""
         mock_process_instance: Mock = Mock()
         mock_process_instance.cpu_percent.return_value = 7.0
         mock_process.return_value = mock_process_instance
 
-        from AutoQACLib.utils import check_process
+        from AutoQACLib.process_utils import check_process
 
         result = check_process(12345, threshold=5)
         assert result is True
 
-    @patch("AutoQACLib.utils.psutil.Process")
+    @patch("AutoQACLib.process_utils.psutil.Process")
     def test_check_process_no_such_process(self, mock_process: Mock) -> None:
         """Test check_process when process doesn't exist."""
         from psutil import NoSuchProcess
 
         mock_process.side_effect = NoSuchProcess(12345)
 
-        from AutoQACLib.utils import check_process
+        from AutoQACLib.process_utils import check_process
 
         result = check_process(12345)
         assert result is False
 
-    @patch("AutoQACLib.utils.psutil.Process")
+    @patch("AutoQACLib.process_utils.psutil.Process")
     def test_check_process_access_denied(self, mock_process: Mock) -> None:
         """Test check_process when access is denied."""
         from psutil import AccessDenied
 
         mock_process.side_effect = AccessDenied(12345)
 
-        from AutoQACLib.utils import check_process
+        from AutoQACLib.process_utils import check_process
 
         result = check_process(12345)
         assert result is False
@@ -340,7 +335,7 @@ class TestGameDetectionFunctions:
         load_order_path: Path = temp_test_file
         load_order_path.write_text("Skyrim.esm\nSomeOtherPlugin.esp\n")
 
-        from AutoQACLib.utils import detect_game_from_load_order
+        from AutoQACLib.game_detection import detect_game_from_load_order
 
         result = detect_game_from_load_order(load_order_path)
         assert result == "SSE"
@@ -350,7 +345,7 @@ class TestGameDetectionFunctions:
         load_order_path: Path = temp_test_file
         load_order_path.write_text("Fallout3.esm\nSomeOtherPlugin.esp\n")
 
-        from AutoQACLib.utils import detect_game_from_load_order
+        from AutoQACLib.game_detection import detect_game_from_load_order
 
         result = detect_game_from_load_order(load_order_path)
         assert result == "FO3"
@@ -360,7 +355,7 @@ class TestGameDetectionFunctions:
         load_order_path: Path = temp_test_file
         load_order_path.write_text("FalloutNV.esm\nSomeOtherPlugin.esp\n")
 
-        from AutoQACLib.utils import detect_game_from_load_order
+        from AutoQACLib.game_detection import detect_game_from_load_order
 
         result = detect_game_from_load_order(load_order_path)
         assert result == "FNV"
@@ -370,7 +365,7 @@ class TestGameDetectionFunctions:
         load_order_path: Path = temp_test_file
         load_order_path.write_text("Fallout4.esm\nSomeOtherPlugin.esp\n")
 
-        from AutoQACLib.utils import detect_game_from_load_order
+        from AutoQACLib.game_detection import detect_game_from_load_order
 
         result = detect_game_from_load_order(load_order_path)
         assert result == "FO4"
@@ -380,7 +375,7 @@ class TestGameDetectionFunctions:
         load_order_path: Path = temp_test_file
         load_order_path.write_text("*Skyrim.esm\n+SomeOtherPlugin.esp\n")
 
-        from AutoQACLib.utils import detect_game_from_load_order
+        from AutoQACLib.game_detection import detect_game_from_load_order
 
         result = detect_game_from_load_order(load_order_path)
         assert result == "SSE"
@@ -390,7 +385,7 @@ class TestGameDetectionFunctions:
         load_order_path: Path = temp_test_file
         load_order_path.write_text("SomePlugin.esp\nAnotherPlugin.esp\n")
 
-        from AutoQACLib.utils import detect_game_from_load_order
+        from AutoQACLib.game_detection import detect_game_from_load_order
 
         result = detect_game_from_load_order(load_order_path)
         assert result is None
@@ -398,14 +393,14 @@ class TestGameDetectionFunctions:
     def test_detect_game_from_load_order_file_not_found(self) -> None:
         """Test detect_game_from_load_order with non-existent file."""
 
-        from AutoQACLib.utils import detect_game_from_load_order
+        from AutoQACLib.game_detection import detect_game_from_load_order
 
         with pytest.raises(FileNotFoundError):
             detect_game_from_load_order(Path("/nonexistent/file.txt"))
 
     def test_detect_xedit_game_from_filename(self) -> None:
         """Test detect_xedit_game with various xEdit executable names."""
-        from AutoQACLib.utils import detect_xedit_game
+        from AutoQACLib.game_detection import detect_xedit_game
 
         test_cases = [
             ("fo3edit.exe", "FO3"),
@@ -424,7 +419,7 @@ class TestGameDetectionFunctions:
 
     def test_detect_xedit_game_no_match(self) -> None:
         """Test detect_xedit_game with no matching executable name."""
-        from AutoQACLib.utils import detect_xedit_game
+        from AutoQACLib.game_detection import detect_xedit_game
 
         result = detect_xedit_game("some_other_tool.exe")
         assert result is None
@@ -434,7 +429,7 @@ class TestGameDetectionFunctions:
         load_order_path: Path = temp_test_file
         load_order_path.write_text("Skyrim.esm\n")
 
-        from AutoQACLib.utils import detect_xedit_game
+        from AutoQACLib.game_detection import detect_xedit_game
 
         result = detect_xedit_game("unknown_edit.exe", load_order_path)
         assert result == "SSE"
@@ -616,7 +611,7 @@ class TestLogMonitoringFunctions:
         def line_callback(line: str) -> None:
             lines_received.append(line)
 
-        from AutoQACLib.utils import monitor_log_file
+        from AutoQACLib.game_detection import monitor_log_file
 
         # Start monitoring in a separate thread
         monitor_thread: threading.Thread = threading.Thread(

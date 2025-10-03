@@ -15,7 +15,7 @@ from PySide6.QtCore import QCoreApplication, QThread
 
 from AutoQACLib.config_manager import ConfigManager
 from AutoQACLib.state_manager import StateManager
-from AutoQACLib.utils import run_process_with_realtime_output, safe_popen
+from AutoQACLib.process_utils import run_process_with_realtime_output, safe_popen
 
 
 class TestResourceManagement:
@@ -290,7 +290,8 @@ class TestResourceManagement:
 
     def test_yaml_cache_memory_management(self, test_output_dir: Path) -> None:
         """Test that YAML cache doesn't grow unbounded."""
-        from AutoQACLib.utils import _yaml_manager, yaml_settings, yaml_settings_write
+        from AutoQACLib.game_detection import yaml_settings, yaml_settings_write
+        from AutoQACLib.yaml_manager import _yaml_manager
 
         process = psutil.Process()
         initial_memory = process.memory_info().rss / 1024 / 1024  # MB

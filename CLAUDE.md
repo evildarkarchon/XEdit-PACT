@@ -10,36 +10,30 @@ AutoQAC is a PySide6 (Qt) application for batch cleaning Bethesda game plugins u
 
 ```bash
 # Install dependencies
-poetry install --with dev
+uv sync --extra dev
 
 # Run linting and formatting
-poetry run ruff check .                  # Check for issues
-poetry run ruff check . --fix           # Auto-fix issues
-poetry run ruff check . --diff          # Show what needs fixing
-poetry run ruff format .                # Format code
+uv run ruff check .                  # Check for issues
+uv run ruff check . --fix           # Auto-fix issues
+uv run ruff check . --diff          # Show what needs fixing
+uv run ruff format .                # Format code
 
 # Run type checking
-poetry run mypy AutoQAC_Interface.py AutoQACLib/*.py
+uv run mypy AutoQAC_Interface.py AutoQACLib/*.py
 
 # Run tests
-pytest                                   # All tests  
-pytest -m unit                          # Unit tests only
-pytest -m integration                   # Integration tests only
-pytest tests/test_state_manager.py     # Single test file
-pytest -v                               # Verbose output
-pytest --cov=AutoQACLib --cov=AutoQAC_Interface --cov-report=html  # With coverage
+uv run pytest                                   # All tests
+uv run pytest -m unit                          # Unit tests only
+uv run pytest -m integration                   # Integration tests only
+uv run pytest tests/test_state_manager.py     # Single test file
+uv run pytest -v                               # Verbose output
+uv run pytest --cov=AutoQACLib --cov=AutoQAC_Interface --cov-report=html  # With coverage
 
 # Run the application
-python AutoQAC_Interface.py
+uv run python AutoQAC_Interface.py
 ```
 
 ## Code Organization Rules
-
-### File Size Limits
-- **Soft limit**: 500 lines per file (prefer refactoring when approaching this limit)
-- **Hard limit**: 550 lines per file (must refactor if exceeded)
-- **One class per file**: Each file should contain only one class
-  - Exception: Small, closely related helper classes can be in the same file
 
 ### GUI Development Guidelines
 - **New GUI functionality**: Create as MixIn classes in `AutoQACLib/ui/mixins/`
@@ -111,7 +105,7 @@ python AutoQAC_Interface.py
 
 ### Configuration Files
 
-- `pyproject.toml`: Poetry dependencies, tool configs (ruff, mypy, pytest, coverage)
+- `pyproject.toml`: Project dependencies and tool configs (ruff, mypy, pytest, coverage)
 - `AutoQAC Data/AutoQAC Main.yaml`: Game configurations, plugin skip lists
 - `AutoQAC Data/AutoQAC Config.yaml`: User settings, file paths
 - `PACT Settings.yaml`: Legacy config for backward compatibility
