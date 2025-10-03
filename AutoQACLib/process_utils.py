@@ -6,7 +6,7 @@ import contextlib
 import subprocess
 import sys
 import time
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import psutil
 from PySide6.QtCore import QMutex, QMutexLocker, QThread
@@ -14,7 +14,7 @@ from PySide6.QtCore import QMutex, QMutexLocker, QThread
 from AutoQACLib.logging_config import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Callable, Generator
     from logging import Logger
     from pathlib import Path
     from subprocess import CompletedProcess

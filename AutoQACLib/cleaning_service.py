@@ -5,13 +5,14 @@ from __future__ import annotations
 import subprocess
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from AutoQACLib.game_detection import detect_xedit_game
 from AutoQACLib.logging_config import get_logger
 from AutoQACLib.process_utils import run_process_with_realtime_output
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from logging import Logger
     from re import Pattern
 

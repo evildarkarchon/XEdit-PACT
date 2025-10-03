@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import ruamel.yaml
 from PySide6.QtCore import QMutexLocker, QThread
@@ -12,6 +12,7 @@ from AutoQACLib.logging_config import get_logger
 from AutoQACLib.yaml_manager import _yaml_manager
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from logging import Logger
 
     from ruamel.yaml.main import YAML
