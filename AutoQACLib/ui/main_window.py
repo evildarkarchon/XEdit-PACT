@@ -85,7 +85,7 @@ class MainWindow(
 
     def _setup_ui(self) -> None:
         """Setup the main window UI."""
-        self.setWindowTitle("AutoQAC - Refactored")
+        self.setWindowTitle("AutoQAC")
         self.setMinimumSize(600, 400)
 
         # Create central widget

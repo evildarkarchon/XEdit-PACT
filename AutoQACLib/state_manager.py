@@ -72,7 +72,29 @@ class AppState:
 
 
 class StateManager(QObject):
-    """Thread-safe state manager with Qt signals."""
+    """
+    Manages the application's state, updating and synchronizing state attributes,
+    emitting signals for changes, and handling state-related logic.
+
+    This class provides methods for updating single or multiple state properties,
+    retrieving state values, and managing the progress of processes such as plugin
+    cleaning. Specialized signals are emitted to notify other components of specific
+    state changes, ensuring a reactive and thread-safe environment.
+
+    Attributes:
+        state_changed (Signal): Signal emitted when individual state properties change.
+            Provides the property name and its new value.
+        bulk_state_changed (Signal): Signal emitted when multiple state properties
+            change simultaneously. Provides a dictionary of changes.
+        configuration_changed (Signal): Signal emitted when configuration changes occur,
+            specifying whether full configuration is achieved.
+        progress_changed (Signal): Signal emitted when process progress is updated,
+            providing the current progress and total steps.
+        cleaning_started (Signal): Signal emitted when the cleaning process starts.
+        cleaning_finished (Signal): Signal emitted when the cleaning process finishes.
+        plugin_processed (Signal): Signal emitted when a plugin is processed during
+            cleaning, providing the plugin name, status, and an optional message.
+    """
 
     # Signals for state changes
     state_changed: Signal = Signal(str, object)  # (property_name, new_value)
@@ -201,7 +223,16 @@ class StateManager(QObject):
 
     @property
     def state(self) -> AppState:
-        """Get a snapshot of the current state."""
+        """
+        Returns a copy of the current application state.
+
+        The property ensures thread-safe read access to the `_state` attribute
+        using a read-write lock. It creates and returns a copy of the `_state`
+        to preserve immutability, preventing external modifications.
+
+        Returns:
+            AppState: A copy of the application's current state.
+        """
         with QReadLocker(self._rw_lock):
             return replace(self._state)
 

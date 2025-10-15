@@ -1,6 +1,13 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(cargo:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo doc:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "serana"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }
