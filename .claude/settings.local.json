@@ -3,7 +3,8 @@
     "allow": [
       "Bash(cargo:*)",
       "Bash(cargo check:*)",
-      "Bash(cargo doc:*)"
+      "Bash(cargo doc:*)",
+      "WebFetch(domain:docs.rs)"
     ]
   },
   "enableAllProjectMcpServers": true,
