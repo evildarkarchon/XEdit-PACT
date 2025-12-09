@@ -1,7 +1,3 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Overview
 
 AutoQAC is a PySide6 (Qt) application for batch cleaning Bethesda game plugins using xEdit's quickautoclean. It removes Identical To Master Records (ITMs) and Undisabled References (UDRs) from game plugins for Fallout 3/NV/4, Skyrim SE, and VR variants.
@@ -124,14 +120,14 @@ The application interfaces with xEdit (SSEEdit/FO4Edit) via subprocess:
 
 ### Supported Games
 
-| Game | Short Code | xEdit Executables |
-|------|------------|-------------------|
-| Fallout 3 | FO3 | FO3Edit.exe, FO3Edit64.exe |
-| Fallout New Vegas | FNV | FNVEdit.exe, FNVEdit64.exe |
-| Fallout 4 | FO4 | FO4Edit.exe, FO4Edit64.exe |
-| Fallout 4 VR | FO4VR | FO4VREdit.exe |
-| Skyrim Special Edition | SSE | SSEEdit.exe, SSEEdit64.exe |
-| Skyrim VR | SkyrimVR | TES5VREdit.exe |
+| Game                   | Short Code | xEdit Executables          |
+| ---------------------- | ---------- | -------------------------- |
+| Fallout 3              | FO3        | FO3Edit.exe, FO3Edit64.exe |
+| Fallout New Vegas      | FNV        | FNVEdit.exe, FNVEdit64.exe |
+| Fallout 4              | FO4        | FO4Edit.exe, FO4Edit64.exe |
+| Fallout 4 VR           | FO4VR      | FO4VREdit.exe              |
+| Skyrim Special Edition | SSE        | SSEEdit.exe, SSEEdit64.exe |
+| Skyrim VR              | SkyrimVR   | TES5VREdit.exe             |
 
 Also supports universal xEdit executables (`xEdit.exe`, `xEdit64.exe`) with automatic game detection.
 
