@@ -169,7 +169,7 @@ class ConfigManager:
             - "skip_list": The list of items to be skipped for the
               specified game type.
         """
-        # Get skip list from the correct key in PACT Main.yaml
+        # Get skip list from the correct key in AutoQAC Main.yaml
         skip_list = self.get(f"AutoQAC_Data.Skip_Lists.{game_type}", [])
 
         return {
@@ -227,11 +227,11 @@ class ConfigManager:
 
         """
         return {
-            "journal_expiration": self.get("PACT_Settings.Journal_Expiration", 7),
-            "cleaning_timeout": self.get("PACT_Settings.Cleaning_Timeout", 300),
-            "cpu_threshold": self.get("PACT_Settings.CPU_Threshold", 5),
-            "mo2_mode": self.get("PACT_Settings.MO2Mode", False),
-            "max_concurrent_subprocesses": self.get("PACT_Settings.Max_Concurrent_Subprocesses", 3),
+            "journal_expiration": self.get("AutoQAC_Settings.Journal_Expiration", 7),
+            "cleaning_timeout": self.get("AutoQAC_Settings.Cleaning_Timeout", 300),
+            "cpu_threshold": self.get("AutoQAC_Settings.CPU_Threshold", 5),
+            "mo2_mode": self.get("AutoQAC_Settings.MO2Mode", False),
+            "max_concurrent_subprocesses": self.get("AutoQAC_Settings.Max_Concurrent_Subprocesses", 3),
         }
 
     def validate_paths(self) -> dict[str, bool]:

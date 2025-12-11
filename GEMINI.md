@@ -1,7 +1,7 @@
-# XEdit-PACT (Plugin Auto Cleaning Tool)
+# AutoQAC (Auto Quick Auto Clean)
 
 **Project Context:**
-XEdit-PACT is a tool for automating the cleaning of Bethesda game plugins (ESP/ESM/ESL) using xEdit's Quick Auto Clean functionality. It is currently in a transitional phase, maintaining a stable Python/Qt implementation while actively migrating to a modern Rust/Slint architecture.
+AutoQAC is a tool for automating the cleaning of Bethesda game plugins (ESP/ESM/ESL) using xEdit's Quick Auto Clean functionality. It is currently in a transitional phase, maintaining a stable Python/Qt implementation while actively migrating to a modern Rust/Slint architecture.
 
 ## 1. Project Structure & Implementations
 
@@ -82,7 +82,7 @@ Configuration is stored in YAML files within the `AutoQAC Data/` directory (shar
 
 *   `AutoQAC Main.yaml`: Game definitions, xEdit executable names, and skip lists.
 *   `AutoQAC Config.yaml`: User-specific settings (paths, timeouts).
-*   `PACT Ignore.yaml`: Custom plugin ignore lists.
+*   `AutoQAC Ignore.yaml`: User-defined plugin ignore lists.
 
 ## 5. Development Guidelines
 

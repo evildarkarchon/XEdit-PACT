@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QApplication
 from AutoQACLib.config_manager import ConfigManager
 from AutoQACLib.gui_controller import GuiController
 from AutoQACLib.logging_config import get_logger, log_startup_info, setup_logging
+from AutoQACLib.migration import run_all_migrations
 from AutoQACLib.state_manager import StateManager
 from AutoQACLib.ui.main_window import MainWindow
 
@@ -34,6 +35,11 @@ def create_application() -> tuple[QApplication, MainWindow]:
     # Create application
     app: QApplication = QApplication(sys.argv)
     app.setApplicationName("AutoQAC")
+
+    # Run legacy configuration migrations
+    migration_results = run_all_migrations()
+    if any(migration_results.values()):
+        logger.info(f"Migration results: {migration_results}")
 
     # Create config managers
     main_config: ConfigManager = ConfigManager(AUTOQAC_YAML_PATH)  # For skip lists and game configs

@@ -1,12 +1,12 @@
-# XEdit-PACT
+# AutoQAC
 
-**Plugin Auto Cleaning Tool for Bethesda Game Plugins**
+**Auto Quick Auto Clean - Batch Plugin Cleaning Tool for Bethesda Games**
 
 Automated batch cleaning of Bethesda game plugins using xEdit's Quick Auto Clean (-QAC) functionality.
 
 ## Overview
 
-XEdit-PACT automates the process of cleaning game plugins (ESP/ESM/ESL files) to remove:
+AutoQAC automates the process of cleaning game plugins (ESP/ESM/ESL files) to remove:
 - **ITMs (Identical To Master)**: Records that are identical to the master file
 - **UDRs (Undisabled References)**: References that should be disabled but aren't
 - **Deleted Navmeshes**: Navigation meshes that can cause crashes
@@ -77,11 +77,11 @@ Sometimes, a mod author will open a plugin record simply to investigate a field 
 
 - Records need to be restored and properly disabled
 - Can cause crashes and broken quests if not cleaned
-- PACT automatically handles UDR restoration
+- AutoQAC automatically handles UDR restoration
 
 ### DLC Cleaning
 
-While cleaning official DLC plugins is recommended for **Skyrim**, it is **NOT recommended** for **Fallout 4**. However, PACT will skip official DLC plugins by default for safety.
+While cleaning official DLC plugins is recommended for **Skyrim**, it is **NOT recommended** for **Fallout 4**. However, AutoQAC will skip official DLC plugins by default for safety.
 
 All other mod plugins, including **Creation Club Content**, can and should be cleaned.
 
@@ -110,14 +110,14 @@ All other mod plugins, including **Creation Club Content**, can and should be cl
 
 ## Supported Games
 
-| Game | Short Code | xEdit Executables |
-|------|------------|-------------------|
-| Fallout 3 | FO3 | FO3Edit.exe, FO3Edit64.exe |
-| Fallout New Vegas | FNV | FNVEdit.exe, FNVEdit64.exe |
-| Fallout 4 | FO4 | FO4Edit.exe, FO4Edit64.exe |
-| Skyrim Special Edition | SSE | SSEEdit.exe, SSEEdit64.exe |
-| Fallout 4 VR | FO4VR | FO4VREdit.exe |
-| Skyrim VR | SkyrimVR | TES5VREdit.exe |
+| Game                   | Short Code | xEdit Executables          |
+| ---------------------- | ---------- | -------------------------- |
+| Fallout 3              | FO3        | FO3Edit.exe, FO3Edit64.exe |
+| Fallout New Vegas      | FNV        | FNVEdit.exe, FNVEdit64.exe |
+| Fallout 4              | FO4        | FO4Edit.exe, FO4Edit64.exe |
+| Skyrim Special Edition | SSE        | SSEEdit.exe, SSEEdit64.exe |
+| Fallout 4 VR           | FO4VR      | FO4VREdit.exe              |
+| Skyrim VR              | SkyrimVR   | TES5VREdit.exe             |
 
 **Universal xEdit**: Also supports universal xEdit executables (`xEdit.exe`, `xEdit64.exe`) with automatic game detection.
 
@@ -177,13 +177,13 @@ Download from Nexus Mods:
 - [SSEEdit](https://www.nexusmods.com/skyrimspecialedition/mods/164?tab=files) (Skyrim Special Edition)
 - [FO4Edit](https://www.nexusmods.com/fallout4/mods/2737/?tab=files) (Fallout 4)
 
-**Important**: Run xEdit at least once before using PACT to ensure proper configuration.
+**Important**: Run xEdit at least once before using AutoQAC to ensure proper configuration.
 
 ### Mod Organizer 2 Users
 
 **⚠ IMPORTANT**: Make sure MO2 is **completely closed** before starting cleaning.
 
-Set the **ModOrganizer.exe** path in PACT. Vortex and other mod manager users can leave this blank.
+Set the **ModOrganizer.exe** path in AutoQAC. Vortex and other mod manager users can leave this blank.
 
 ---
 
@@ -194,7 +194,7 @@ Set the **ModOrganizer.exe** path in PACT. Vortex and other mod manager users ca
 Located in `AutoQAC Data/`:
 - `AutoQAC Main.yaml`: Game configurations, skip lists
 - `AutoQAC Config.yaml`: User settings, paths
-- `PACT Ignore.yaml`: Additional ignore list
+- `AutoQAC Ignore.yaml`: Additional ignore list
 
 ### Rust/Slint Version
 
@@ -222,20 +222,20 @@ Both implementations create log files:
 
 ### Critical Constraint
 
-**⚠ PACT SHOULD ONLY CLEAN ONE (1) PLUGIN AT A TIME**
+**⚠ AutoQAC SHOULD ONLY CLEAN ONE (1) PLUGIN AT A TIME**
 
-If multiple xEdit windows start opening simultaneously, immediately close PACT and report the issue.
+If multiple xEdit windows start opening simultaneously, immediately close AutoQAC and report the issue.
 
 ### Timeout Handling
 
 - Default timeout: **5 minutes** (300s) per plugin
-- PACT will automatically close xEdit and skip the plugin if timeout is reached
+- AutoQAC will automatically close xEdit and skip the plugin if timeout is reached
 - You can manually close xEdit to skip the wait
 
 ### Common Errors
 
 **"Exactly one module must be selected for Quick Clean mode"**:
-1. Plugin name is invalid → Press OK, PACT will continue
+1. Plugin name is invalid → Press OK, AutoQAC will continue
 2. MO2 path not set correctly → Set ModOrganizer.exe path
 
 **"This application failed to start because no Qt Platform..."**:
@@ -249,7 +249,7 @@ If multiple xEdit windows start opening simultaneously, immediately close PACT a
 To avoid xEdit pop-ups interrupting your work:
 
 1. Press **WIN + CTRL + →** to switch to another virtual desktop
-2. Run PACT on that desktop
+2. Run AutoQAC on that desktop
 3. Press **WIN + CTRL + ←** to switch back to your main desktop
 
 **Guides**:
@@ -271,8 +271,8 @@ To avoid xEdit pop-ups interrupting your work:
 - **Mod Organizer 2**: [GitHub Releases](https://github.com/ModOrganizer2/modorganizer/releases)
 - **SSEEdit**: [Nexus Mods](https://www.nexusmods.com/skyrimspecialedition/mods/164?tab=files)
 - **FO4Edit**: [Nexus Mods](https://www.nexusmods.com/fallout4/mods/2737/?tab=files)
-- **FO4 PACT**: [Nexus Mods](https://www.nexusmods.com/fallout4/mods/69413)
-- **SSE PACT**: [Nexus Mods](https://www.nexusmods.com/skyrimspecialedition/mods/86683)
+- **FO4 AutoQAC**: [Nexus Mods](https://www.nexusmods.com/fallout4/mods/69413)
+- **SSE AutoQAC**: [Nexus Mods](https://www.nexusmods.com/skyrimspecialedition/mods/86683)
 
 ---
 

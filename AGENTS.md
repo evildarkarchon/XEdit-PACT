@@ -1,3 +1,22 @@
+<!-- OPENSPEC:START -->
+# OpenSpec Instructions
+
+These instructions are for AI assistants working in this project.
+
+Always open `@/openspec/AGENTS.md` when the request:
+- Mentions planning or proposals (words like proposal, spec, change, plan)
+- Introduces new capabilities, breaking changes, architecture shifts, or big performance/security work
+- Sounds ambiguous and you need the authoritative spec before coding
+
+Use `@/openspec/AGENTS.md` to learn:
+- How to create and apply change proposals
+- Spec format and conventions
+- Project structure and guidelines
+
+Keep this managed block so 'openspec update' can refresh the instructions.
+
+<!-- OPENSPEC:END -->
+
 ## Overview
 
 AutoQAC is a PySide6 (Qt) application for batch cleaning Bethesda game plugins using xEdit's quickautoclean. It removes Identical To Master Records (ITMs) and Undisabled References (UDRs) from game plugins for Fallout 3/NV/4, Skyrim SE, and VR variants.
@@ -95,8 +114,7 @@ uv run python AutoQAC_Interface.py
 - `pyproject.toml`: Project dependencies and tool configs (ruff, mypy, pytest, coverage)
 - `AutoQAC Data/AutoQAC Main.yaml`: Game configurations, plugin skip lists
 - `AutoQAC Data/AutoQAC Config.yaml`: User settings, file paths
-- `PACT Settings.yaml`: Legacy config for backward compatibility
-- `PACT Ignore.yaml`: Additional ignore list for plugins
+- `AutoQAC Data/AutoQAC Ignore.yaml`: User-defined plugin ignore lists
 
 ### Dependency Injection Pattern
 
