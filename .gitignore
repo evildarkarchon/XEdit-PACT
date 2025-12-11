@@ -32,3 +32,4 @@ uv.lock
 .coverage
 coverage.xml
 migrate_to_refactored.py
+AutoQAC Data/AutoQAC Ignore.yaml

@@ -98,10 +98,5 @@ Configuration is stored in YAML files within the `AutoQAC Data/` directory (shar
 
 *   `AutoQACLib/`: Python backend logic.
 *   `AutoQAC_Interface.py`: Python GUI entry point.
-*   `autoqac-rust/src/`: Rust source code.
-    *   `ui/`: Slint UI definitions and bridge logic.
-    *   `state/`: Thread-safe state management (`Arc<RwLock<AppState>>`).
-    *   `services/`: Business logic (cleaning, game detection).
 *   `AutoQAC Data/`: Runtime configuration and assets.
 *   `tests/`: Python test suite.
-*   `autoqac-rust/tests/`: Rust integration tests.
