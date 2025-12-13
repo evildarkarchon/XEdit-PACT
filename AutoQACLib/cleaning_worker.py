@@ -134,9 +134,9 @@ class CleaningWorker(QThread):
         logger.info("Stopping cleaning worker...")
         self._should_stop = True
         self.requestInterruption()
-        
+
         # First try to stop any running subprocess through the service
-        if hasattr(self, 'service') and self.service:
+        if hasattr(self, "service") and self.service:
             try:
                 self.service.stop_current_operation()
             except (AttributeError, RuntimeError) as e:

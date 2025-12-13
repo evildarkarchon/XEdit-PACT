@@ -156,7 +156,7 @@ class TestDeadlockScenarios:
         # Try to get value - should timeout and raise exception instead of deadlocking
         start_time = time.time()
         from AutoQACLib.yaml_manager import YAMLLockTimeoutError
-        
+
         with pytest.raises(YAMLLockTimeoutError):
             _yaml_manager.get_value(yaml_path, "test_key")
         elapsed = time.time() - start_time

@@ -41,24 +41,24 @@ class CleaningService:
         self.main_config = main_config  # For skip lists and game configs
         self.user_config = user_config  # For user settings
         self.state = state
-        self.progress_callback: Callable | None = None
-        self.log_callback: Callable | None = None
+        self.progress_callback: Callable[[dict[str, Any]], None] | None = None
+        self.log_callback: Callable[[str], None] | None = None
         self._current_process: Any = None  # Track current subprocess for cleanup
         self._stop_requested: bool = False  # Flag to indicate stop was requested
 
-    def set_progress_callback(self, callback: Callable | None) -> None:
+    def set_progress_callback(self, callback: Callable[[dict[str, Any]], None] | None) -> None:
         """
         Sets the progress callback to monitor or handle progress updates during an operation.
         The callback function will be called whenever progress changes.
 
         Args:
-            callback (Callable | None): A function to handle progress updates. If provided,
-                the function should take necessary parameters as required for processing the progress
-                information. If None, no progress updates will be processed.
+            callback: A function to handle progress updates. Takes a dict with progress
+                information (plugin, action, line, stats). If None, no progress updates
+                will be processed.
         """
         self.progress_callback = callback
 
-    def set_log_callback(self, callback: Callable | None) -> None:
+    def set_log_callback(self, callback: Callable[[str], None] | None) -> None:
         """
         Sets a callback function for logging events.
 
@@ -67,7 +67,7 @@ class CleaningService:
         logging callback will be disabled.
 
         Args:
-            callback (Callable | None): A callable function to handle logging events,
+            callback: A callable function to handle logging events (takes a string),
                 or `None` to disable the logging callback.
         """
         self.log_callback = callback
@@ -75,22 +75,21 @@ class CleaningService:
     def stop_current_operation(self) -> None:
         """
         Stop the currently running cleaning operation gracefully.
-        
+
         This method sets a flag to request stopping and attempts to terminate
         the current subprocess if one is running.
         """
         logger.info("Requesting stop of current cleaning operation")
         self._stop_requested = True
-        
+
         if self._current_process:
             try:
                 # Attempt to terminate the subprocess gracefully
                 logger.info("Terminating current subprocess")
                 self._current_process.terminate()
                 # Give it a moment to terminate
-                import time
                 time.sleep(0.5)
-                
+
                 # If still running, kill it
                 if self._current_process.poll() is None:
                     logger.warning("Subprocess did not terminate gracefully, killing")
@@ -109,7 +108,7 @@ class CleaningService:
             CleanResult: An object representing the result of the cleaning operation.
         """
         start_time: float = time.time()
-        
+
         # Reset stop flag at the beginning of each cleaning operation
         self._stop_requested = False
         self._current_process = None
@@ -274,7 +273,13 @@ class CleaningService:
         return ""
 
     def _execute_cleaning_command(self, command: str, plugin_name: str, timeout: int) -> CleanResult:
-        """Execute the cleaning command with real-time monitoring."""
+        """Execute the cleaning command with real-time monitoring.
+
+        Note: This method uses instance variables (_cleaning_stats, _current_plugin)
+        that are not thread-synchronized. CleaningService is designed to be called
+        sequentially by a single CleaningWorker thread. Do not call this method
+        from multiple threads concurrently.
+        """
         start_time: float = time.time()
 
         try:

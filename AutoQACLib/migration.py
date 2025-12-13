@@ -60,9 +60,7 @@ def migrate_legacy_ignore_file() -> bool:
     try:
         logger.info(f"Migrating {LEGACY_PACT_IGNORE_PATH} → {AUTOQAC_IGNORE_PATH}")
         shutil.copy2(LEGACY_PACT_IGNORE_PATH, AUTOQAC_IGNORE_PATH)
-        logger.info(
-            f"Migration complete. You may delete the legacy file: {LEGACY_PACT_IGNORE_PATH}"
-        )
+        logger.info(f"Migration complete. You may delete the legacy file: {LEGACY_PACT_IGNORE_PATH}")
     except (OSError, shutil.Error) as e:
         logger.error(f"Failed to migrate legacy ignore file: {e}")
         return False

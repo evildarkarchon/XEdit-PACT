@@ -228,9 +228,10 @@ class ConfigurationDialogs:
             enabled (bool): Specifies whether to enable or disable Partial Forms.
         """
         try:
-            # Update state and configuration
+            # Update state immediately
             self.state.update(partial_forms_enabled=enabled)
-            self.user_config.set("Settings.Partial_Forms", enabled)
+            # Defer config save to avoid deadlock (consistent with other toggle methods)
+            self.controller.defer_config_save("Settings.Partial_Forms", enabled)
             self.controller.update_status.emit(f"Partial Forms {'enabled' if enabled else 'disabled'}")
         except (OSError, ValueError, TypeError) as e:
             logger.error(f"Error toggling Partial Forms: {e}")

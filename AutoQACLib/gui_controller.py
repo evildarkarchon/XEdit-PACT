@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-
 class GuiController(QObject):
     """Mediates between GUI and business logic."""
 
@@ -240,6 +239,7 @@ class GuiController(QObject):
             self.worker.deleteLater()
             # Process events to ensure deletion happens
             from PySide6.QtCore import QCoreApplication
+
             QCoreApplication.processEvents()
             self.worker = None
 
@@ -283,7 +283,7 @@ class GuiController(QObject):
         with QMutexLocker(self._pending_saves_mutex):
             if not self._pending_config_saves:
                 return
-            
+
             # Copy and clear the list under mutex protection
             saves_to_process = self._pending_config_saves.copy()
             self._pending_config_saves.clear()
@@ -298,7 +298,7 @@ class GuiController(QObject):
             # If we get an exception during the loop, log it and stop processing
             logger.error(f"Error during config save processing: {e}")
             return
-        
+
         # Log all errors after the loop
         for error in errors:
             logger.error(error)

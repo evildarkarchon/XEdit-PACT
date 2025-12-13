@@ -75,6 +75,7 @@ class SignalConnectionMixin:
             self.state.cleaning_finished.disconnect(self._on_cleaning_finished)
             self.state.plugin_processed.disconnect(self._on_plugin_processed)
             self.state.state_changed.disconnect(self._on_state_changed)
+            self.state.bulk_state_changed.disconnect(self._on_bulk_state_changed)
         except RuntimeError:
             pass  # Already disconnected
 

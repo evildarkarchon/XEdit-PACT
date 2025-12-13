@@ -5,8 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import ruamel.yaml
-from PySide6.QtCore import QMutexLocker, QThread
+from PySide6.QtCore import QThread
 
 from AutoQACLib.logging_config import get_logger
 from AutoQACLib.yaml_manager import _yaml_manager
@@ -14,8 +13,6 @@ from AutoQACLib.yaml_manager import _yaml_manager
 if TYPE_CHECKING:
     from collections.abc import Callable
     from logging import Logger
-
-    from ruamel.yaml.main import YAML
 
 logger: Logger = get_logger(__name__)
 
@@ -59,18 +56,8 @@ def yaml_settings_write(yaml_path: str | Path, new_value: Any, key_path: str | l
         None
     """
     if key_path is None:
-        # Write entire file
-        path: Path = Path(yaml_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        yaml: YAML = ruamel.yaml.YAML()
-        yaml.indent(offset=2)
-        yaml.width = 300
-        with path.open("w", encoding="utf-8") as f:
-            yaml.dump(new_value, f)
-
-        # Thread-safe cache update after full file write
-        with QMutexLocker(_yaml_manager._cache_mutex):  # noqa: SLF001
-            _yaml_manager._cache[str(yaml_path)] = new_value  # noqa: SLF001
+        # Write entire file using the public API
+        _yaml_manager.write_full_file(str(yaml_path), new_value)
     else:
         _yaml_manager.set_value(str(yaml_path), key_path, new_value)
 

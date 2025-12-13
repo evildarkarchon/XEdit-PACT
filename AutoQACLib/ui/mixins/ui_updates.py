@@ -29,7 +29,7 @@ class UIUpdateMixin:
 
     def _update_ui_from_state(self, priority: str = "normal") -> None:
         """Update UI elements based on current state with priority-based debouncing.
-        
+
         Args:
             priority: Update priority - "immediate", "high", or "normal"
         """
@@ -37,15 +37,15 @@ class UIUpdateMixin:
         if priority == "immediate":
             self._perform_ui_update()
             return
-        
+
         # Set appropriate debounce interval based on priority
         interval = 50 if priority == "high" else 200  # Longer delay for normal updates
-        
+
         # Update priority if this is a higher priority update
         if priority == "high" and self._update_priority == "normal":
             self._update_priority = priority
             self._update_timer.setInterval(interval)
-        
+
         # Start or restart timer with appropriate interval
         if not self._update_timer.isActive() or priority == "high":
             self._update_timer.setInterval(interval)

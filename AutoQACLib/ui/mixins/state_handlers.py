@@ -74,7 +74,7 @@ class StateEventHandlerMixin:
         # Check if any changes require immediate update
         immediate_update = False
         high_priority_update = False
-        
+
         for property_name, value in changes.items():
             if property_name == "is_cleaning":
                 immediate_update = True
@@ -91,7 +91,7 @@ class StateEventHandlerMixin:
                     and isinstance(value, str)
                 ):
                     self.progress_dialog.update_current_plugin(value)
-        
+
         # Update UI with appropriate priority
         if immediate_update:
             self._update_ui_from_state("immediate")
@@ -99,13 +99,13 @@ class StateEventHandlerMixin:
             self._update_ui_from_state("high")
         else:
             self._update_ui_from_state("normal")
-    
+
     @Slot(str, object)
     def _on_state_changed(self, property_name: str, value: object) -> None:
         """Handle individual state property changes with appropriate priority."""
         # Determine update priority based on property type
         priority = "normal"
-        
+
         # High priority for user-facing state changes
         if property_name == "is_cleaning":
             priority = "immediate"  # Cleaning state changes need immediate feedback
@@ -121,7 +121,7 @@ class StateEventHandlerMixin:
                 self.progress_dialog.update_current_plugin(value)
         elif property_name in ["mo2_mode", "partial_forms_enabled"]:
             priority = "normal"  # Settings changes
-        
+
         # Update UI with appropriate priority
         if property_name in [
             "is_load_order_configured",

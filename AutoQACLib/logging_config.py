@@ -131,8 +131,12 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 
-def log_startup_info(logger: logging.Logger, app_name: str = "AutoQAC", version: str = "2.0.0") -> None:
+def log_startup_info(logger: logging.Logger, app_name: str = "AutoQAC", version: str | None = None) -> None:
     """Log startup information."""
+    if version is None:
+        from AutoQACLib import __version__
+
+        version = __version__
     separator = "=" * 60
     logger.info(separator)
     logger.info(f"{app_name} v{version} - Starting up")

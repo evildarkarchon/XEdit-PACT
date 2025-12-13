@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, cast
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import QMessageBox, QWidget
 
+from AutoQACLib import __version__
+
 if TYPE_CHECKING:
     from PySide6.QtWidgets import QStatusBar
 
@@ -50,6 +52,6 @@ class DialogMixin:
             "AutoQAC - Automated Quick Auto Clean\n\n"
             "A PySide6 application for batch cleaning Bethesda game plugins "
             "using xEdit's Quick Auto Clean (-QAC) functionality.\n\n"
-            "Version: 2.0.0\n"
-            "Built with PySide6 and Python 3.8+",
+            f"Version: {__version__}\n"
+            "Built with PySide6 and Python 3.12+",
         )

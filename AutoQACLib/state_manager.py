@@ -155,7 +155,7 @@ class StateManager(QObject):
                                 cleaning_started = True
                             else:
                                 cleaning_finished = True
-            
+
             # Capture values needed for signals while still holding lock
             if config_changed:
                 is_fully_configured = self._state.is_fully_configured
@@ -253,7 +253,7 @@ class StateManager(QObject):
         # Capture values for signals - minimize lock time
         current_progress = 0
         total_plugins = 0
-        
+
         # Update state atomically
         with QWriteLocker(self._rw_lock):
             if status == "cleaned":
@@ -325,7 +325,7 @@ class StateManager(QObject):
 
         if load_order_path is not None:
             updates["load_order_path"] = load_order_path
-            # Defer file existence check to avoid blocking UI
+            # Check file existence (synchronous - acceptable for Path.exists())
             try:
                 updates["is_load_order_configured"] = load_order_path.exists()
             except (OSError, PermissionError):
@@ -333,7 +333,7 @@ class StateManager(QObject):
 
         if mo2_exe_path is not None:
             updates["mo2_exe_path"] = mo2_exe_path
-            # Defer file existence check to avoid blocking UI
+            # Check file existence (synchronous - acceptable for Path.exists())
             try:
                 updates["is_mo2_configured"] = mo2_exe_path.exists()
             except (OSError, PermissionError):
@@ -343,7 +343,7 @@ class StateManager(QObject):
 
         if xedit_exe_path is not None:
             updates["xedit_exe_path"] = xedit_exe_path
-            # Defer file existence check to avoid blocking UI
+            # Check file existence (synchronous - acceptable for Path.exists())
             try:
                 updates["is_xedit_configured"] = xedit_exe_path.exists()
             except (OSError, PermissionError):

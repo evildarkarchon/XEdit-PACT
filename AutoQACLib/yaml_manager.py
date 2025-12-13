@@ -22,8 +22,8 @@ class YAMLLockTimeoutError(Exception):
     """Raised when a YAML file lock cannot be acquired within the timeout period."""
 
 
-# Thread-safe file operations
-_yaml_mutexes: dict[str, QMutex] = {}
+# Timeout constant for YAML file locks
+YAML_LOCK_TIMEOUT_MS = 5000  # 5 second timeout
 
 
 class YamlManager:
@@ -66,7 +66,7 @@ class YamlManager:
         file_mutex: QMutex = self._get_file_mutex(yaml_path)
 
         # Use Qt mutex with timeout to prevent deadlocks
-        if not file_mutex.tryLock(5000):  # 5 second timeout
+        if not file_mutex.tryLock(YAML_LOCK_TIMEOUT_MS):
             error_msg = f"Timeout acquiring lock for file: {yaml_path}"
             logger.error(error_msg)
             raise YAMLLockTimeoutError(error_msg)
@@ -103,7 +103,7 @@ class YamlManager:
         file_mutex: QMutex = self._get_file_mutex(yaml_path)
 
         # Use Qt mutex with timeout to prevent deadlocks
-        if not file_mutex.tryLock(5000):  # 5 second timeout
+        if not file_mutex.tryLock(YAML_LOCK_TIMEOUT_MS):
             error_msg = f"Timeout acquiring lock for file: {yaml_path}"
             logger.error(error_msg)
             raise YAMLLockTimeoutError(error_msg)
@@ -127,6 +127,19 @@ class YamlManager:
         finally:
             file_mutex.unlock()
 
+    def write_full_file(self, yaml_path: str, data: Any) -> None:
+        """
+        Write full file contents and update cache atomically.
+
+        This method replaces the entire YAML file with the provided data,
+        properly updating both the cache and modification time tracking.
+
+        Args:
+            yaml_path: Path to the YAML file to write.
+            data: The complete data structure to write to the file.
+        """
+        self._save_yaml(yaml_path, data)
+
     @staticmethod
     def _parse_key_path(key_path: str | list[str]) -> list[str]:
         """Convert a dot-separated string path to list of keys."""
@@ -135,7 +148,7 @@ class YamlManager:
     def _load_yaml(self, yaml_path: str) -> Any:
         """Load YAML file with intelligent caching based on modification time."""
         path = Path(yaml_path)
-        
+
         # Quick cache check with modification time validation
         with QMutexLocker(self._cache_mutex):
             if yaml_path in self._cache:
@@ -162,7 +175,7 @@ class YamlManager:
             else:
                 # Get modification time for cache tracking
                 file_mtime = path.stat().st_mtime
-                
+
                 with path.open(encoding="utf-8") as yaml_file:
                     content: str = yaml_file.read().strip()
                     # Handle empty file
@@ -200,7 +213,7 @@ class YamlManager:
 
             # Atomic rename
             temp_path.replace(path)
-            
+
             # Get new modification time after save
             file_mtime = path.stat().st_mtime
 

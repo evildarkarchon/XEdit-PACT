@@ -140,8 +140,8 @@ class TestGuiController:
         with patch.object(Path, "exists", return_value=False):
             plugins: list[str] = controller.get_plugins_to_clean()
 
-            # According to implementation, should return test plugins for test paths
-            assert plugins == ["test.esp", "test2.esm"]
+            # Should return empty list when file doesn't exist
+            assert plugins == []
 
     def test_get_plugins_to_clean_no_path(self, controller: GuiController) -> None:
         """Test getting plugins when no path is configured."""
@@ -163,10 +163,14 @@ class TestGuiController:
     def test_validate_plugin_line_invalid_extension_position(self, controller: GuiController) -> None:
         """Test validation of plugin lines with content after extension."""
         # Test with content after extension
-        result1: str | None = controller.plugin_validator._validate_plugin_line("plugin1.esp,plugin2.esp", 1, "plugin1.esp,plugin2.esp")  # noqa: SLF001
+        result1: str | None = controller.plugin_validator._validate_plugin_line(
+            "plugin1.esp,plugin2.esp", 1, "plugin1.esp,plugin2.esp"
+        )  # noqa: SLF001
         assert result1 == "plugin1.esp"
 
-        result2: str | None = controller.plugin_validator._validate_plugin_line("plugin1.esm;plugin2.esm", 2, "plugin1.esm;plugin2.esm")  # noqa: SLF001
+        result2: str | None = controller.plugin_validator._validate_plugin_line(
+            "plugin1.esm;plugin2.esm", 2, "plugin1.esm;plugin2.esm"
+        )  # noqa: SLF001
         assert result2 == "plugin1.esm"
 
         result3: str | None = controller.plugin_validator._validate_plugin_line(  # noqa: SLF001
@@ -334,12 +338,15 @@ class TestGuiControllerPartialForms:
         self, partial_forms_controller: GuiController, mock_user_config: Mock, mock_state: Mock
     ) -> None:
         """Test enabling Partial Forms for the first time shows warning."""
-        # Enable Partial Forms
-        partial_forms_controller.toggle_partial_forms(True)
+        # Patch defer_config_save to track calls
+        with patch.object(partial_forms_controller, "defer_config_save") as mock_defer:
+            # Enable Partial Forms
+            partial_forms_controller.toggle_partial_forms(True)
 
-        # Verify state was updated
-        mock_state.update.assert_called_with(partial_forms_enabled=True)
-        mock_user_config.set.assert_called_with("Settings.Partial_Forms", True)
+            # Verify state was updated
+            mock_state.update.assert_called_with(partial_forms_enabled=True)
+            # Verify deferred config save was called (consistent with other toggle methods)
+            mock_defer.assert_called_with("Settings.Partial_Forms", True)
 
     def test_toggle_partial_forms_subsequent_time(
         self, partial_forms_controller: GuiController, mock_user_config: Mock, mock_state: Mock
@@ -348,33 +355,40 @@ class TestGuiControllerPartialForms:
         # Mock that warning has been shown before
         mock_user_config.get.return_value = True
 
-        # Enable Partial Forms
-        partial_forms_controller.toggle_partial_forms(True)
+        # Patch defer_config_save to track calls
+        with patch.object(partial_forms_controller, "defer_config_save") as mock_defer:
+            # Enable Partial Forms
+            partial_forms_controller.toggle_partial_forms(True)
 
-        # Verify state was updated
-        mock_state.update.assert_called_with(partial_forms_enabled=True)
-        mock_user_config.set.assert_called_with("Settings.Partial_Forms", True)
+            # Verify state was updated
+            mock_state.update.assert_called_with(partial_forms_enabled=True)
+            # Verify deferred config save was called (consistent with other toggle methods)
+            mock_defer.assert_called_with("Settings.Partial_Forms", True)
 
     def test_toggle_partial_forms_disable(
         self, partial_forms_controller: GuiController, mock_user_config: Mock, mock_state: Mock
     ) -> None:
         """Test disabling Partial Forms."""
-        # Disable Partial Forms
-        partial_forms_controller.toggle_partial_forms(False)
+        # Patch defer_config_save to track calls
+        with patch.object(partial_forms_controller, "defer_config_save") as mock_defer:
+            # Disable Partial Forms
+            partial_forms_controller.toggle_partial_forms(False)
 
-        # Verify state was updated
-        mock_state.update.assert_called_with(partial_forms_enabled=False)
-        mock_user_config.set.assert_called_with("Settings.Partial_Forms", False)
+            # Verify state was updated
+            mock_state.update.assert_called_with(partial_forms_enabled=False)
+            # Verify deferred config save was called (consistent with other toggle methods)
+            mock_defer.assert_called_with("Settings.Partial_Forms", False)
 
     def test_toggle_partial_forms_error_handling(
         self, partial_forms_controller: GuiController, mock_user_config: Mock, mock_state: Mock
     ) -> None:
         """Test error handling in Partial Forms toggle."""
-        # Mock an error during configuration save
-        mock_user_config.set.side_effect = OSError("Test error")
+        # Mock an error during deferred config save
+        with patch.object(
+            partial_forms_controller, "defer_config_save", side_effect=OSError("Test error")
+        ):
+            # Try to enable Partial Forms
+            partial_forms_controller.toggle_partial_forms(True)
 
-        # Try to enable Partial Forms
-        partial_forms_controller.toggle_partial_forms(True)
-
-        # Verify error was handled (state update was attempted)
-        mock_state.update.assert_called_with(partial_forms_enabled=True)
+            # Verify error was handled (state update was attempted)
+            mock_state.update.assert_called_with(partial_forms_enabled=True)

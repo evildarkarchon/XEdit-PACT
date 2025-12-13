@@ -52,10 +52,6 @@ class PluginValidator:
 
         if not state_snapshot.load_order_path.exists():
             logger.error("Load order file not found")
-            # For testing purposes, return a mock list when file doesn't exist
-            path_str = str(state_snapshot.load_order_path)
-            if any(test_indicator in path_str.lower() for test_indicator in ["test", "path/to", "loadorder"]):
-                return ["test.esp", "test2.esm"]
             return []
 
         try:
@@ -66,11 +62,11 @@ class PluginValidator:
                     # Fast skip empty lines and comments
                     if not line or line[0] == "#":
                         continue
-                    
+
                     original_line = line.strip()
                     if not original_line:
                         continue
-                    
+
                     # Optimized prefix removal
                     line = original_line[1:].strip() if original_line[0] in PREFIX_CHARS else original_line
 
@@ -81,7 +77,7 @@ class PluginValidator:
                         if ext in line_lower:
                             has_plugin_ext = True
                             break
-                    
+
                     if has_plugin_ext:
                         # Validate plugin line and extract clean plugin name
                         plugin_name = self._validate_plugin_line(line, line_num, original_line)
@@ -109,7 +105,7 @@ class PluginValidator:
         """
         # Check if the line contains separators that would indicate multiple plugins
         has_separator = any(sep in line for sep in SEPARATOR_CHARS)
-        
+
         if has_separator:
             # Line contains separators, extract the first plugin
             for ext in PLUGIN_EXTENSIONS:

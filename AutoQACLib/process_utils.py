@@ -9,7 +9,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 import psutil
-from PySide6.QtCore import QMutex, QMutexLocker, QThread
+from PySide6.QtCore import QMutex, QMutexLocker, QThread, QWaitCondition
 
 from AutoQACLib.logging_config import get_logger
 
@@ -23,6 +23,7 @@ logger: Logger = get_logger(__name__)
 
 # Subprocess resource management
 _subprocess_semaphore = QMutex()
+_subprocess_condition = QWaitCondition()
 _active_subprocesses = 0
 _max_concurrent_subprocesses = 3  # Default limit
 
@@ -54,29 +55,36 @@ def _subprocess_resource_manager() -> Generator[None, None, None]:
     """
     Context manager to track and limit subprocess resources.
 
+    Uses QWaitCondition for proper thread synchronization when waiting
+    for available subprocess slots.
+
     Raises:
-        RuntimeError: If subprocess limit is exceeded.
+        RuntimeError: If subprocess limit is exceeded after timeout.
     """
     global _active_subprocesses  # noqa: PLW0603
 
-    # Wait for available slot
-    acquired = False
-    wait_count = 0
-    max_wait_cycles = 600  # 60 seconds with 0.1s sleep
+    # Wait for available slot using proper condition variable
+    wait_timeout_ms = 100  # 100ms per wait cycle
+    max_wait_cycles = 600  # 60 seconds total timeout
 
-    while not acquired and wait_count < max_wait_cycles:
-        with QMutexLocker(_subprocess_semaphore):
-            if _active_subprocesses < _max_concurrent_subprocesses:
-                _active_subprocesses += 1
-                acquired = True
-                logger.debug(f"Acquired subprocess slot ({_active_subprocesses}/{_max_concurrent_subprocesses})")
+    _subprocess_semaphore.lock()
+    try:
+        wait_count = 0
+        while _active_subprocesses >= _max_concurrent_subprocesses:
+            # Wait on condition with timeout
+            if not _subprocess_condition.wait(_subprocess_semaphore, wait_timeout_ms):
+                wait_count += 1
+                if wait_count >= max_wait_cycles:
+                    _subprocess_semaphore.unlock()
+                    raise RuntimeError(
+                        f"Subprocess limit exceeded: maximum {_max_concurrent_subprocesses} concurrent processes"
+                    )
 
-        if not acquired:
-            QThread.msleep(100)  # Wait 100ms
-            wait_count += 1
-
-    if not acquired:
-        raise RuntimeError(f"Subprocess limit exceeded: maximum {_max_concurrent_subprocesses} concurrent processes")
+        # Slot is available, acquire it
+        _active_subprocesses += 1
+        logger.debug(f"Acquired subprocess slot ({_active_subprocesses}/{_max_concurrent_subprocesses})")
+    finally:
+        _subprocess_semaphore.unlock()
 
     try:
         yield
@@ -84,6 +92,8 @@ def _subprocess_resource_manager() -> Generator[None, None, None]:
         with QMutexLocker(_subprocess_semaphore):
             _active_subprocesses -= 1
             logger.debug(f"Released subprocess slot ({_active_subprocesses}/{_max_concurrent_subprocesses})")
+            # Wake up any waiting threads
+            _subprocess_condition.wakeOne()
 
 
 @contextlib.contextmanager
@@ -198,7 +208,7 @@ def run_process(command: list[str] | str, timeout: int | None = None) -> tuple[i
 
 class OutputReaderThread(QThread):
     """Thread for reading process output asynchronously."""
-    
+
     def __init__(self, pipe: Any, line_list: list[str], callback: Callable[[str], None] | None) -> None:
         super().__init__()
         self.pipe = pipe
@@ -277,7 +287,7 @@ def run_process_with_realtime_output(
     process: subprocess.Popen | None = None
     stdout_thread: OutputReaderThread | None = None
     stderr_thread: OutputReaderThread | None = None
-    
+
     # Optimize subprocess creation for Windows
     if startup_info is None and sys.platform == "win32":
         startup_info = subprocess.STARTUPINFO()
@@ -298,7 +308,6 @@ def run_process_with_realtime_output(
             startupinfo=startup_info if sys.platform == "win32" else None,
             close_fds=sys.platform != "win32",  # Faster on Windows
         ) as process:
-
             # Start threads to read stdout and stderr
             stdout_thread = OutputReaderThread(process.stdout, stdout_lines, output_callback)
             stderr_thread = OutputReaderThread(process.stderr, stderr_lines, None)

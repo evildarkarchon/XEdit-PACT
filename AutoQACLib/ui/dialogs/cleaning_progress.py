@@ -207,7 +207,9 @@ class CleaningProgressDialog(QDialog):
         """Clean up signal connections."""
         with suppress(RuntimeError):
             self.button_box.rejected.disconnect()
-            
+        with suppress(RuntimeError):
+            self.stop_button.clicked.disconnect()
+
     def closeEvent(self, event: QCloseEvent) -> None:
         """Handle close event."""
         if self._cleaning_in_progress:
